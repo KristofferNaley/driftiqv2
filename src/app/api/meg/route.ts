@@ -53,6 +53,14 @@ export const GET = plattformRute({
       : [];
 
     return {
+      /**
+       * Domenet plattformpanelet ligger på, når vertene er delt.
+       *
+       * Kunde-appen trenger det for å kunne lenke TIL panelet fra support-stripa: der er
+       * `/plattform` en 404. Kommer herfra og ikke fra en `NEXT_PUBLIC_`-variabel — den
+       * bakes inn ved bygg, og et domenebytte ville krevd nytt image.
+       */
+      adminVert: process.env.VERT_ADMIN ?? null,
       supportOrger,
       id: bruker.id,
       name: bruker.name,

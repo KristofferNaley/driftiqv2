@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { OktProvider } from "@/components/OktProvider";
+import { VerterProvider } from "./verter";
 import { withoutRls } from "@/db/client";
 import { users } from "@/db/schema/users";
 import { auth } from "@/lib/auth";
@@ -44,5 +45,9 @@ export default async function PlattformLayout({ children }: { children: ReactNod
   const bruker = rader[0];
   if (!bruker?.aktiv || !erPlattformadminRolle(bruker.rolle)) notFound();
 
-  return <OktProvider versjon="0.1.0">{children}</OktProvider>;
+  return (
+    <OktProvider versjon="0.1.0">
+      <VerterProvider appVert={process.env.VERT_APP ?? null}>{children}</VerterProvider>
+    </OktProvider>
+  );
 }

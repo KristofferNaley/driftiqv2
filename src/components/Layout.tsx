@@ -23,6 +23,17 @@ const erMobil = () =>
  * Samme ☰-knapp styrer to ting: på mobil åpner den menyen som skuff, på desktop slår den
  * den sammen til bare ikoner. Valget på desktop huskes mellom besøk.
  */
+/**
+ * Lenke til panelet fra kunde-appen.
+ *
+ * Absolutt til panelverten når vertene er delt — `/plattform` er en 404 på kundeverten.
+ * `adminVert` kommer fra `/meg`, altså fra serveren ved kjøretid.
+ */
+function panelLenke(adminVert: string | null, orgId: string): string {
+  const sti = `/plattform/kunder/${orgId}`;
+  return adminVert ? `https://${adminVert}${sti}` : sti;
+}
+
 export default function Layout({
   tittel,
   handlinger,
@@ -113,7 +124,7 @@ export default function Layout({
             <span>
               <b>Support-modus.</b> Du ser {aktivOrg.name} sine data på et logget innsyn.
             </span>
-            <Link href={`/plattform/kunder/${aktivOrg.id}`}>Avslutt i plattformpanelet →</Link>
+            <a href={panelLenke(bruker?.adminVert ?? null, aktivOrg.id)}>Avslutt i plattformpanelet →</a>
           </div>
         )}
 

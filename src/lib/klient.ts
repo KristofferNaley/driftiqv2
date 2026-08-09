@@ -416,6 +416,8 @@ export const brreg = {
 };
 
 export type MegSvar = {
+  /** Domenet plattformpanelet ligger på, når vertene er delt. Ellers `null`. */
+  adminVert: string | null;
   /** Org-er du har aktivt support-innsyn i. Tom for vanlige brukere. */
   supportOrger: string[];
   id: string;

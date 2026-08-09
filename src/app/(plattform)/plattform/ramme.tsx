@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useOkt } from "@/components/OktProvider";
 import { initialer } from "@/components/felles";
 import { erPlattformadminRolle } from "@/lib/nivaer";
+import { useAppLenke } from "../verter";
 
 /**
  * Skallet rundt plattformsidene.
@@ -29,6 +30,8 @@ const MENY = [
 export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {
   const { bruker } = useOkt();
   const sti = usePathname();
+  // Absolutt til appverten når vertene er delt: /dashboard er 404 her.
+  const appLenke = useAppLenke();
 
   return (
     <div className="pf-side">
@@ -56,9 +59,9 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
         })}
 
         <div className="pf-meny-fot">
-          <Link className="pf-tilbake" href="/dashboard">
+          <a className="pf-tilbake" href={appLenke}>
             ← Til kunde-appen
-          </Link>
+          </a>
           {bruker && (
             <div className="pf-bruker-blokk">
               <span className="pf-mark liten" aria-hidden>{initialer(bruker.name)}</span>
