@@ -80,6 +80,53 @@ export default function Landing() {
         </p>
       </section>
 
+      {/* Et glimt av systemet. Bevisst en HTML-mock og ikke et skjermbilde: et bilde blir
+          utdatert i det UI-et endres, og det gjør det ofte. Denne følger designtokenene og
+          blir aldri feil på samme måte. */}
+      <section className="mk-seksjon">
+        <span className="mk-overtittel">Et glimt av systemet</span>
+        <h2>Slik ser det ut i praksis</h2>
+        <div className="mk-skjerm" aria-hidden>
+          <div className="mk-skjerm-topp">
+            <span className="mk-prikker"><i /><i /><i /></span>
+            <span className="mk-url">app.driftiq.no/dashboard</span>
+          </div>
+          <div className="mk-app">
+            <aside className="mk-app-meny">
+              <span className="mk-app-lbl">Moduler</span>
+              {["Dashboard", "Oppgaver", "Avvik", "Internkontroll", "Kontrakter", "Vedlikeholdsplan", "Årshjul", "Dokumentarkiv"].map((m, i) => (
+                <span key={m} className={i === 0 ? "pa" : undefined}>{m}</span>
+              ))}
+            </aside>
+            <div className="mk-app-innhold">
+              <div className="mk-app-tittel">Test Borettslag</div>
+              <div className="mk-app-tall">
+                <div><b>15</b><span>Oppgaver</span></div>
+                <div><b className="gronn">7</b><span>À jour</span></div>
+                <div><b className="gul">8</b><span>Forsinket</span></div>
+                <div><b className="rod">3</b><span>Åpne avvik</span></div>
+              </div>
+              <div className="mk-app-liste">
+                {[
+                  ["Gulvvask med maskin", "Renholdsfirma · Månedlig", "Forsinket", "gul"],
+                  ["Ukentlig renhold fellesarealer", "Renholdsfirma · Ukentlig", "Ikke utført", "grå"],
+                  ["Vindusvask fellesarealer", "Renholdsfirma · Kvartalsvis", "Forsinket", "gul"],
+                  ["Årlig sjekk av avtrekksvifter", "Vaktmesterfirma · Årlig", "À jour", "gronn"],
+                ].map(([tittel, meta, status, farge]) => (
+                  <div key={tittel}>
+                    <span>
+                      <b>{tittel}</b>
+                      <em>{meta}</em>
+                    </span>
+                    <span className={`mk-app-status ${farge}`}>{status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="mk-seksjon" id="moduler">
         <span className="mk-overtittel">Hva systemet dekker</span>
         <h2>Det styret er ansvarlig for — samlet ett sted</h2>

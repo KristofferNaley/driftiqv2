@@ -1360,11 +1360,19 @@ textarea.qr-input { resize: vertical; }
  * Lyse farger uansett systemtema. En marketingside som skifter utseende med besøkendes
  * innstillinger er vanskelig å designe for, og det finnes ingen «bruker» å respektere ennå.
  */
+/*
+ * Følger `data-theme` som resten av appen — mørk som standard, med veksler i toppen.
+ *
+ * Første utkast hardkodet lyse farger «fordi det ikke finnes en bruker ennå». Det var feil:
+ * temaet settes av et skript før første maling, appen er mørk som standard, og en
+ * landingsside som blender deg for så å bli mørk når du logger inn er dårlig sammenheng.
+ */
 .mk {
-  --mk-blekk: #0d1b2a;
-  --mk-dempet: #55617a;
-  --mk-kant: #e2e8f0;
-  background: #fff; color: var(--mk-blekk);
+  --mk-blekk: var(--text);
+  --mk-dempet: var(--muted);
+  --mk-kant: var(--border);
+  --mk-flate: var(--surface);
+  background: var(--bg); color: var(--mk-blekk);
   min-height: 100dvh; display: flex; flex-direction: column;
 }
 .mk a { color: var(--accent); }
@@ -1372,7 +1380,7 @@ textarea.qr-input { resize: vertical; }
 .mk-topp {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 16px 24px; border-bottom: 1px solid var(--mk-kant);
-  position: sticky; top: 0; background: rgba(255, 255, 255, 0.92);
+  position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(8px); z-index: 10;
 }
 .mk-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
@@ -1385,6 +1393,19 @@ textarea.qr-input { resize: vertical; }
   border: 1px solid var(--mk-kant); border-radius: 9px; padding: 7px 14px;
   color: var(--mk-blekk) !important; font-weight: 600;
 }
+.mk-tema {
+  border: 1px solid var(--mk-kant); border-radius: 9px; background: none;
+  width: 34px; height: 34px; cursor: pointer; font-size: var(--fs-sm);
+  color: var(--mk-blekk); line-height: 1;
+}
+.mk-tema:hover { background: var(--mk-flate); }
+/* Hopp-lenka er usynlig til den får fokus. */
+.mk-hopp {
+  position: absolute; left: -9999px; top: 8px;
+  background: var(--accent); color: #fff !important; padding: 10px 16px;
+  border-radius: 9px; z-index: 20; text-decoration: none;
+}
+.mk-hopp:focus { left: 16px; }
 @media (max-width: 620px) { .mk-nav a:not(.mk-knapp-liten) { display: none; } }
 
 .mk-hero {
@@ -1411,7 +1432,7 @@ textarea.qr-input { resize: vertical; }
   font-family: var(--font-sans); cursor: pointer;
 }
 .mk-knapp:disabled { opacity: 0.55; cursor: default; }
-.mk .mk-knapp.sekundaer { background: #fff; color: var(--mk-blekk); border: 1px solid var(--mk-kant); }
+.mk .mk-knapp.sekundaer { background: var(--mk-flate); color: var(--mk-blekk); border: 1px solid var(--mk-kant); }
 .mk-liten { font-size: var(--fs-label); color: var(--mk-dempet); margin-top: 14px; }
 
 .mk-seksjon { padding: 56px 24px; max-width: 1080px; margin: 0 auto; width: 100%; }
@@ -1426,7 +1447,7 @@ textarea.qr-input { resize: vertical; }
 }
 
 .mk-rutenett { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; }
-.mk-kort { border: 1px solid var(--mk-kant); border-radius: 14px; padding: 22px; background: #fafbff; }
+.mk-kort { border: 1px solid var(--mk-kant); border-radius: 14px; padding: 22px; background: var(--mk-flate); }
 .mk-kort h3 { font-size: var(--fs-md); font-weight: 700; margin: 0 0 9px; }
 .mk-kort p { font-size: var(--fs-sm); line-height: 1.65; color: var(--mk-dempet); margin: 0; }
 
@@ -1437,8 +1458,8 @@ textarea.qr-input { resize: vertical; }
 .mk-felt input, .mk-felt textarea {
   /* 16px: under det zoomer iOS Safari inn ved fokus, og siden hopper. */
   font-size: 16px; font-family: var(--font-sans); color: var(--mk-blekk);
-  padding: 12px 13px; border: 1.5px solid #d7dee8; border-radius: 11px;
-  background: #fff; width: 100%; box-sizing: border-box; resize: vertical;
+  padding: 12px 13px; border: 1.5px solid var(--mk-kant); border-radius: 11px;
+  background: var(--mk-flate); width: 100%; box-sizing: border-box; resize: vertical;
 }
 .mk-felt input:focus, .mk-felt textarea:focus { outline: none; border-color: var(--accent); }
 /* Honningkrukka: helt ute av visningen, men til stede i HTML-en. `display: none` unngås —
@@ -1463,7 +1484,7 @@ textarea.qr-input { resize: vertical; }
 .mk-tekst h2 { font-size: var(--fs-lg); font-weight: 700; margin: 28px 0 10px; }
 .mk-tekst p { font-size: var(--fs-sm); line-height: 1.75; color: var(--mk-dempet); margin: 0 0 12px; }
 
-.mk-fot { margin-top: auto; border-top: 1px solid var(--mk-kant); background: #fafbff; }
+.mk-fot { margin-top: auto; border-top: 1px solid var(--mk-kant); background: var(--mk-flate); }
 .mk-fot-inn {
   max-width: 1080px; margin: 0 auto; padding: 22px 24px;
   display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
@@ -1479,4 +1500,63 @@ textarea.qr-input { resize: vertical; }
 .pf-lead:last-child { border-bottom: none; }
 .pf-lead-melding {
   font-size: var(--fs-sm); line-height: 1.6; margin: 7px 0 0; white-space: pre-wrap;
+}
+
+/* ── PRODUKTBILDET ──
+   HTML-mock, ikke et skjermbilde: et bilde blir utdatert i det UI-et endres. Denne følger
+   designtokenene og blir aldri feil på samme måte. */
+.mk-skjerm {
+  border: 1px solid var(--mk-kant); border-radius: 14px; overflow: hidden;
+  background: var(--surface); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+}
+.mk-skjerm-topp {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: var(--bg); border-bottom: 1px solid var(--mk-kant);
+}
+.mk-prikker { display: flex; gap: 6px; }
+.mk-prikker i { width: 9px; height: 9px; border-radius: 50%; background: var(--mk-kant); }
+.mk-url {
+  font-size: var(--fs-label); color: var(--mk-dempet);
+  background: var(--surface); border-radius: 7px; padding: 3px 12px;
+}
+.mk-app { display: grid; grid-template-columns: 176px 1fr; min-height: 300px; }
+.mk-app-meny {
+  background: var(--bg); border-right: 1px solid var(--mk-kant);
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;
+}
+.mk-app-lbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--mk-dempet); padding: 0 8px 6px;
+}
+.mk-app-meny span:not(.mk-app-lbl) {
+  font-size: var(--fs-label); color: var(--mk-dempet); padding: 7px 9px; border-radius: 7px;
+}
+.mk-app-meny span.pa { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); font-weight: 600; }
+.mk-app-innhold { padding: 16px 18px; }
+.mk-app-tittel { font-size: var(--fs-sm); font-weight: 700; margin-bottom: 12px; }
+.mk-app-tall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.mk-app-tall div {
+  border: 1px solid var(--mk-kant); border-radius: 10px; padding: 10px 12px; background: var(--bg);
+}
+.mk-app-tall b { display: block; font-size: 22px; font-weight: 700; }
+.mk-app-tall b.gronn { color: var(--accent2); }
+.mk-app-tall b.gul { color: var(--warn); }
+.mk-app-tall b.rod { color: var(--danger); }
+.mk-app-tall span { font-size: 10px; color: var(--mk-dempet); }
+.mk-app-liste > div {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--mk-kant);
+}
+.mk-app-liste > div:last-child { border-bottom: none; }
+.mk-app-liste b { display: block; font-size: var(--fs-label); font-weight: 600; }
+.mk-app-liste em { display: block; font-size: 10px; color: var(--mk-dempet); font-style: normal; }
+.mk-app-status { font-size: 10px; font-weight: 700; white-space: nowrap; }
+.mk-app-status.gronn { color: var(--accent2); }
+.mk-app-status.gul { color: var(--warn); }
+.mk-app-status.rod { color: var(--danger); }
+.mk-app-status.grå { color: var(--mk-dempet); }
+@media (max-width: 620px) {
+  .mk-app { grid-template-columns: 1fr; }
+  .mk-app-meny { display: none; }
+  .mk-app-tall { grid-template-columns: repeat(2, 1fr); }
 }

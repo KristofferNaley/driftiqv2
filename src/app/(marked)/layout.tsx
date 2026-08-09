@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Temaveksler } from "./temaveksler";
 
 /**
  * Landingssiden. Egen rutegruppe, ingen `OktProvider`.
@@ -36,6 +37,10 @@ export const viewport: Viewport = { themeColor: "#0d1b2a" };
 export default function MarkedLayout({ children }: { children: ReactNode }) {
   return (
     <div className="mk">
+      {/* Hopp-lenke: en tastaturbruker skal slippe å tabbe gjennom hele menyen for å nå
+          skjemaet, som er hele poenget med siden. */}
+      <a className="mk-hopp" href="#kontakt">Hopp til kontaktskjemaet</a>
+
       <header className="mk-topp">
         <Link href="/" className="mk-logo">
           <span className="logo-mark" aria-hidden>IQ</span>
@@ -44,6 +49,7 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
         <nav className="mk-nav">
           <a href="#moduler">Hva systemet dekker</a>
           <a href="#kontakt">Bli pilotlag</a>
+          <Temaveksler />
           <Link className="mk-knapp-liten" href="/logg-inn">Logg inn</Link>
         </nav>
       </header>
