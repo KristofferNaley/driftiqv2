@@ -45,6 +45,8 @@ export default ts.config(
         process: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
+        // Tidsavbrudd på utgående kall til tredjeparter (lib/brreg.ts).
+        AbortSignal: "readonly",
         RequestInit: "readonly",
         React: "readonly",
         TextDecoder: "readonly",

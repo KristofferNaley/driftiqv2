@@ -6,6 +6,12 @@ export const organizations = pgTable("organizations", {
   name: varchar("name").notNull(),
   slug: varchar("slug").notNull().unique(),
   orgNr: varchar("org_nr").unique(),
+  /**
+   * Kundens egne avvikskategorier som JSON, eller `null` for standardsettet. Les den gjennom
+   * `lesKategorier` i lib/avvikkategorier.ts — aldri direkte: v1 lagret feltene som
+   * `value`/`label`, og migrerte rader har fortsatt den formen.
+   */
+  deviationCategories: text("deviation_categories"),
   orgForm: varchar("org_form"),
   municipality: varchar("municipality"),
   /** Antall boliger/enheter — brukes til kostnad per enhet i vedlikeholdsplanen. */

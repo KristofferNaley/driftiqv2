@@ -12,6 +12,7 @@ import { Pool, type PoolClient } from "pg";
 import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import {
+  avvikSok,
   apneAvvikPerEnhet,
   endreAvvik,
   hentAvvik,
@@ -226,9 +227,52 @@ describe("oversikter", () => {
     await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Åpent" }));
     await i(org, (db) => lukkAvvik(db, org, a.id, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
-    expect((await i(org, (db) => hentAvvik(db, org, { lukkede: false }))).length).toBe(1);
-    expect((await i(org, (db) => hentAvvik(db, org, { lukkede: true }))).length).toBe(1);
-    expect((await i(org, (db) => hentAvvik(db, org))).length).toBe(2);
+    expect((await i(org, (db) => hentAvvik(db, org, { lukkede: false }))).total).toBe(1);
+    expect((await i(org, (db) => hentAvvik(db, org, { lukkede: true }))).total).toBe(1);
+    expect((await i(org, (db) => hentAvvik(db, org))).total).toBe(2);
+  });
+
+  it("søker på tittel og på løpenummer", async () => {
+    const org = await nyOrg();
+    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Lekkasje i kjeller" }));
+    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Rekkverk løst" }));
+
+    const tittel = await i(org, (db) => hentAvvik(db, org, { sok: "lekkasje" }));
+    expect(tittel.items.map((r) => r.id)).toEqual([a.id]);
+
+    // «#1» skal treffe løpenummeret, ikke lete etter tallet inne i titlene.
+    const nummer = await i(org, (db) => hentAvvik(db, org, { sok: `#${a.number}` }));
+    expect(nummer.items.map((r) => r.id)).toEqual([a.id]);
+  });
+
+  it("filtrerer på kategori", async () => {
+    const org = await nyOrg();
+    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "A", category: "hms" }));
+    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "B", category: "teknisk" }));
+    const ut = await i(org, (db) => hentAvvik(db, org, { kategori: "hms" }));
+    expect(ut.items.map((r) => r.id)).toEqual([a.id]);
+  });
+
+  it("faller tilbake til standardsortering på et ukjent sorteringsfelt", async () => {
+    // Feltet kommer fra en URL-parameter. Uten hvitelista ville dette vært en SQL-injeksjon;
+    // testen slår fast at ukjent input gir et normalt svar, ikke en feil eller rar SQL.
+    const org = await nyOrg();
+    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "A" }));
+    const ut = await i(org, (db) =>
+      hentAvvik(db, org, { sorter: "title; DROP TABLE deviations" }),
+    );
+    expect(ut.total).toBe(1);
+  });
+
+  it("paginerer, og teller totalen uavhengig av siden", async () => {
+    const org = await nyOrg();
+    for (let n = 0; n < 3; n++) {
+      await i(org, (db) => opprettAvvik(db, org, "Kari", { title: `Avvik ${n}` }));
+    }
+    const side1 = await i(org, (db) => hentAvvik(db, org, { side: 1 }));
+    expect(side1.total).toBe(3);
+    expect(side1.sider).toBe(1);
+    expect(side1.items).toHaveLength(3);
   });
 
   it("teller åpne avvik per enhet", async () => {
@@ -250,5 +294,23 @@ describe("oversikter", () => {
     const org = await nyOrg();
     await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
     expect(await i(org, (db) => tellPerStatus(db, org))).toEqual({ ny: 1 });
+  });
+});
+
+
+describe("avvikSok", () => {
+  it("tolker «false» fra URL-en som usant", () => {
+    // `z.coerce.boolean()` ville gitt `true` her: en ikke-tom streng er sann i JS. Feilen
+    // var at «Aktive» viste de LUKKEDE avvikene.
+    expect(avvikSok.parse({ lukkede: "false" }).lukkede).toBe(false);
+    expect(avvikSok.parse({ lukkede: "true" }).lukkede).toBe(true);
+    expect(avvikSok.parse({}).lukkede).toBe(false);
+  });
+
+  it("faller tilbake til side 1 og standardsortering uten parametre", () => {
+    const ut = avvikSok.parse({});
+    expect(ut.side).toBe(1);
+    expect(ut.sorter).toBe("reported_at");
+    expect(ut.retning).toBe("desc");
   });
 });

@@ -12,7 +12,7 @@
  * - Vedlegg (`deviation_attachments`) — venter på fillagring.
  */
 
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -21,6 +21,7 @@ import { units } from "../db/schema/units";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
+import { organizations } from "../db/schema/organizations";
 
 export const STATUSER = ["ny", "under_behandling", "lukket"] as const;
 export const ALVORLIGHET = ["lav", "middels", "akutt"] as const;
@@ -97,20 +98,184 @@ function medAnsvarlig<T extends { assignedTo: string | null }>(rad: T, brukernav
   return { ...rad, assignedTo: brukernavn ?? rad.assignedTo };
 }
 
-export async function hentAvvik(db: Db, orgId: string, opts: { lukkede?: boolean } = {}) {
+/**
+ * Kolonnene som kan sorteres på, og hva de faktisk sorterer.
+ *
+ * **Hviteliste, ikke en streng fra klienten.** Sorteringsfeltet kommer fra en URL-parameter;
+ * slippes den rett inn i `ORDER BY`, er det en SQL-injeksjon. Her kan en ukjent verdi bare
+ * falle tilbake til standarden.
+ */
+const SORTERBARE = {
+  number: deviations.number,
+  title: deviations.title,
+  reported_at: deviations.reportedAt,
+  due_date: deviations.dueDate,
+  reported_by: deviations.reportedBy,
+  assigned_to: deviations.assignedTo,
+  category: deviations.category,
+  status: deviations.status,
+} as const;
+
+export type Sorterbar = keyof typeof SORTERBARE;
+
+export const SIDESTORRELSE = 25;
+
+export const avvikSok = z.object({
+  side: z.coerce.number().int().min(1).default(1),
+  sok: z.string().trim().default(""),
+  kategori: z.string().trim().default(""),
+  unitId: z.string().trim().default(""),
+  /**
+   * IKKE `z.coerce.boolean()`. Den kjører `Boolean(verdi)`, og for en URL-parameter er
+   * verdien alltid en streng — `"false"` er en ikke-tom streng og blir dermed `true`.
+   * Symptomet var at «Aktive» viste de lukkede avvikene.
+   */
+  lukkede: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .default(false)
+    .transform((v) => v === true || v === "true"),
+  sorter: z.string().default("reported_at"),
+  retning: z.enum(["asc", "desc"]).default("desc"),
+});
+
+/**
+ * Avvikslista — filtrert, sortert og paginert.
+ *
+ * Paginering er ikke pynt: v1 hentet ALLE avvik og filtrerte i nettleseren fram til lista
+ * ble lang nok til at det merket. Et lag med noen års drift har fort tusen rader, og de skal
+ * ikke over ledningen for å vise 25.
+ */
+export async function hentAvvik(
+  db: Db,
+  orgId: string,
+  opts: Partial<z.infer<typeof avvikSok>> & { lukkede?: boolean } = {},
+) {
+  const {
+    side = 1,
+    sok = "",
+    kategori = "",
+    unitId = "",
+    lukkede,
+    sorter = "reported_at",
+    retning = "desc",
+  } = opts;
+
   const betingelser = [eq(deviations.orgId, orgId)];
-  if (opts.lukkede === true) betingelser.push(eq(deviations.status, "lukket"));
-  if (opts.lukkede === false) betingelser.push(sql`${deviations.status} <> 'lukket'`);
+  if (lukkede === true) betingelser.push(eq(deviations.status, "lukket"));
+  if (lukkede === false) betingelser.push(sql`${deviations.status} <> 'lukket'`);
+  if (kategori) betingelser.push(eq(deviations.category, kategori));
+  if (unitId) betingelser.push(eq(deviations.unitId, unitId));
 
+  if (sok) {
+    // Søk på «#21» eller «21» skal treffe løpenummeret, ikke lete etter tallet i tittelen.
+    const somTall = Number(sok.replace(/^#/, ""));
+    const tittelTreff = ilike(deviations.title, `%${sok}%`);
+    betingelser.push(
+      Number.isInteger(somTall) && somTall > 0
+        ? or(tittelTreff, eq(deviations.number, somTall))!
+        : tittelTreff,
+    );
+  }
+
+  const hvor = and(...betingelser);
+  const kolonne = SORTERBARE[sorter as Sorterbar] ?? deviations.reportedAt;
+
+  const [rader, antall] = await Promise.all([
+    db
+      .select({ avvik: deviations, brukernavn: users.name, unitNavn: units.navn })
+      .from(deviations)
+      .leftJoin(users, eq(users.id, deviations.responsibleUserId))
+      .leftJoin(units, eq(units.id, deviations.unitId))
+      .where(hvor)
+      // Løpenummeret som andrenøkkel: uten det kan to rader med samme dato bytte plass
+      // mellom to sidelastinger, og da hopper rader mellom sider under paginering.
+      .orderBy(retning === "desc" ? desc(kolonne) : asc(kolonne), desc(deviations.number))
+      .limit(SIDESTORRELSE)
+      .offset((side - 1) * SIDESTORRELSE),
+    db.select({ n: count() }).from(deviations).where(hvor),
+  ]);
+
+  const total = antall[0]?.n ?? 0;
+  return {
+    items: rader.map((r) => ({ ...medAnsvarlig(r.avvik, r.brukernavn), unitNavn: r.unitNavn })),
+    total,
+    side,
+    sider: Math.max(1, Math.ceil(total / SIDESTORRELSE)),
+  };
+}
+
+/**
+ * Nøkkeltallene over lista.
+ *
+ * `ytd` teller inneværende år til dags dato og sammenlignes med SAMME periode i fjor — ikke
+ * med hele fjoråret. Sammenligner man mot et helt år, ser man alltid ut til å ha færre avvik
+ * i januar, og tallet sier ingenting.
+ */
+export async function avvikStatistikk(db: Db, orgId: string, brukerId: string) {
+  const naa = new Date();
+  const iAar = naa.getUTCFullYear();
+  const startIAar = new Date(Date.UTC(iAar, 0, 1));
+  const startIFjor = new Date(Date.UTC(iAar - 1, 0, 1));
+  // Samme dag og klokkeslett, ett år tilbake — grensen for «hittil i fjor».
+  const naaIFjor = new Date(naa);
+  naaIFjor.setUTCFullYear(iAar - 1);
+
+  const [ytdRad, ifjorRad, perStatus, mineRad] = await Promise.all([
+    db
+      .select({ n: count() })
+      .from(deviations)
+      .where(and(eq(deviations.orgId, orgId), sql`${deviations.reportedAt} >= ${startIAar}`)),
+    db
+      .select({ n: count() })
+      .from(deviations)
+      .where(
+        and(
+          eq(deviations.orgId, orgId),
+          sql`${deviations.reportedAt} >= ${startIFjor}`,
+          sql`${deviations.reportedAt} < ${naaIFjor}`,
+        ),
+      ),
+    db
+      .select({ status: deviations.status, n: count() })
+      .from(deviations)
+      .where(eq(deviations.orgId, orgId))
+      .groupBy(deviations.status),
+    db
+      .select({ n: count() })
+      .from(deviations)
+      .where(
+        and(
+          eq(deviations.orgId, orgId),
+          eq(deviations.responsibleUserId, brukerId),
+          sql`${deviations.status} <> 'lukket'`,
+        ),
+      ),
+  ]);
+
+  const ytd = ytdRad[0]?.n ?? 0;
+  const ytdIFjor = ifjorRad[0]?.n ?? 0;
+  const tell = (s: string) => perStatus.find((r) => r.status === s)?.n ?? 0;
+
+  return {
+    ytd,
+    ytdIFjor,
+    // `null` når i fjor var null — «uendelig prosent opp» er ikke et tall å vise noen.
+    ytdEndring: ytdIFjor === 0 ? null : Math.round(((ytd - ytdIFjor) / ytdIFjor) * 100),
+    ny: tell("ny"),
+    underBehandling: tell("under_behandling"),
+    lukket: tell("lukket"),
+    mine: mineRad[0]?.n ?? 0,
+  };
+}
+
+/** Kundens avvikskategorier, eller standardsettet. */
+export async function hentKategorier(db: Db, orgId: string): Promise<string | null> {
   const rader = await db
-    .select({ avvik: deviations, brukernavn: users.name, unitNavn: units.navn })
-    .from(deviations)
-    .leftJoin(users, eq(users.id, deviations.responsibleUserId))
-    .leftJoin(units, eq(units.id, deviations.unitId))
-    .where(and(...betingelser))
-    .orderBy(desc(deviations.number));
-
-  return rader.map((r) => ({ ...medAnsvarlig(r.avvik, r.brukernavn), unitNavn: r.unitNavn }));
+    .select({ k: organizations.deviationCategories })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  return rader[0]?.k ?? null;
 }
 
 export async function hentEttAvvik(db: Db, orgId: string, devId: string) {

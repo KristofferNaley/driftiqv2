@@ -123,12 +123,40 @@ export const oppgaver = {
 export type Avvik = {
   id: string; number: number | null; title: string; description: string | null;
   status: string; severity: string | null; assignedTo: string | null; dueDate: string | null;
-  reportedBy: string; unitNavn: string | null;
+  reportedBy: string; reportedAt: string; category: string | null; unitNavn: string | null;
+};
+
+export type AvvikSok = {
+  side?: number;
+  sok?: string;
+  kategori?: string;
+  unitId?: string;
+  lukkede?: boolean;
+  sorter?: string;
+  retning?: "asc" | "desc";
+};
+
+export type AvvikSvar = {
+  items: Avvik[];
+  total: number;
+  side: number;
+  sider: number;
+  stats: {
+    ytd: number; ytdIFjor: number; ytdEndring: number | null;
+    ny: number; underBehandling: number; lukket: number; mine: number;
+  };
+  kategorier: string | null;
 };
 
 export const avvik = {
-  liste: (o: string, lukkede?: boolean) =>
-    api.hent<Avvik[]>(org(o, `/deviations${lukkede === undefined ? "" : `?lukkede=${lukkede}`}`)),
+  /** Liste + nøkkeltall + kategorier i ett kall — se kommentaren på GET-ruta. */
+  liste: (o: string, sok: AvvikSok = {}) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(sok)) {
+      if (v !== undefined && v !== "" && v !== null) p.set(k, String(v));
+    }
+    return api.hent<AvvikSvar>(org(o, `/deviations?${p.toString()}`));
+  },
   hent: (o: string, id: string) =>
     api.hent<Avvik & { behandlinger: Array<{ id: string; text: string; createdBy: string; createdAt: string }>; logg: Array<{ id: string; event: string; changedAt: string }> }>(org(o, `/deviations/${id}`)),
   meld: (o: string, d: unknown) => api.send<Avvik>(org(o, "/deviations"), d),
@@ -332,6 +360,10 @@ export type OrgInfo = {
 export const organisasjon = {
   hent: (o: string) => api.hent<OrgInfo>(`/organizations/${o}`),
   endre: (o: string, d: unknown) => api.endre<OrgInfo>(`/organizations/${o}`, d),
+  /**
+   * Modulvalg — plattformadmin. Blir stående her fordi plattformpanelet skal bruke det;
+   * kundens innstillinger gjør det IKKE, og API-et avviser dem uansett.
+   */
   settModuler: (o: string, moduler: string[]) => api.endre(`/organizations/${o}/modules`, { moduler }),
 };
 
@@ -345,16 +377,38 @@ export const brukere = {
   inviter: (o: string, d: unknown) => api.send(org(o, "/users"), d),
   endre: (o: string, id: string, d: unknown) => api.endre(org(o, `/users/${id}`), d),
   fjern: (o: string, id: string) => api.slett(org(o, `/users/${id}`)),
+  // Varslene ligger på medlemskapet, ikke på kontoen — samme person kan sitte i flere lag
+  // og vil sjelden ha samme oppsett i alle.
+  varsler: (o: string, id: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, `/users/${id}/varsler`)),
+  settVarsler: (o: string, id: string, prefs: Record<string, boolean>) =>
+    api.endre(org(o, `/users/${id}/varsler`), { prefs }),
+  egneVarsler: (o: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, "/users/meg/varsler")),
+  settEgneVarsler: (o: string, prefs: Record<string, boolean>) =>
+    api.endre(org(o, "/users/meg/varsler"), { prefs }),
+};
+
+export type StyreSvar = {
+  status: "ok" | "mangler-orgnr" | "ingen-svar";
+  orgNr: string | null;
+  styre: Array<{ navn: string; rolle: string }>;
+};
+
+/** Enhetsregisteret. Kallet gjøres av API-et, ikke av nettleseren — se lib/brreg.ts. */
+export const brreg = {
+  styre: (o: string) => api.hent<StyreSvar>(org(o, "/brreg/styre")),
 };
 
 export type MegSvar = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   role: string;
   organisasjoner: Array<{ id: string; name: string; nivaa: string; enabledModules: string | null }>;
 };
 
 export const meg = {
   hent: () => api.hent<MegSvar>("/meg"),
+  /** Navn og telefon. E-post kan ikke endres her — se kommentaren i api/meg/route.ts. */
+  lagre: (d: { name?: string; phone?: string | null }) => api.endre<MegSvar>("/meg", d),
 };

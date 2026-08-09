@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as ikoner from "lucide-react";
+import { Settings } from "lucide-react";
 import { menyFor } from "@/lib/moduler";
+import { initialer } from "./felles";
 
 /**
  * Sidemenyen. Punktene kommer fra `menyFor()` i lib/moduler.ts — samme fil som gaten på
@@ -18,16 +20,21 @@ export default function Sidebar({
   sammenslatt,
   aktiverteModuler,
   oktKjent,
+  bruker,
   versjon,
   onLukk,
+  onProfil,
 }: {
   apen: boolean;
   sammenslatt: boolean;
   aktiverteModuler: string | null;
+  bruker: { navn: string; tittel: string | null } | null;
   /** Er økten hentet? Før den er det, tegnes ingen punkter — se `menyFor`. */
   oktKjent: boolean;
   versjon: string;
   onLukk: () => void;
+  /** Åpner «Min profil» — også eneste vei til utlogging. */
+  onProfil: () => void;
 }) {
   const sti = usePathname();
   const grupper = menyFor(aktiverteModuler, oktKjent);
@@ -73,6 +80,18 @@ export default function Sidebar({
         ))}
       </div>
 
+      {/* Profilblokken står NEDERST, som i v1: hvem du er innlogget som er kontekst du
+          sjelden trenger, men alltid vil kunne finne. Navnet i toppbaren erstattes av den. */}
+      {bruker && (
+        <button className="profil-blokk" onClick={onProfil} title="Min profil">
+          <span className="avatar accent">{initialer(bruker.navn)}</span>
+          <div className="profil-tekst" style={{ minWidth: 0 }}>
+            <div className="profil-navn">{bruker.navn}</div>
+            {bruker.tittel && <div className="profil-tittel">{bruker.tittel}</div>}
+          </div>
+          <Settings size={15} strokeWidth={1.9} aria-hidden />
+        </button>
+      )}
       <div className="sidebar-fot">v{versjon}</div>
     </nav>
   );

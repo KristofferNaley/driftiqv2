@@ -1,0 +1,1 @@
+ALTER TABLE "user_org_memberships" ADD COLUMN "notification_prefs" text;

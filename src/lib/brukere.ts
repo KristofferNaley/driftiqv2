@@ -15,14 +15,10 @@ import type { Db } from "../db/client";
 import { account } from "../db/schema/auth";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { ikkeFunnet, ugyldig } from "./api";
+// Etikettene bor i en ren fil uten server-importer — se kommentaren der.
+import { NIVAER } from "./nivaer";
 
-export const NIVAER = ["orgadmin", "redigering", "visning"] as const;
-
-export const NIVA_ETIKETT: Record<string, string> = {
-  orgadmin: "Administrator",
-  redigering: "Redigering",
-  visning: "Visning",
-};
+export { NIVAER, NIVA_ETIKETT, TILGANGSNIVAER } from "./nivaer";
 
 export const inviterInn = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut"),
@@ -34,6 +30,12 @@ export const inviterInn = z.object({
 export const medlemEndring = z.object({
   role: z.enum(NIVAER).optional(),
   title: z.string().trim().nullish(),
+  /**
+   * Navnet ligger på KONTOEN, ikke medlemskapet — retter du en skrivefeil her, endres det
+   * i alle lag personen sitter i. Det er riktig: et navn er det samme overalt. E-posten kan
+   * derimot ikke endres, fordi den er innloggingsnøkkelen.
+   */
+  name: z.string().trim().min(1, "Navn må fylles ut").optional(),
 });
 
 export async function hentBrukere(db: Db, orgId: string) {
@@ -147,9 +149,20 @@ export async function endreMedlemskap(
     }
   }
 
+  if (data.name) {
+    await db.update(users).set({ name: data.name }).where(eq(users.id, brukerId));
+  }
+
+  // Bare feltene som faktisk hører til medlemskapet. Drizzle kaster på `.set({})`, så et
+  // kall som utelukkende retter navnet må hoppe over skrivingen her.
+  const medlemsfelter: Partial<typeof medlemskap> = {};
+  if (data.role !== undefined) medlemsfelter.role = data.role;
+  if (data.title !== undefined) medlemsfelter.title = data.title ?? null;
+  if (Object.keys(medlemsfelter).length === 0) return medlemskap;
+
   const [endret] = await db
     .update(userOrgMemberships)
-    .set(data)
+    .set(medlemsfelter)
     .where(and(eq(userOrgMemberships.userId, brukerId), eq(userOrgMemberships.orgId, orgId)))
     .returning();
   return endret!;

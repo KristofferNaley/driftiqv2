@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import OrgVelger from "./OrgVelger";
 import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
+import { NIVA_ETIKETT } from "@/lib/nivaer";
+import ProfilModal from "./ProfilModal";
 
 const erMobil = () =>
   typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
@@ -36,6 +38,7 @@ export default function Layout({
   const { bruker, aktivOrg, versjon, laster } = useOkt();
   const [apen, setApen] = useState(false);
   const [sammenslatt, setSammenslatt] = useState(false);
+  const [profil, setProfil] = useState(false);
 
   // Leses etter montering, ikke i initialverdien: `localStorage` finnes ikke på serveren,
   // og en initialverdi som avviker mellom server og klient gir hydreringsfeil.
@@ -57,13 +60,21 @@ export default function Layout({
   return (
     <div className="app-shell">
       {apen && <div className="sidebar-backdrop" onClick={() => setApen(false)} />}
+      {/* `bruker.tittel` får ETIKETTEN, ikke råverdien: `orgadmin` er et kodenavn, og kunden
+          skal lese «Kontoadmin». Se lib/nivaer.ts for hvorfor de to er ulike med vilje. */}
       <Sidebar
         apen={apen}
         sammenslatt={sammenslatt}
         aktiverteModuler={aktivOrg?.enabledModules ?? null}
         oktKjent={!laster}
+        bruker={
+          bruker
+            ? { navn: bruker.name, tittel: aktivOrg ? (NIVA_ETIKETT[aktivOrg.nivaa] ?? null) : null }
+            : null
+        }
         versjon={versjon}
         onLukk={() => setApen(false)}
+        onProfil={() => setProfil(true)}
       />
 
       <div className="app-main">
@@ -82,7 +93,6 @@ export default function Layout({
           </div>
           <div className="topbar-right">
             {handlinger}
-            <span style={{ color: "var(--muted)" }}>{bruker?.name}</span>
           </div>
         </div>
 
@@ -93,6 +103,15 @@ export default function Layout({
           {aside && <aside className="app-aside">{aside}</aside>}
         </div>
       </div>
+
+      {profil && (
+        <ProfilModal
+          orgId={aktivOrg?.id ?? null}
+          onLukk={() => setProfil(false)}
+          // Navnet står i profilblokken i sidemenyen, så en endring må hentes på nytt.
+          onLagret={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

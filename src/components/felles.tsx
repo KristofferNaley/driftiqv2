@@ -201,5 +201,40 @@ export function Faner<T extends string>({
 export const kr = (n: number | null | undefined) =>
   n === null || n === undefined ? "—" : `${n.toLocaleString("nb-NO")} kr`;
 
+/**
+ * «i dag», «i går», «for 5 dager siden» — og full dato når det er lenger enn en måned.
+ * For «sist innlogget» o.l., der det nære er interessant relativt og det fjerne som dato.
+ *
+ * Reserven er «aldri», ikke «—»: mangler verdien, ER det svaret, ikke ukjent.
+ */
+export function siden(verdi: string | null | undefined, reserve = "aldri"): string {
+  const dager = dagerSiden(verdi);
+  if (dager === null) return reserve;
+  if (dager <= 0) return "i dag";
+  if (dager === 1) return "i går";
+  if (dager <= 31) return `for ${dager} dager siden`;
+  return dato(verdi);
+}
+
+/**
+ * Antall hele dager siden et tidspunkt, eller `null` hvis verdien mangler.
+ *
+ * Skilt ut fra `siden()` fordi kallstedet ofte trenger TALLET og ikke teksten — «sist
+ * innlogget» dempes når det er over 90 dager siden, og den terskelen kan ikke leses ut av
+ * strengen «for 200 dager siden».
+ */
+export function dagerSiden(verdi: string | null | undefined): number | null {
+  if (!verdi) return null;
+  return Math.floor((Date.now() - new Date(verdi).getTime()) / 86_400_000);
+}
+
+/** Initialer til avatarsirkelen. To bokstaver, aldri mer. */
+export function initialer(navn: string): string {
+  const deler = navn.trim().split(/\s+/).filter(Boolean);
+  if (deler.length === 0) return "?";
+  if (deler.length === 1) return deler[0]!.slice(0, 1).toUpperCase();
+  return (deler[0]![0]! + deler[deler.length - 1]![0]!).toUpperCase();
+}
+
 export const dato = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("nb-NO", { day: "2-digit", month: "short", year: "numeric" }) : "—";

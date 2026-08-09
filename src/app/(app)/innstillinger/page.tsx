@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Faner, Feil, Kort, Rad, Tom, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { enheter, organisasjon, type Enhet, type OrgInfo } from "@/lib/klient";
-import { ALLE_MODULER, ALLTID_PA, MENY, modulErAktivert } from "@/lib/moduler";
+import { ALLE_MODULER, MENY, modulErAktivert } from "@/lib/moduler";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
 function storrelse(n: number): string {
@@ -208,34 +208,18 @@ function RedigerOrg({
 
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Modulene kunden har — som LESEVISNING.
+ *
+ * Her sto tidligere avkryssingsbokser kunden kunne lagre selv. Det er feil modell: modulene
+ * er det de har kjøpt, og styres fra plattformpanelet (samme sted som i v1). API-et avviser
+ * nå kundens forsøk uansett, så boksene her ville bare vært knapper som svarte 403.
+ *
+ * Lista blir stående fordi kunden skal kunne SE hva de har. Moduler de ikke har, hører
+ * hjemme i modulkatalogen, som selger dem — ikke i en avkryssingsliste her.
+ */
 function Moduler() {
-  const { aktivOrg } = useOkt();
-  const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => organisasjon.hent(o));
-  const [valgte, setValgte] = useState<Set<string>>(new Set());
-  const [lagrer, setLagrer] = useState(false);
-  const erAdmin = aktivOrg?.nivaa === "orgadmin";
-
-  // Settes når data kommer, ikke i initialverdien — org kan byttes mens siden står åpen.
-  useEffect(() => {
-    if (!data) return;
-    setValgte(new Set(ALLE_MODULER.filter((n) => modulErAktivert(data.enabledModules, n))));
-  }, [data]);
-
-  async function lagre() {
-    if (!orgId) return;
-    setLagrer(true);
-    setFeil(null);
-    try {
-      await organisasjon.settModuler(orgId, [...valgte]);
-      await last();
-      // Sidemenyen leser modullista fra økten, så den må hentes på nytt for å oppdateres.
-      window.location.reload();
-    } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke lagre modulvalget");
-    } finally {
-      setLagrer(false);
-    }
-  }
+  const { data, feil, laster } = useOrgData((o) => organisasjon.hent(o));
 
   if (laster || !data) {
     return (
@@ -246,55 +230,26 @@ function Moduler() {
     );
   }
 
+  const aktive = ALLE_MODULER.filter((n) => MENY[n] && modulErAktivert(data.enabledModules, n));
+
   return (
     <>
       <Feil melding={feil} />
-      <Kort
-        tittel="Aktiverte moduler"
-        handling={
-          erAdmin && (
-            <button className="btn btn-primary" onClick={lagre} disabled={lagrer}>
-              {lagrer ? "Lagrer …" : "Lagre"}
-            </button>
-          )
-        }
-      >
-        {ALLE_MODULER.filter((n) => MENY[n]).map((n) => {
-          const last_ = ALLTID_PA.has(n);
-          return (
-            <label
-              key={n}
-              className="list-item"
-              style={{ cursor: last_ || !erAdmin ? "default" : "pointer" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "11px", minWidth: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={valgte.has(n) || last_}
-                  disabled={last_ || !erAdmin}
-                  onChange={(e) => {
-                    const neste = new Set(valgte);
-                    if (e.target.checked) neste.add(n);
-                    else neste.delete(n);
-                    setValgte(neste);
-                  }}
-                />
-                <div>
-                  <div className="list-tittel">{MENY[n]!.etikett}</div>
-                  <div className="list-meta">{MENY[n]!.gruppe}</div>
-                </div>
-              </div>
-              {/* Dashboard er inngangen til alt annet — en kunde uten den ville hatt en app
-                  uten forside. */}
-              {last_ && <span className="badge muted">Kan ikke slås av</span>}
-            </label>
-          );
-        })}
+      <Kort tittel="Moduler i abonnementet">
+        {aktive.map((n) => (
+          <div key={n} className="list-item">
+            <div style={{ minWidth: 0 }}>
+              <div className="list-tittel">{MENY[n]!.etikett}</div>
+              <div className="list-meta">{MENY[n]!.gruppe}</div>
+            </div>
+            <span className="badge ok">Aktiv</span>
+          </div>
+        ))}
       </Kort>
 
       <div className="field-note">
-        Slår du av en modul, forsvinner den fra menyen og API-et svarer 403 — men ingenting
-        slettes. Slås den på igjen, står dataene der de sto.
+        Modulene følger avtalen deres og settes av DriftIQ. Vil dere ha en modul til — eller
+        fjerne en dere ikke bruker — ta kontakt, så ordner vi det.
       </div>
     </>
   );

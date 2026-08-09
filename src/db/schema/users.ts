@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, unique, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 /**
@@ -55,20 +55,37 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-/** Selve tilgangstabellen. Står i UNNTATT — org-velgeren må lese medlemskap på tvers. */
-export const userOrgMemberships = pgTable("user_org_memberships", {
-  id: varchar("id").primaryKey(),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  orgId: varchar("org_id")
-    .notNull()
-    .references(() => organizations.id, { onDelete: "cascade" }),
-  role: accessLevelEnum("role").notNull().default("visning"),
-  /** Ren beskrivelse — styrer ingenting. Nivået over er det eneste som gjelder. */
-  title: varchar("title"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+/**
+ * Selve tilgangstabellen. Står i UNNTATT — org-velgeren må lese medlemskap på tvers.
+ *
+ * `uq_user_org` er IKKE valgfri. v1 har den; jeg glemte den i porten, og resultatet var to
+ * medlemskapsrader for samme person i samme org — brukeren sto to ganger i lista, med hvert
+ * sitt tilgangsnivå. Applikasjonskoden sjekker for duplikat ved invitasjon, men
+ * migreringsskriptet gjorde ikke det, og en sjekk i koden er uansett ikke en garanti.
+ */
+export const userOrgMemberships = pgTable(
+  "user_org_memberships",
+  {
+    id: varchar("id").primaryKey(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    orgId: varchar("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: accessLevelEnum("role").notNull().default("visning"),
+    /** Ren beskrivelse — styrer ingenting. Nivået over er det eneste som gjelder. */
+    title: varchar("title"),
+    /**
+     * Varselinnstillinger som JSON. Fri tekst, ikke `jsonb` — v1 valgte `Text`, og
+     * migreringen kopierer verdien ordrett. Les den gjennom `lesPrefs` i `lib/varsler.ts`,
+     * aldri direkte: nøkler som mangler skal falle tilbake til standardene.
+     */
+    notificationPrefs: text("notification_prefs"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique("uq_user_org").on(t.userId, t.orgId)],
+);
 
 export type User = typeof users.$inferSelect;
 export type UserOrgMembership = typeof userOrgMemberships.$inferSelect;

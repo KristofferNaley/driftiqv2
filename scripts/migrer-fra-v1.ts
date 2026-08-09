@@ -53,10 +53,13 @@ const TABELLER: Tabell[] = [
   {
     navn: "organizations",
     kilde: `SELECT id, name, slug, org_nr, org_form, municipality, unit_count,
-                   COALESCE(active, true) AS active, enabled_modules, created_at
+                   COALESCE(active, true) AS active, enabled_modules, deviation_categories, created_at
             FROM organizations`,
-    kolonner: ["id", "name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "created_at"],
-    oppdater: ["name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules"],
+    kolonner: ["id", "name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories", "created_at"],
+    // `deviation_categories` er kundens egne avvikskategorier. Uten den her ville et lag som
+    // har navngitt kategoriene sine falt tilbake til standardsettet, og gamle avvik ville
+    // pekt på verdier som ikke lenger fantes i nedtrekket.
+    oppdater: ["name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories"],
   },
   {
     navn: "users",
@@ -73,11 +76,13 @@ const TABELLER: Tabell[] = [
   },
   {
     navn: "user_org_memberships",
-    kilde: `SELECT id, user_id, org_id, role::text AS role, title,
+    kilde: `SELECT id, user_id, org_id, role::text AS role, title, notification_prefs,
                    COALESCE(created_at, now()) AS created_at
             FROM user_org_memberships`,
-    kolonner: ["id", "user_id", "org_id", "role", "title", "created_at"],
-    oppdater: ["role", "title"],
+    kolonner: ["id", "user_id", "org_id", "role", "title", "notification_prefs", "created_at"],
+    // `notification_prefs` er med i `oppdater`: kjøres migreringen om igjen etter at kunden
+    // har endret varslene sine i v1, skal v2 følge etter — ellers står v2 på et gammelt sett.
+    oppdater: ["role", "title", "notification_prefs"],
   },
   {
     navn: "platform_contracts",

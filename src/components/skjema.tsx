@@ -88,6 +88,7 @@ export function Tekstfelt({
   type = "text",
   notat,
   plassholder,
+  laast,
 }: {
   etikett: string;
   verdi: string;
@@ -95,6 +96,8 @@ export function Tekstfelt({
   type?: string;
   notat?: string;
   plassholder?: string;
+  /** Vis verdien, men ikke la den endres — for felter som e-post, der verdien er nøkkelen. */
+  laast?: boolean;
 }) {
   return (
     <Felt etikett={etikett} notat={notat}>
@@ -103,6 +106,7 @@ export function Tekstfelt({
         type={type}
         value={verdi}
         placeholder={plassholder}
+        disabled={laast}
         onChange={(e) => onEndre(e.target.value)}
       />
     </Felt>
@@ -180,23 +184,34 @@ export function Avkryssing({
 /** Knapperad nederst i en modal. Primærhandlingen til høyre, som ellers i appen. */
 export function Knapperad({
   onAvbryt,
+  avbrytEtikett = "Avbryt",
   sendEtikett = "Lagre",
   sender,
   deaktivert,
   farlig,
+  onSend,
 }: {
   onAvbryt: () => void;
+  /** «Tilbake» når raden står i et steg som har et steg foran seg. */
+  avbrytEtikett?: string;
   sendEtikett?: string;
   sender?: boolean;
   deaktivert?: boolean;
   farlig?: boolean;
+  /** Gjør knappen til en vanlig knapp i stedet for submit — for bekreftelsesdialoger. */
+  onSend?: () => void;
 }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "4px" }}>
       <button type="button" className="btn btn-ghost" onClick={onAvbryt}>
-        Avbryt
+        {avbrytEtikett}
       </button>
-      <button className={`btn ${farlig ? "btn-danger" : "btn-primary"}`} disabled={sender || deaktivert}>
+      <button
+        type={onSend ? "button" : "submit"}
+        onClick={onSend}
+        className={`btn ${farlig ? "btn-danger" : "btn-primary"}`}
+        disabled={sender || deaktivert}
+      >
         {sender ? "Lagrer …" : sendEtikett}
       </button>
     </div>
