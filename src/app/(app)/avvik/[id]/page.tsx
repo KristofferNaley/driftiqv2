@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import Layout from "@/components/Layout";
-import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, dato, initialer, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
 import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
@@ -34,7 +34,6 @@ const STEG = [
 export default function Avviksdetalj({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => avvik.hent(o, id), [id]);
-  const [behandler, setBehandler] = useState(false);
   const [lukker, setLukker] = useState(false);
   const [redigerer, setRedigerer] = useState(false);
 
@@ -62,9 +61,6 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
             <button className="btn btn-ghost" onClick={() => setRedigerer(true)}>
               Rediger
             </button>
-            <button className="btn btn-ghost" onClick={() => setBehandler(true)}>
-              ＋ Legg til behandling
-            </button>
             <button className="btn btn-primary" onClick={() => setLukker(true)}>
               Lukk avvik
             </button>
@@ -88,7 +84,14 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
           ← Alle avvik
         </Link>
 
-        <Stegviser status={data.status} />
+        <Stegviser
+          status={data.status}
+          meldt={data.reportedAt}
+          // Når behandlingen startet: datoen på FØRSTE innlegg. Status settes av nettopp
+          // det å skrive et innlegg, så de to kan ikke komme ut av takt.
+          behandletFra={data.behandlinger[0]?.createdAt ?? null}
+          lukket={data.resolvedAt}
+        />
 
         {/* ── 1 · HVA ER AVVIKET ── */}
         <Kort
@@ -124,20 +127,40 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
         </Kort>
 
         {/* ── 2 · BEHANDLING ── */}
-        <Kort tittel={`2 · Behandling — hva gjør vi med saken (${data.behandlinger.length})`}>
-          {data.behandlinger.length === 0 ? (
-            <Tom tekst="Ingen behandlingsinnlegg ennå." />
-          ) : (
-            data.behandlinger.map((b) => (
-              <div key={b.id} className="logg-rad">
-                <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+        <Kort
+          tittel="2 · Behandling — hva gjør vi med saken"
+          handling={
+            <span className="field-note">
+              {data.behandlinger.length} {data.behandlinger.length === 1 ? "hendelse" : "hendelser"}
+            </span>
+          }
+        >
+          {data.behandlinger.map((b) => (
+            <div key={b.id} className="behandling-rad">
+              <span className="avatar liten">{initialer(b.createdBy)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div className="list-meta">
+                  <strong style={{ color: "var(--text)" }}>{b.createdBy}</strong> · {dato(b.createdAt)}
+                </div>
+                <div
+                  style={{
+                    fontSize: "var(--fs-sm)",
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    marginTop: "3px",
+                  }}
+                >
                   {b.text}
                 </div>
-                <div className="list-meta" style={{ marginTop: "5px" }}>
-                  {b.createdBy} · {dato(b.createdAt)}
-                </div>
               </div>
-            ))
+            </div>
+          ))}
+
+          {/* Skrivefeltet står DER samtalen er, ikke bak en knapp i toppen. Å registrere hva
+              som er gjort er den vanligste handlingen på siden — den skal ikke koste en
+              modal, og man skal se de forrige innleggene mens man skriver. */}
+          {!lukket && (
+            <SkrivBehandling orgId={orgId!} devId={id} onLagret={last} onFeil={setFeil} />
           )}
         </Kort>
 
@@ -158,14 +181,6 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
         </Kort>
       </div>
 
-      {behandler && (
-        <LeggTilBehandling
-          orgId={orgId!}
-          devId={id}
-          onLukk={() => setBehandler(false)}
-          onLagret={last}
-        />
-      )}
       {lukker && (
         <LukkAvvik orgId={orgId!} devId={id} onLukk={() => setLukker(false)} onLagret={last} />
       )}
@@ -187,16 +202,41 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
  * Viser hvor saken står i flyten. Status settes ALDRI direkte herfra: lukking krever en
  * løsningsbeskrivelse, og det kravet ville vært trivielt å omgå med en statusvelger.
  */
-function Stegviser({ status }: { status: string }) {
+function Stegviser({
+  status,
+  meldt,
+  behandletFra,
+  lukket,
+}: {
+  status: string;
+  meldt: string;
+  behandletFra: string | null;
+  lukket: string | null;
+}) {
   const naa = STEG.findIndex((s) => s.status === status);
+  // Datoen under hvert steg er poenget med visningen: «Under behandling» sier lite, «siden
+  // 9. august» sier om saken står stille.
+  const datoer = [meldt, behandletFra, lukket];
+
   return (
     <div className="stegviser">
-      {STEG.map((s, i) => (
-        <div key={s.status} className={`steg${i < naa ? " passert" : i === naa ? " aktiv" : ""}`}>
-          <span className="steg-prikk" aria-hidden />
-          <span className="steg-tekst">{s.etikett}</span>
-        </div>
-      ))}
+      {STEG.map((s, i) => {
+        const tilstand = i < naa ? " passert" : i === naa ? " aktiv" : "";
+        const d = datoer[i];
+        return (
+          <div key={s.status} className={`steg${tilstand}`}>
+            <span className="steg-prikk" aria-hidden />
+            <span style={{ minWidth: 0 }}>
+              <span className="steg-tekst">{s.etikett}</span>
+              {d && (
+                <span className="steg-dato">
+                  {i === naa && i > 0 ? `siden ${dato(d)}` : dato(d)}
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -397,42 +437,76 @@ function RedigerAvvik({
   );
 }
 
-function LeggTilBehandling({
+/**
+ * Skrivefeltet i behandlingsjournalen.
+ *
+ * Innlegget er append-only: det kan verken endres eller slettes etterpå. Derfor står
+ * påminnelsen om det RETT under feltet — ikke i en hjelpetekst man leser etter at man har
+ * sendt.
+ */
+function SkrivBehandling({
   orgId,
   devId,
-  onLukk,
   onLagret,
+  onFeil,
 }: {
   orgId: string;
   devId: string;
-  onLukk: () => void;
   onLagret: () => Promise<void>;
+  onFeil: (m: string) => void;
 }) {
   const [tekst, setTekst] = useState("");
-  const { sender, feil, send } = useSending(async () => {
-    await onLagret();
-    onLukk();
-  });
+  const [sender, setSender] = useState(false);
+
+  async function registrer() {
+    const rent = tekst.trim();
+    if (!rent || sender) return;
+    setSender(true);
+    try {
+      await avvik.behandle(orgId, devId, { text: rent });
+      setTekst("");
+      await onLagret();
+    } catch (e) {
+      onFeil(e instanceof Error ? e.message : "Kunne ikke lagre innlegget");
+    } finally {
+      setSender(false);
+    }
+  }
 
   return (
-    <Modal tittel="Legg til behandling" onLukk={onLukk}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(() => avvik.behandle(orgId, devId, { text: tekst.trim() }));
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
-      >
-        <Feil melding={feil} />
-        <Tekstomrade
-          etikett="Hva er gjort?"
-          verdi={tekst}
-          onEndre={setTekst}
-          notat="Innlegget kan ikke endres eller slettes etterpå. Journalen er dokumentasjon, og den er bare troverdig hvis den står som den ble skrevet."
+    <form
+      className="behandling-skriv"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void registrer();
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <textarea
+          className="input"
+          rows={2}
+          value={tekst}
+          aria-label="Hva er gjort eller avtalt?"
+          placeholder="Skriv hva som er gjort eller avtalt …"
+          onChange={(e) => setTekst(e.target.value)}
+          // Ctrl/Cmd+Enter sender, som i de fleste kommentarfelt. Enter alene gir linjeskift:
+          // et behandlingsinnlegg er ofte flere setninger.
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void registrer();
+            }
+          }}
         />
-        <Knapperad onAvbryt={onLukk} sendEtikett="Legg til" sender={sender} deaktivert={!tekst.trim()} />
-      </form>
-    </Modal>
+        <div className="field-note" style={{ marginTop: "6px" }}>
+          Innlegget kan ikke endres eller slettes etterpå — journalen er dokumentasjon, og den
+          er bare troverdig hvis den står som den ble skrevet.
+        </div>
+      </div>
+      <button className="btn btn-primary" disabled={sender || !tekst.trim()}>
+        {sender ? "Lagrer …" : "Registrer"}
+      </button>
+    </form>
   );
 }
 
