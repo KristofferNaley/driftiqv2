@@ -8,7 +8,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { userOrgMemberships } from "../db/schema/users";
+import { userOrgMemberships, users } from "../db/schema/users";
 import { ikkeFunnet } from "./api";
 import { VARSEL_NOKLER, VARSEL_STANDARD, type VarselNokkel } from "./varselvalg";
 
@@ -46,6 +46,49 @@ async function hentMedlemskap(db: Db, orgId: string, brukerId: string) {
   const m = rader[0];
   if (!m) throw ikkeFunnet("Bruker i denne organisasjonen");
   return m;
+}
+
+/**
+ * Hvem i org-en som vil ha ETT bestemt varsel.
+ *
+ * Går til hver enkelt som har bedt om det, ikke til én felles adresse per organisasjon slik
+ * v1 gjorde før 2026. Deaktiverte brukere og brukere uten e-post faller ut.
+ */
+export async function mottakere(
+  db: Db,
+  orgId: string,
+  nokkel: VarselNokkel,
+): Promise<Array<{ id: string; navn: string; epost: string }>> {
+  const rader = await db
+    .select({
+      id: users.id,
+      navn: users.name,
+      epost: users.email,
+      prefs: userOrgMemberships.notificationPrefs,
+    })
+    .from(userOrgMemberships)
+    .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+    .where(and(eq(userOrgMemberships.orgId, orgId), eq(users.active, true)));
+
+  return rader
+    .filter((r) => Boolean(r.epost) && lesPrefs(r.prefs)[nokkel] === true)
+    .map((r) => ({ id: r.id, navn: r.navn, epost: r.epost }));
+}
+
+/** Om ÉN bruker vil ha ett bestemt varsel i én organisasjon. */
+export async function varselPa(
+  db: Db,
+  brukerId: string,
+  orgId: string,
+  nokkel: VarselNokkel,
+): Promise<boolean> {
+  const rader = await db
+    .select({ prefs: userOrgMemberships.notificationPrefs })
+    .from(userOrgMemberships)
+    .where(and(eq(userOrgMemberships.orgId, orgId), eq(userOrgMemberships.userId, brukerId)))
+    .limit(1);
+  if (!rader[0]) return false;
+  return lesPrefs(rader[0].prefs)[nokkel] === true;
 }
 
 export async function hentVarsler(db: Db, orgId: string, brukerId: string) {

@@ -189,3 +189,108 @@ export async function sendKontooppsett(navn: string, til: string, url: string): 
     ),
   );
 }
+
+/* ── Varsler fra den periodiske jobben ─────────────────────────────────────────────── */
+
+const rad = (venstre: string, hoyre?: string) =>
+  `<tr style="border-bottom:1px solid #e2e8f0;">` +
+  `<td style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${venstre}</td>` +
+  (hoyre === undefined ? "" : `<td style="padding:8px 0;font-size:12px;color:#8892a4;">${hoyre}</td>`) +
+  `</tr>`;
+
+const tabell = (rader: string) =>
+  `<table style="width:100%;border-collapse:collapse;margin:12px 0;">${rader}</table>`;
+
+/**
+ * Ukentlig sammendrag av ALLE forsinkede oppgaver i laget.
+ *
+ * Skiller seg fra den personlige varianten under ved at lista er hele lagets — dette går til
+ * den som har bedt om oversikten, ikke til den som er ansvarlig.
+ */
+export async function sendForsinkedeOppgaver(
+  orgNavn: string,
+  til: string,
+  oppgaver: Array<{ tittel: string; leverandor: string | null }>,
+): Promise<void> {
+  const antall = oppgaver.length;
+  await send(
+    til,
+    `${antall} forsinkede oppgaver — ${orgNavn}`,
+    ramme(
+      h(`Forsinkede oppgaver — ${trygg(orgNavn)}`) +
+        p(
+          `${antall} oppgave${antall === 1 ? "" : "r"} i <strong>${trygg(orgNavn)}</strong> er ` +
+            "forfalt og ikke utført:",
+        ) +
+        tabell(oppgaver.map((o) => rad(trygg(o.tittel), trygg(o.leverandor ?? "—"))).join("")) +
+        knapp("Se alle oppgaver", `${APP_URL}/oppgaver`),
+    ),
+  );
+}
+
+/**
+ * Personlig påminnelse til den som står som ansvarlig.
+ *
+ * Mykere innledning enn sammendraget over, og med vilje: dette er en påminnelse om ditt eget
+ * ansvar, ikke en rapport om laget.
+ */
+export async function sendMineForsinkedeOppgaver(
+  orgNavn: string,
+  til: string,
+  navn: string,
+  oppgaver: Array<{ tittel: string; sted: string | null }>,
+): Promise<void> {
+  const antall = oppgaver.length;
+  await send(
+    til,
+    `${antall} av dine oppgaver er forsinket — ${orgNavn}`,
+    ramme(
+      h(`${antall} av dine oppgaver er forsinket`) +
+        p(
+          `Hei ${fornavn(navn)}! Disse oppgavene i <strong>${trygg(orgNavn)}</strong> står som ` +
+            "ditt ansvar og har passert fristen sin.",
+        ) +
+        tabell(
+          oppgaver
+            .map((o) =>
+              rad(
+                trygg(o.tittel) +
+                  (o.sted ? `<br><span style="font-size:11px;color:#8892a4;">${trygg(o.sted)}</span>` : ""),
+              ),
+            )
+            .join(""),
+        ) +
+        knapp("Se oppgavene", `${APP_URL}/oppgaver`),
+    ),
+  );
+}
+
+/** Kontrakter som nærmer seg utløp. Rødt under 30 dager — da haster reforhandlingen. */
+export async function sendKontrakterUtloper(
+  orgNavn: string,
+  til: string,
+  kontrakter: Array<{ tittel: string; leverandor: string | null; dagerIgjen: number }>,
+): Promise<void> {
+  const rader = kontrakter
+    .map(
+      (k) =>
+        `<tr style="border-bottom:1px solid #e2e8f0;">` +
+        `<td style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${trygg(k.tittel)}</td>` +
+        `<td style="padding:8px 12px 8px 0;font-size:12px;color:#8892a4;">${trygg(k.leverandor ?? "—")}</td>` +
+        // #d97706 og ikke profilens amber: den har for lav kontrast mot hvitt som tekst.
+        `<td style="padding:8px 0;font-size:12px;font-weight:600;color:${k.dagerIgjen <= 30 ? "#f04040" : "#d97706"};">${k.dagerIgjen} dager</td>` +
+        `</tr>`,
+    )
+    .join("");
+
+  await send(
+    til,
+    `Kontrakter utløper snart — ${orgNavn}`,
+    ramme(
+      h(`Kontrakter som snart utløper — ${trygg(orgNavn)}`) +
+        p(`Følgende avtaler i <strong>${trygg(orgNavn)}</strong> nærmer seg utløpsdato:`) +
+        tabell(rader) +
+        knapp("Se kontrakter", `${APP_URL}/kontrakter`),
+    ),
+  );
+}
