@@ -30,10 +30,17 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
     <Layout
       tittel={data.title}
       handlinger={
-        <button className="btn btn-primary" onClick={() => setKvitterer(true)}>
-          <Check size={16} strokeWidth={2} aria-hidden />
-          Kvitter ut
-        </button>
+        <>
+          {/* Arket bærer QR-koden som henges opp på installasjonen. Uten denne inngangen
+              er siden bare en URL man må huske. */}
+          <Link className="btn btn-ghost" href={`/oppgaver/${id}/ark`}>
+            🖨 Oppgaveark
+          </Link>
+          <button className="btn btn-primary" onClick={() => setKvitterer(true)}>
+            <Check size={16} strokeWidth={2} aria-hidden />
+            Kvitter ut
+          </button>
+        </>
       }
     >
       <div className="page-content">

@@ -989,3 +989,150 @@ textarea.qr-input { resize: vertical; }
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: rgba(255, 255, 255, 0.55);
 }
+
+/* ══ UTSKRIFTSARK (A4) ══
+ *
+ * Hele siden ER ett ark. Fargene følger den grafiske profilen — A4-mockupen i Mockups/ er
+ * tegnet med en annen palett og et annet merke; komposisjonen derfra gjelder, fargene ikke.
+ */
+.ark-side {
+  min-height: 100dvh; background: #0d1b2a;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 24px; overflow-y: auto;
+}
+.ark-side > * { flex-shrink: 0; }
+.ark-verktoy {
+  width: 210mm; max-width: 100%;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.ark-verktoy a { color: #e9f0f7; font-size: var(--fs-sm); text-decoration: none; }
+.ark-verktoy a:hover { text-decoration: underline; }
+.ark-feil { color: #e9f0f7; margin-top: 60px; }
+
+.ark {
+  width: 210mm; height: 297mm; background: #fff; color: #0d1b2a;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-sans);
+}
+.ark * { box-sizing: border-box; }
+
+.ark-merke { display: flex; align-items: center; justify-content: space-between; padding: 10mm 14mm 0; }
+.ark-logo { display: flex; align-items: center; gap: 9px; }
+.ark-mark {
+  width: 30px; height: 30px; border-radius: 8px; flex: none;
+  background: linear-gradient(135deg, #1459e0, #00c2ff);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 800; letter-spacing: -0.5px;
+}
+.ark-navn { font-weight: 800; font-size: 17px; letter-spacing: -0.5px; }
+.ark-navn span { color: #1459e0; }
+.ark-dok {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px;
+  text-transform: uppercase; color: #8892a4;
+}
+
+.ark-kunde { padding: 8mm 14mm 0; }
+.ark-overtittel {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px;
+  text-transform: uppercase; color: #1459e0; margin-bottom: 4px;
+}
+.ark-kunde h1 { font-size: 22px; font-weight: 700; margin: 0; }
+
+.ark-band {
+  margin: 6mm 14mm 0; padding: 6mm 7mm; border-radius: 12px;
+  background: #f0f4ff; border-left: 4px solid #1459e0;
+}
+.ark-band.kritisk { background: #fdeceb; border-left-color: #f04040; }
+.ark-kicker {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px;
+  text-transform: uppercase; color: #8892a4;
+}
+.ark-band h2 { font-size: 26px; font-weight: 700; margin: 3px 0 6px; line-height: 1.15; }
+.ark-fakta { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: #3d4a5c; }
+
+.ark-hoved { display: flex; gap: 8mm; padding: 7mm 14mm 0; flex: 1; min-height: 0; }
+.ark-venstre { flex: 1; min-width: 0; }
+.ark-blokk {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px;
+  text-transform: uppercase; color: #8892a4; margin-bottom: 3px;
+}
+.ark-tekst { font-size: 12.5px; line-height: 1.65; margin: 0; white-space: pre-wrap; }
+.ark-sjekk { list-style: none; margin: 0; padding: 0; }
+.ark-sjekk li {
+  font-size: 12.5px; line-height: 1.5; padding: 2.6mm 0 2.6mm 8mm;
+  border-bottom: 1px solid #e2e8f0; position: relative;
+}
+.ark-sjekk li::before {
+  content: ""; position: absolute; left: 0; top: 2.4mm;
+  width: 4.2mm; height: 4.2mm; border: 1.4px solid #8892a4; border-radius: 2px;
+}
+.ark-sjekk li:last-child { border-bottom: none; }
+
+.ark-qr { width: 52mm; flex: none; text-align: center; }
+.ark-qr.smal { width: 44mm; }
+.ark-qr img { width: 100%; height: auto; display: block; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ark-skann {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: #1459e0; margin-bottom: 3mm;
+}
+.ark-hvordan { font-size: 10.5px; line-height: 1.5; color: #3d4a5c; margin: 3mm 0 0; }
+.ark-url { font-size: 8.5px; color: #8892a4; margin-top: 2mm; word-break: break-all; }
+
+.ark-steg { list-style: none; margin: 4mm 0 0; padding: 0; }
+.ark-steg li { display: flex; gap: 4mm; padding: 3mm 0; border-bottom: 1px solid #e2e8f0; }
+.ark-steg li:last-child { border-bottom: none; }
+.ark-nr {
+  width: 6.5mm; height: 6.5mm; border-radius: 50%; flex: none;
+  border: 1.4px solid #1459e0; color: #1459e0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.ark-steg li.kritisk .ark-nr { border-color: #f04040; color: #f04040; }
+.ark-steg-tittel { font-size: 12.5px; font-weight: 700; }
+.ark-steg-tekst { font-size: 11.5px; color: #3d4a5c; margin-top: 1mm; line-height: 1.5; white-space: pre-wrap; }
+.ark-varsel { font-size: 11px; color: #f04040; font-weight: 600; margin-top: 1.5mm; }
+
+.ark-kontakt {
+  display: flex; align-items: center; gap: 4mm;
+  margin: 6mm 14mm 0; padding: 4mm 5mm;
+  background: #fafbff; border: 1px solid #e2e8f0; border-radius: 10px;
+}
+.ark-avatar {
+  width: 10mm; height: 10mm; border-radius: 50%; flex: none;
+  background: #1459e0; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.ark-rolle {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: #8892a4;
+}
+.ark-person { font-size: 13px; font-weight: 700; }
+.ark-naa { margin-left: auto; text-align: right; font-size: 11.5px; color: #3d4a5c; }
+
+.ark-fot {
+  margin-top: auto; padding: 5mm 14mm 8mm;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: #8892a4; border-top: 1px solid #e2e8f0; padding-top: 4mm;
+}
+.ark-prikk {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: #0fba81; margin-right: 5px;
+}
+
+/*
+ * Utskrift. Alt utenom selve arket bort — verktøylinja hører til skjermen, ikke papiret.
+ *
+ * `print-color-adjust: exact` er ikke valgfritt: uten den fjerner nettleseren bakgrunnene,
+ * og fargebåndet som skiller oppgaven fra resten blir hvitt på hvitt.
+ */
+@media print {
+  @page { size: A4; margin: 0; }
+  .ark-side { background: #fff; padding: 0; display: block; height: auto; overflow: visible; }
+  .ark-verktoy { display: none; }
+  .ark {
+    width: 210mm; height: 297mm; box-shadow: none;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+}

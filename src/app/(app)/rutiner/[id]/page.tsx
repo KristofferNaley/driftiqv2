@@ -28,7 +28,11 @@ export default function Rutinedetalj({ params }: { params: Promise<{ id: string 
     <Layout
       tittel={data.title}
       handlinger={
-        data.effektivStatus === "trenger_gjennomgang" && (
+        <>
+        <Link className="btn btn-ghost" href={`/rutiner/${id}/ark`}>
+          🖨 Rutineark
+        </Link>
+        {data.effektivStatus === "trenger_gjennomgang" && (
           <button
             className="btn btn-primary"
             onClick={async () => {
@@ -40,7 +44,8 @@ export default function Rutinedetalj({ params }: { params: Promise<{ id: string 
           >
             Marker gjennomgått
           </button>
-        )
+        )}
+        </>
       }
     >
       <div className="page-content">
