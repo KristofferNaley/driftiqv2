@@ -1,0 +1,9 @@
+.env
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# macOS-støy fra Finder
+.DS_Store
+._*

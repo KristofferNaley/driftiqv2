@@ -1,0 +1,12 @@
+DriftIQ — komplett dataeksport for Borettslaget Håsteinsgate 9
+Generert: 2026-08-09
+
+data.json         Alle registrerte data (oppgaver, avvik, kontrakter, HMS, …)
+dokumentarkiv/    Dokumentarkivet, i samme mapper som i appen
+kontrakter/       Kontraktsfiler, per leverandør
+avvik/            Vedlegg, per avvik (nummerert som i appen)
+utkvitteringer/   Bilder fra utførte oppgaver, per oppgave og dato
+vedlikeholdsplan/ FDV-dokumentasjon, per bygningselement
+profil/           Logo og banner
+
+Antall filer: 38

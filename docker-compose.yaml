@@ -1,0 +1,34 @@
+# DriftIQ v2 — Next.js + Better Auth. Eget prosjekt, egen historikk, egen database.
+#
+# Kjører side om side med v1s test (3005/3006/8001) og prod (3002/3003/8000), og deler
+# ingenting med dem utover den sentrale Postgres-serveren.
+#
+#   docker compose up -d --build
+#
+# Databasen er IKKE en del av stacken. Den ligger på vertens sentrale Postgres 17, som nås
+# som verten «postgres» på det eksterne `edge`-nettet. Se README, «Første gang».
+services:
+  app:
+    build: .
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      # Egen approlle: den sentrale Postgres-serveren er delt mellom miljøer, og roller er
+      # cluster-vide. Uten eget navn ville v2 og v1-test kjempet om samme rolles passord ved
+      # hver oppstart — samme grunn som `driftiq_test_app` i v1.
+      APP_DB_USER: ${APP_DB_USER:-driftiq_v2_app}
+      # I motsetning til v1 er denne PÅKREVD — appen nekter å starte uten den, i stedet for
+      # å falle tilbake til eierrollen med en advarsel. Se kommentaren i src/db/client.ts.
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3008}
+    ports:
+      - "3008:3008"
+    networks:
+      default:
+      edge:
+
+# Nettet opprettes én gang per maskin med:  docker network create edge
+networks:
+  edge:
+    external: true

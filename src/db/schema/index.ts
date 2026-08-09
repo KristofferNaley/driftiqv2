@@ -1,0 +1,18 @@
+/**
+ * Drizzle-skjema for v2.
+ *
+ * Bare de tabellene som er portert så langt ligger her. RLS-registeret i `../rls/tables.ts`
+ * bærer derimot HELE lista fra v1 fra dag én — `settOpp()` hopper over tabeller som ikke
+ * finnes ennå. Rekkefølgen er med vilje: sikkerhetsspesifikasjonen skal være komplett før
+ * modulene kommer, ikke vokse etter dem.
+ *
+ * Kolonnene speiler `backend/app/models.py` felt for felt der de finnes, slik at data kan
+ * kopieres over uten oversettelseslag. Merk at id og org_id er VARCHAR og ikke `uuid` — en
+ * arv fra v1 som beholdes bevisst, siden RLS-policyene sammenligner mot en tekstverdi og en
+ * `::uuid`-cast ville feilet med «invalid input syntax».
+ */
+
+export * from "./organizations";
+export * from "./users";
+export * from "./vendors";
+export * from "./tasks";
