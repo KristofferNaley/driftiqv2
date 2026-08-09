@@ -21,7 +21,12 @@ export const GET = plattformRute({
   handler: async ({ db, bruker }) => {
     const rader = await withoutRls("innlogging", (d) =>
       d
-        .select({ org: organizations, nivaa: userOrgMemberships.role })
+        .select({
+          org: organizations,
+          nivaa: userOrgMemberships.role,
+          /** Vervet — «Styreleder», «Vaktmester». Ren beskrivelse, styrer ingenting. */
+          tittel: userOrgMemberships.title,
+        })
         .from(userOrgMemberships)
         .innerJoin(organizations, eq(organizations.id, userOrgMemberships.orgId))
         .where(eq(userOrgMemberships.userId, bruker.id)),
@@ -73,6 +78,7 @@ export const GET = plattformRute({
           id: r.org.id,
           name: r.org.name,
           nivaa: r.nivaa,
+          tittel: r.tittel,
           enabledModules: r.org.enabledModules,
         })),
     };

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import OrgVelger from "./OrgVelger";
 import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
 import { NIVA_ETIKETT } from "@/lib/nivaer";
@@ -94,14 +93,18 @@ export default function Layout({
   return (
     <div className="app-shell">
       {apen && <div className="sidebar-backdrop" onClick={() => setApen(false)} />}
-      {/* `bruker.tittel` får ETIKETTEN, ikke råverdien: `orgadmin` er et kodenavn, og kunden
-          skal lese «Kontoadmin». Se lib/nivaer.ts for hvorfor de to er ulike med vilje. */}
+      {/* Under navnet står VERVET, ikke tilgangsnivået: «Styreleder» er det personen kjenner
+          seg igjen som, og det er kunden selv som har fylt det ut. Nivået er en
+          tillatelseskonstruksjon og brukes bare som reserve når vervet ikke er satt — da
+          vises etiketten («Kontoadmin»), aldri råverdien `orgadmin`. Samme rekkefølge som v1.
+
+          Support-modus overstyrer begge: da er det en TILSTAND som må være synlig for den
+          som utfører innsynet, ikke en identitet. */}
       <Sidebar
         apen={apen}
         sammenslatt={sammenslatt}
         aktiverteModuler={aktivOrg?.enabledModules ?? null}
         oktKjent={!laster}
-        orgNavn={aktivOrg?.name ?? null}
         tall={navtallene}
         bruker={
           bruker
@@ -111,7 +114,7 @@ export default function Layout({
                   aktivOrg && bruker.supportOrger?.includes(aktivOrg.id)
                     ? "Support-modus"
                     : aktivOrg
-                      ? (NIVA_ETIKETT[aktivOrg.nivaa] ?? null)
+                      ? (aktivOrg.tittel?.trim() || NIVA_ETIKETT[aktivOrg.nivaa] || null)
                       : null,
               }
             : null
@@ -133,7 +136,6 @@ export default function Layout({
             </button>
             <div className="page-title">{tittel}</div>
             {/* Kontekst for HELE skjermbildet — derfor til venstre, ved tittelen. */}
-            <OrgVelger />
           </div>
           <div className="topbar-right">
             {handlinger}

@@ -10,13 +10,15 @@
  * dokumentene flyttes til «Annet», undertreet slettes for hånd.
  */
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { documentFolders, documents } from "../db/schema/dokumenter";
+import { elementDocuments } from "../db/schema/vedlikehold";
+import { contracts } from "../db/schema/kontrakter";
 import { ikkeFunnet, ugyldig } from "./api";
-import { lagreFil, slettFil } from "./lagring";
+import { lagreFil, lagringsstatus, slettFil } from "./lagring";
 
 const MODUL = "documents";
 
@@ -308,4 +310,106 @@ export function grupperPaAar(dokumenter: Array<{ documentDate: string | null }>)
     grupper.set(aar, (grupper.get(aar) ?? 0) + 1);
   }
   return grupper;
+}
+
+// ---------------------------------------------------------------------------------------
+// Arkivoversikten
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Anbefalt innhold. Hvert punkt sjekker bare om en mappe HAR noe i seg.
+ *
+ * Det er alt vi ærlig kan utlede. Vi kan ikke vite om en bestemt PDF faktisk er
+ * som-bygget-tegninger, og lista skal ikke påstå mer enn den vet — den er en huskeliste,
+ * ikke en godkjenning.
+ */
+export const ANBEFALT: ReadonlyArray<{ mappe: string; tittel: string; hint?: string }> = [
+  { mappe: "vedtekter", tittel: "Gjeldende vedtekter", hint: "Signert og datert versjon" },
+  { mappe: "generalforsamling", tittel: "Siste generalforsamlingsprotokoll" },
+  { mappe: "styrereferater", tittel: "Styrereferater", hint: "Referat fra styremøtene" },
+  {
+    mappe: "bygningsdok",
+    tittel: "Bygningsdokumentasjon",
+    hint: "Tegninger og tilsynsrapporter. FDV per bygningsdel ligger i Vedlikehold-mappa.",
+  },
+  { mappe: "forsikring", tittel: "Gjeldende forsikringsavtale" },
+];
+
+/**
+ * Alt forsiden i arkivet trenger: mapper med tellinger, speilmappene, anbefalt innhold,
+ * lagringsstatus og de sist opplastede.
+ *
+ * ## Speilmappene
+ *
+ * FDV-filene eies av Vedlikehold og kontraktfilene av Kontrakter. De vises HER fordi det er
+ * her folk leter etter «forsikringsavtalen» eller «FDV-en på taket» — men de kopieres ikke.
+ * Kortene teller bare, og opplasting og sletting skjer i modulen som eier filene. To steder
+ * å laste opp samme fil ville gitt to sannheter om hvilken versjon som gjelder.
+ */
+export async function hentArkivoversikt(db: Db, orgId: string) {
+  const [alle, egne, lagring, fdv, kontraktfiler] = await Promise.all([
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        folder: documents.folder,
+        fileSize: documents.fileSize,
+        originalName: documents.originalName,
+        contentType: documents.contentType,
+        documentDate: documents.documentDate,
+        uploadedAt: documents.uploadedAt,
+      })
+      .from(documents)
+      .where(eq(documents.orgId, orgId)),
+    hentMapper(db, orgId),
+    lagringsstatus(db, orgId),
+    // Speil: FDV per bygningsdel.
+    db
+      .select({ elementId: elementDocuments.elementId })
+      .from(elementDocuments)
+      .where(eq(elementDocuments.orgId, orgId)),
+    // Speil: kontrakter med fil. `fileName` er null når ingen fil er lastet opp.
+    db
+      .select({ vendorId: contracts.vendorId })
+      .from(contracts)
+      .where(and(eq(contracts.orgId, orgId), isNotNull(contracts.fileName))),
+  ]);
+
+  const perMappe = new Map<string, number>();
+  for (const d of alle) perMappe.set(d.folder, (perMappe.get(d.folder) ?? 0) + 1);
+
+  const undermapper = new Map<string, number>();
+  for (const m of egne) {
+    if (m.parentId) undermapper.set(m.parentId, (undermapper.get(m.parentId) ?? 0) + 1);
+  }
+
+  return {
+    faste: FASTE_MAPPER.map((n) => ({
+      nokkel: n,
+      antall: perMappe.get(n) ?? 0,
+      antallUndermapper: undermapper.get(n) ?? 0,
+    })),
+    // Bare toppnivå på forsiden — undermapper vises når man går inn i forelderen.
+    egne: egne
+      .filter((m) => !m.parentId)
+      .map((m) => ({
+        ...m,
+        antall: perMappe.get(m.id) ?? 0,
+        antallUndermapper: undermapper.get(m.id) ?? 0,
+      })),
+    speil: {
+      vedlikehold: { antall: fdv.length, antallDeler: new Set(fdv.map((r) => r.elementId)).size },
+      kontrakter: {
+        antall: kontraktfiler.length,
+        antallLeverandorer: new Set(kontraktfiler.map((r) => r.vendorId)).size,
+      },
+    },
+    anbefalt: ANBEFALT.map((a) => ({ ...a, ok: (perMappe.get(a.mappe) ?? 0) > 0 })),
+    lagring,
+    /** De ti sist opplastede, på tvers av mapper — «hvor ble det av den jeg lastet opp?». */
+    nylig: [...alle]
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+      .slice(0, 10),
+    antallTotalt: alle.length,
+  };
 }

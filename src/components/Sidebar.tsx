@@ -6,6 +6,8 @@ import * as ikoner from "lucide-react";
 import { Settings } from "lucide-react";
 import { menyFor } from "@/lib/moduler";
 import { initialer } from "./felles";
+import OrgVelger from "./OrgVelger";
+import Temaknapp from "./Temaknapp";
 
 /**
  * Sidemenyen. Punktene kommer fra `menyFor()` i lib/moduler.ts — samme fil som gaten på
@@ -37,7 +39,6 @@ export default function Sidebar({
   aktiverteModuler,
   oktKjent,
   bruker,
-  orgNavn,
   tall,
   versjon,
   onLukk,
@@ -47,8 +48,6 @@ export default function Sidebar({
   sammenslatt: boolean;
   aktiverteModuler: string | null;
   bruker: { navn: string; tittel: string | null } | null;
-  /** Kundens navn i toppen — det er DERES system, ikke vårt. */
-  orgNavn: string | null;
   /** Merker på Oppgaver og Avvik. `null` før tallene er hentet — se kommentaren i Layout. */
   tall: { forsinkedeOppgaver: number; apneAvvik: number } | null;
   /** Er økten hentet? Før den er det, tegnes ingen punkter — se `menyFor`. */
@@ -66,25 +65,22 @@ export default function Sidebar({
       className={`sidebar${apen ? " apen" : ""}${sammenslatt ? " collapsed" : ""}`}
       aria-label="Hovedmeny"
     >
-      {/* Kundens navn står øverst, ikke vårt.
-          Systemet er deres arbeidsflate — de bruker det hver uke og vet godt hvem som har
-          laget det. DriftIQ-merket flyttes til foten, der det hører hjemme. */}
+      {/* Logoen er et avrundet kvadrat med radius = 25 % av bredden, identisk med
+          favicon.svg. Tegn den aldri på nytt fra en mockup.
+
+          Kundens navn sto her en periode, men flyttet ned til org-velgeren rett over
+          Dashboard — ellers sto det to ganger like under hverandre. */}
       <div className="sidebar-logo">
-        {orgNavn ? (
-          <span className="org-navn" title={orgNavn}>{orgNavn}</span>
-        ) : (
-          <>
-            {/* Logoen er et avrundet kvadrat med radius = 25 % av bredden, identisk med
-                favicon.svg. Tegn den aldri på nytt fra en mockup. */}
-            <span className="logo-mark" aria-hidden>
-              IQ
-            </span>
-            <span className="logo-tekst">
-              Drift<span className="iq">IQ</span>
-            </span>
-          </>
-        )}
+        <span className="logo-mark" aria-hidden>
+          IQ
+        </span>
+        <span className="logo-tekst">
+          Drift<span className="iq">IQ</span>
+        </span>
       </div>
+
+      {/* Org-en er kontekst for alt under, derfor over det første menypunktet. */}
+      <OrgVelger />
 
       <div className="sidebar-nav">
         {grupper.map((g) => (
@@ -118,6 +114,9 @@ export default function Sidebar({
         ))}
       </div>
 
+      {/* Temaveksleren over profilblokken, som i v1. */}
+      <Temaknapp />
+
       {/* Profilblokken står NEDERST, som i v1: hvem du er innlogget som er kontekst du
           sjelden trenger, men alltid vil kunne finne. Navnet i toppbaren erstattes av den. */}
       {bruker && (
@@ -130,11 +129,7 @@ export default function Sidebar({
           <Settings size={15} strokeWidth={1.9} aria-hidden />
         </button>
       )}
-      {/* Merket i foten: kundens navn har toppen. */}
-      <div className="sidebar-fot">
-        <span className="logo-mark liten" aria-hidden>IQ</span>
-        <span>Drift<span className="iq">IQ</span> v{versjon}</span>
-      </div>
+      <div className="sidebar-fot">v{versjon}</div>
     </nav>
   );
 }

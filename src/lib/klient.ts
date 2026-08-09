@@ -227,6 +227,9 @@ export const leverandorer = {
 export type Dokument = {
   id: string; title: string; folder: string; documentDate: string | null;
   originalName: string; fileSize: number | null; aiReadable: boolean;
+  // API-et returnerer hele raden; disse manglet i typen og gjorde at kallsteder som
+  // trengte filikon eller opplastingsdato ikke kompilerte.
+  contentType: string; uploadedAt: string;
 };
 export type Mappe = { id: string; name: string; icon: string; parentId: string | null };
 
@@ -239,6 +242,27 @@ export const dokumenter = {
   mapper: (o: string) => api.hent<Mappe[]>(org(o, "/document-folders")),
   nyMappe: (o: string, d: unknown) => api.send<Mappe>(org(o, "/document-folders"), d),
   slettMappe: (o: string, id: string) => api.slett(org(o, `/document-folders/${id}`)),
+  endreMappe: (o: string, id: string, d: unknown) =>
+    api.endre<Mappe>(org(o, `/document-folders/${id}`), d),
+  oversikt: (o: string) => api.hent<Arkivoversikt>(org(o, "/documents/oversikt")),
+};
+
+export type ArkivDok = {
+  id: string; title: string; folder: string; fileSize: number | null;
+  originalName: string; contentType: string; documentDate: string | null; uploadedAt: string;
+};
+
+export type Arkivoversikt = {
+  faste: Array<{ nokkel: string; antall: number; antallUndermapper: number }>;
+  egne: Array<Mappe & { antall: number; antallUndermapper: number }>;
+  speil: {
+    vedlikehold: { antall: number; antallDeler: number };
+    kontrakter: { antall: number; antallLeverandorer: number };
+  };
+  anbefalt: Array<{ mappe: string; tittel: string; hint?: string; ok: boolean }>;
+  lagring: { brukt: number; kvote: number; prosent: number };
+  nylig: ArkivDok[];
+  antallTotalt: number;
 };
 
 export type Bygningsdel = {
@@ -440,7 +464,12 @@ export type MegSvar = {
   email: string;
   phone: string | null;
   role: string;
-  organisasjoner: Array<{ id: string; name: string; nivaa: string; enabledModules: string | null }>;
+  organisasjoner: Array<{
+    id: string; name: string; nivaa: string;
+    /** Vervet i DENNE org-en — «Styreleder». Null når det ikke er fylt ut. */
+    tittel: string | null;
+    enabledModules: string | null;
+  }>;
 };
 
 export const navtall = {
