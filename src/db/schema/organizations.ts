@@ -1,4 +1,5 @@
 import { bigint, boolean, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bbl } from "./bbl";
 
 /** Et borettslag eller sameie. Står i UNNTATT — listes på tvers av plattformpanelet. */
 export const organizations = pgTable("organizations", {
@@ -39,6 +40,47 @@ export const organizations = pgTable("organizations", {
    * kravene avgrenses til brannvern, el-sikkerhet og produktkontroll.
    */
   hasEmployees: boolean("has_employees").notNull().default(false),
+
+  /**
+   * Kontaktpunktene til laget SELV — styrets fellesadresse, ikke en person. Hentes fra
+   * Brønnøysund ved opprettelse og vedlikeholdes av plattformadmin.
+   */
+  phone: varchar("phone"),
+  contactEmail: varchar("contact_email"),
+  website: varchar("website"),
+
+  // --- Tilknytning og forretningsfører (BL-85) ---------------------------------------
+  // Settes KUN av plattformadmin. Kunden ser verdiene i egne innstillinger, men kan ikke
+  // endre dem — se strippingen i lib/organisasjon.ts.
+
+  /**
+   * «frittstaende» | «tilknyttet» | NULL (ikke kartlagt ennå).
+   *
+   * Et tilknyttet borettslag følger andre regler ved salg og styring enn et frittstående.
+   * Feltet er grunnlaget Lovverk-visningen og salgsflyten skal lese fra når de modulene
+   * kommer; ingen av dem finnes ennå.
+   */
+  affiliationType: varchar("affiliation_type"),
+  bblId: varchar("bbl_id").references(() => bbl.id),
+  /**
+   * Forretningsfører er et SEPARAT forhold fra tilknytningen. De faller ofte sammen (Vestbo
+   * er forretningsfører for sine tilknyttede lag), men et frittstående lag kan ha et
+   * regnskapsbyrå som forretningsfører, og et tilknyttet lag kan være selvadministrert.
+   *
+   * «selvadministrert» | «bbl» | «ekstern» | NULL.
+   */
+  managerType: varchar("manager_type"),
+  managerBblId: varchar("manager_bbl_id").references(() => bbl.id),
+  /**
+   * Brukes kun når `managerType` = «ekstern». Eksterne forretningsførere er stort sett små,
+   * lokale byråer med én kunde hos oss — et eget register ville vært tomgang.
+   *
+   * Kontaktperson, e-post og telefon fantes som kolonner i v1, men ble fjernet:
+   * personopplysninger DriftIQ ikke trenger. De kommer ikke tilbake her.
+   */
+  managerName: varchar("manager_name"),
+  managerOrgNr: varchar("manager_org_nr"),
+
   createdAt: timestamp("created_at").defaultNow(),
 });
 

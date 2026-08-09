@@ -26,6 +26,11 @@ const MENY = [
   { sti: "/plattform/leads", etikett: "Henvendelser" },
   { sti: "/plattform/brukere", etikett: "Plattformbrukere" },
   { sti: "/plattform/support", etikett: "Support-modus" },
+  { sti: "/plattform/statistikk", etikett: "Statistikk" },
+  { sti: "/plattform/boligbyggelag", etikett: "Boligbyggelag" },
+  { sti: "/plattform/prismodell", etikett: "Prismodell" },
+  { sti: "/plattform/maler", etikett: "HMS-maler" },
+  { sti: "/plattform/system", etikett: "System" },
 ];
 
 export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "nextjs": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "driftiq-mcp-npm:/root/.npm",
+        "-v", "/home/kristoffer/stacks/driftiqv2:/app",
+        "-w", "/app",
+        "node:22-alpine",
+        "npx", "-y", "next-devtools-mcp@0.4.0"
+      ]
+    },
+    "better-auth": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "driftiq-mcp-npm:/root/.npm",
+        "-v", "/home/kristoffer/stacks/driftiqv2:/app",
+        "-w", "/app",
+        "node:22-alpine",
+        "npx", "-y", "@better-auth/mcp@1.4.17"
+      ]
+    }
+  }
+}

@@ -68,3 +68,42 @@ export const supportAccessLog = pgTable("support_access_log", {
 
 export type PlatformContract = typeof platformContracts.$inferSelect;
 export type SupportAccessLog = typeof supportAccessLog.$inferSelect;
+
+/**
+ * Plattformens prismodell — gulv, trappetrinn og standard modulpriser. Singleton-rad med
+ * id `default`; `hentPrismodell()` i lib/prismodell.ts oppretter den ved første oppslag.
+ *
+ * Ligger her fordi dette er DriftIQs egne tall, ikke kundens. Satsene er forretningsdata en
+ * kunde aldri skal se — derfor er hele raden plattformadmin-only, med ett unntak:
+ * `hiddenModules`, som kunde-appen må kunne lese for å skjule umodne moduler fra menyen.
+ * Det unntaket har sin egen rute, ikke sin egen tabell.
+ */
+export const pricingConfig = pgTable("pricing_config", {
+  id: varchar("id").primaryKey(),
+  floorPrice: integer("floor_price").notNull().default(8000),
+  /** JSON [{"from":1,"to":50,"rate":280}, …] — degressive trinn. */
+  tiers: text("tiers").notNull(),
+  /** JSON {"internkontroll":12000, …} — standard årspris per tilleggsmodul. */
+  moduleDefaults: text("module_defaults").notNull(),
+  /**
+   * JSON-liste med modulnøkler som er midlertidig skjult fra kundens sidemeny og fra
+   * Prismodell/Fakturering mens de er under utvikling.
+   *
+   * IKKE det samme som `defaultOff` i modulregisteret: `defaultOff` er en permanent
+   * kodenivå-kategorisering («av som standard for nye kunder, men synlig og selgbar»).
+   * `hiddenModules` er en midlertidig, databasestyrt bryter («ikke klar for kunder ennå»)
+   * som slås av igjen når funksjonen er klar til å selges.
+   */
+  hiddenModules: text("hidden_modules").notNull().default("[]"),
+  /**
+   * JSON-liste med e-postadresser som varsles om nye leads og nye innmeldinger. Tom/NULL =
+   * fall tilbake på miljøvariabelen, slik det var før lista fantes — da endres ingenting
+   * før noen faktisk fyller den ut i panelet.
+   *
+   * Ligger her fordi dette er plattformens singleton-rad, ikke fordi det har med pris å gjøre.
+   */
+  leadsNotifyEmails: text("leads_notify_emails"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type PricingConfig = typeof pricingConfig.$inferSelect;

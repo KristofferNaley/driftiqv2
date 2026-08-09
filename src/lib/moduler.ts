@@ -52,6 +52,18 @@ export const PA_SOM_STANDARD: readonly ModulNokkel[] = ALLE_MODULER.filter(
 );
 
 /**
+ * Modulene som prises og selges hver for seg — grunnpakken dekker resten.
+ *
+ * Utledet av `AV_SOM_STANDARD` fordi de to i dag er samme sett, men navnet er ikke det
+ * samme spørsmålet: «av som standard» handler om hva en eksisterende kunde får uten å be om
+ * det, «tilleggsmodul» om hva som står på fakturaen. Skulle en modul bli standard uten å bli
+ * gratis, er det HER lista må skilles ut.
+ */
+export const TILLEGGSMODULER: readonly ModulNokkel[] = ALLE_MODULER.filter((k) =>
+  AV_SOM_STANDARD.has(k),
+);
+
+/**
  * Nøkler som tidligere var egne moduler, nå slått sammen under én forelder — eller som bare
  * har skiftet navn. Kunder med en eksplisitt liste fra før endringen har ikke den nye nøkkelen
  * lagret; uten dette ville modulen blitt låst ute for dem.

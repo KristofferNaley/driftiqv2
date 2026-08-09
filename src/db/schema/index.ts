@@ -16,6 +16,7 @@ export * from "./organizations";
 export * from "./users";
 export * from "./auth";
 export * from "./platform";
+export * from "./bbl";
 export * from "./parking";
 export * from "./arshjul";
 export * from "./driftslogg";

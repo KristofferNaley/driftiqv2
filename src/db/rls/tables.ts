@@ -114,6 +114,9 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // Globalt register over boligbyggelag. Har ingen org-eier — flere kunder kan være
   // tilknyttet samme lag, og registeret føres uavhengig av om noen kunde bruker laget.
   bbl: "globalt register over boligbyggelag, ingen org-eier",
+  // Plattformens singleton-rad med satser og trappetrinn. Har ingen org_id i det hele tatt
+  // — dette er DriftIQs egne priser, ikke noe som tilhører en kunde.
+  pricing_config: "plattformens prismodell, singleton uten org_id",
 
   // --- Nytt i v2 ---
   // Better Auth eier disse selv. De er global identitet på samme måte som `users`:

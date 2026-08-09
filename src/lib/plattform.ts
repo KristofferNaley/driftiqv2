@@ -392,3 +392,76 @@ export async function endrePlattformbruker(
   const [endret] = await db.update(users).set(felter).where(eq(users.id, brukerId)).returning();
   return endret!;
 }
+
+// ---------------------------------------------------------------------------------------
+// Statistikk på tvers av kunder
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Nøkkeltall per kunde. Port av v1s `/superadmin/stats`.
+ *
+ * v1 kjørte fire tellespørringer PER kunde inne i en løkke — med 30 kunder er det 120
+ * rundturer for én side. Her er det én gruppert spørring per tall, uansett hvor mange
+ * kunder som finnes.
+ *
+ * Dette er fortsatt ikke innsyn i kundedata: et antall avvik sier at de bruker systemet,
+ * ikke hva avvikene handler om.
+ */
+export async function hentStatistikk(db: Db) {
+  const [orger, oppgaver, apneAvvik, utkvitteringer, avtaler] = await Promise.all([
+    db
+      .select({
+        id: organizations.id,
+        navn: organizations.name,
+        aktiv: organizations.active,
+        antallAndeler: organizations.unitCount,
+      })
+      .from(organizations)
+      .orderBy(organizations.name),
+    db
+      .select({ orgId: tasks.orgId, n: count() })
+      .from(tasks)
+      .where(eq(tasks.active, true))
+      .groupBy(tasks.orgId),
+    db
+      .select({ orgId: deviations.orgId, n: count() })
+      .from(deviations)
+      .where(ne(deviations.status, "lukket"))
+      .groupBy(deviations.orgId),
+    // Utkvitteringer henger på oppgaven, ikke på org-en — derfor en join.
+    db
+      .select({ orgId: tasks.orgId, n: count() })
+      .from(completions)
+      .innerJoin(tasks, eq(tasks.id, completions.taskId))
+      .groupBy(tasks.orgId),
+    db.select().from(platformContracts),
+  ]);
+
+  const kart = (rader: Array<{ orgId: string; n: number }>) =>
+    new Map(rader.map((r) => [r.orgId, r.n]));
+  const o = kart(oppgaver);
+  const a = kart(apneAvvik);
+  const u = kart(utkvitteringer);
+
+  const arssummer = new Map<string, number>();
+  for (const k of avtaler) {
+    let moduler: Array<{ price?: number }> = [];
+    try {
+      const t = JSON.parse(k.modules ?? "[]");
+      if (Array.isArray(t)) moduler = t;
+    } catch {
+      // Ødelagt JSON teller som ingen moduler — statistikken skal ikke velte av én rad.
+    }
+    const brutto =
+      (k.baseFee ?? k.annualFee ?? 0) + moduler.reduce((n, m) => n + (m.price ?? 0), 0);
+    arssummer.set(k.orgId, Math.round(brutto * (1 - (k.discountPercent ?? 0) / 100)));
+  }
+
+  return orger.map((org) => ({
+    ...org,
+    antallOppgaver: o.get(org.id) ?? 0,
+    antallApneAvvik: a.get(org.id) ?? 0,
+    antallUtkvitteringer: u.get(org.id) ?? 0,
+    arssum: arssummer.get(org.id) ?? null,
+  }));
+}

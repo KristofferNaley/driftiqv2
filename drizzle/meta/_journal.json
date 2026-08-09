@@ -197,6 +197,20 @@
       "when": 1786291374561,
       "tag": "0027_majestic_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1786294966566,
+      "tag": "0028_clear_saracen",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786295631679,
+      "tag": "0029_dark_bedlam",
+      "breakpoints": true
     }
   ]
 }
