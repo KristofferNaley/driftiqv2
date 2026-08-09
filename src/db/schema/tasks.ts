@@ -1,6 +1,7 @@
-import { date, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
+import { units } from "./units";
 import { vendors } from "./vendors";
 
 /**
@@ -45,8 +46,16 @@ export const tasks = pgTable("tasks", {
    * utkvittering styrer frekvensen som før.
    */
   dueDate: date("due_date"),
+  /**
+   * Trykt på fysiske oppslag i bygget. Endres den, må hvert oppslag printes og henges opp
+   * på nytt — migreringsskriptet verifiserer at den er uendret.
+   */
   qrToken: varchar("qr_token").unique(),
-  createdAt: timestamp("created_at").defaultNow(),
+  active: boolean("active").notNull().default(true),
+  showOnArshjul: boolean("show_on_arshjul").notNull().default(false),
+  /** Strukturert sted. Erstatter fritekstfeltet `location` for nye oppgaver. */
+  unitId: varchar("unit_id").references(() => units.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -60,8 +69,47 @@ export const taskChecklistItems = pgTable("task_checklist_items", {
     .references(() => tasks.id, { onDelete: "cascade" }),
   text: varchar("text").notNull(),
   order: integer("order").notNull().default(0),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Én utførelse av en oppgave. Kommer fra QR-skjemaet, leverandørportalen eller manuelt fra
+ * styret i appen. Barnetabell uten egen `org_id` — isoleres gjennom `tasks`.
+ */
+export const completions = pgTable("completions", {
+  id: varchar("id").primaryKey(),
+  taskId: varchar("task_id")
+    .notNull()
+    .references(() => tasks.id),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Navnet kopiert inn, ikke en peker. Historikk skal ikke endres i ettertid. */
+  completedBy: varchar("completed_by").notNull(),
+  notes: text("notes"),
+  hasDeviation: boolean("has_deviation").notNull().default(false),
+  deviationDescription: text("deviation_description"),
+  /** Registrert av styret i appen, ikke via QR-skjemaet. Loggen viser kilden ærlig. */
+  manual: boolean("manual").notNull().default(false),
+});
+
+/**
+ * Avhuking av ett sjekkpunkt ved én utførelse.
+ *
+ * Teksten KOPIERES fra malen ved innsending. Malpunktet kan endres eller slettes uten at
+ * gammel logg endrer seg — derfor er `itemId` nullbar med SET NULL. Dette er mønsteret for
+ * all historikk i systemet.
+ */
+export const completionChecklistResults = pgTable("completion_checklist_results", {
+  id: varchar("id").primaryKey(),
+  completionId: varchar("completion_id")
+    .notNull()
+    .references(() => completions.id, { onDelete: "cascade" }),
+  itemId: varchar("item_id").references(() => taskChecklistItems.id, { onDelete: "set null" }),
+  text: varchar("text").notNull(),
+  checked: boolean("checked").notNull().default(false),
+  order: integer("order").notNull().default(0),
 });
 
 export type Task = typeof tasks.$inferSelect;
 export type TaskChecklistItem = typeof taskChecklistItems.$inferSelect;
+export type Completion = typeof completions.$inferSelect;
+export type CompletionChecklistResult = typeof completionChecklistResults.$inferSelect;
