@@ -176,6 +176,13 @@
       "when": 1786278303909,
       "tag": "0024_silent_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786283809510,
+      "tag": "0025_right_karnak",
+      "breakpoints": true
     }
   ]
 }

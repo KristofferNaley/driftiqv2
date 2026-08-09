@@ -21,6 +21,7 @@ import { erPlattformadminRolle } from "@/lib/nivaer";
 const MENY = [
   { sti: "/plattform", etikett: "Dashboard" },
   { sti: "/plattform/kunder", etikett: "Kunder" },
+  { sti: "/plattform/leads", etikett: "Henvendelser" },
   { sti: "/plattform/brukere", etikett: "Plattformbrukere" },
   { sti: "/plattform/support", etikett: "Support-modus" },
 ];
@@ -55,7 +56,7 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
         })}
 
         <div className="pf-meny-fot">
-          <Link className="pf-tilbake" href="/">
+          <Link className="pf-tilbake" href="/dashboard">
             ← Til kunde-appen
           </Link>
           {bruker && (

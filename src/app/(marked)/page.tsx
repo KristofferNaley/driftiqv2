@@ -1,0 +1,115 @@
+import Link from "next/link";
+import { Kontaktskjema } from "./kontaktskjema";
+
+/**
+ * Landingssiden.
+ *
+ * Innholdet er hentet fra v1s landingsside, ikke funnet på: teksten er testet mot ekte
+ * styrer, og en omskriving her ville vært å kaste den lærdommen.
+ */
+
+const MODULER = [
+  {
+    tittel: "Internkontroll og HMS",
+    tekst:
+      "Risikovurdering, HMS-mål og vernerunde i én struktur, bygget rundt " +
+      "internkontrollforskriften § 5. Dokumentasjonen samles etter hvert som arbeidet " +
+      "gjøres — ikke kvelden før tilsynet.",
+  },
+  {
+    tittel: "Avvik",
+    tekst:
+      "Styret registrerer det som er galt, med bilde, sted, ansvarlig og frist. Hvert avvik " +
+      "lukkes med begrunnelse, så historikken tåler et forsikringsoppgjør.",
+  },
+  {
+    tittel: "Oppgaver og dokumentert utførelse",
+    tekst:
+      "Faste rutiner med frist og ansvarlig. Leverandøren skanner en QR-kode på stedet og " +
+      "kvitterer for utført arbeid, så styret slipper å ta noen på ordet.",
+  },
+  {
+    tittel: "Vedlikeholdsplan",
+    tekst:
+      "Bygningsdeler med tilstandsgrad, tidslinje for tiltak og budsjettbehov per " +
+      "femårsperiode. Et behov som er dokumentert og priset er lettere å få vedtatt.",
+  },
+  {
+    tittel: "Kontrakter",
+    tekst:
+      "Alle leverandøravtaler med utløpsdato og varsel før de fornyes automatisk eller " +
+      "oppsigelsesfristen løper ut.",
+  },
+  {
+    tittel: "Dokumentarkiv",
+    tekst:
+      "Vedtekter, protokoller, tegninger og rapporter ett sted — også når styret byttes ut.",
+  },
+  {
+    tittel: "Årshjul",
+    tekst:
+      "Faste hendelser, frister og oppgaver fordelt gjennom året, så alt ikke havner i mai.",
+  },
+  {
+    tittel: "Parkering",
+    tekst:
+      "Plasser, hvem som disponerer dem, utleieavtaler og venteliste, med ladeplasser " +
+      "skilt ut.",
+  },
+];
+
+export default function Landing() {
+  return (
+    <main>
+      <section className="mk-hero">
+        <span className="mk-merkelapp">I drift · tar inn pilotlag i høst</span>
+        <h1>
+          Driften av bygget skal ikke ligge i hodet på <em>styrelederen</em>.
+        </h1>
+        <p className="mk-ingress">
+          DriftIQ samler oppgaver, avvik, internkontroll, vedlikeholdsplan og dokumentasjon på
+          ett sted — slik at historikken følger bygget og ikke personen som tilfeldigvis satt i
+          styret. Systemet er i daglig drift i et borettslag i Bergen.
+        </p>
+        <div className="mk-knapper">
+          <a className="mk-knapp" href="#kontakt">Bli pilotlag</a>
+          <a className="mk-knapp sekundaer" href="#moduler">Se hva systemet gjør</a>
+        </div>
+        <p className="mk-liten">
+          Uforpliktende. Du får svar fra utvikleren selv, normalt innen én virkedag.
+        </p>
+      </section>
+
+      <section className="mk-seksjon" id="moduler">
+        <span className="mk-overtittel">Hva systemet dekker</span>
+        <h2>Det styret er ansvarlig for — samlet ett sted</h2>
+        <div className="mk-rutenett">
+          {MODULER.map((m) => (
+            <article key={m.tittel} className="mk-kort">
+              <h3>{m.tittel}</h3>
+              <p>{m.tekst}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mk-seksjon smal" id="kontakt">
+        <span className="mk-overtittel">Pilot høsten 2026</span>
+        <h2>Vil dere være pilotlag?</h2>
+        <p className="mk-ingress">
+          Jeg tar inn et lite antall borettslag og sameier i høst — styrer som vil være med å
+          forme hvordan dette fungerer i praksis. Sitter du i et styre, eller er
+          forretningsfører og nysgjerrig, tar jeg gjerne en uforpliktende prat. Oppsett av
+          bygget deres er inkludert — dere starter ikke med et tomt system.
+        </p>
+        <Kontaktskjema />
+      </section>
+
+      <section className="mk-seksjon smal">
+        <p className="mk-liten">
+          Allerede kunde? <Link href="/logg-inn">Logg inn her</Link>.
+        </p>
+      </section>
+    </main>
+  );
+}

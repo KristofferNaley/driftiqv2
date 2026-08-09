@@ -294,3 +294,46 @@ export async function sendKontrakterUtloper(
     ),
   );
 }
+
+/**
+ * Varsel til DriftIQ om en ny henvendelse.
+ *
+ * Går til `LEADS_NOTIFY_EMAIL`. Er den ikke satt, logges det HØYT — en lead som ligger i
+ * databasen uten at noen vet om den, er en tapt kunde, og stillhet er verste utfall.
+ */
+export async function sendNyLead(lead: {
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  message: string | null;
+}): Promise<void> {
+  const til = process.env.LEADS_NOTIFY_EMAIL;
+  if (!til) {
+    console.warn(
+      `[leads] LEADS_NOTIFY_EMAIL er ikke satt — ingen varslet om «${lead.name}». ` +
+        "Henvendelsen ligger i plattformpanelet.",
+    );
+    return;
+  }
+
+  const felt = (etikett: string, verdi: string) =>
+    `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${etikett}</td>` +
+    `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(verdi)}</td></tr>`;
+
+  await send(
+    til,
+    `Ny henvendelse: ${lead.name}`,
+    ramme(
+      h("Ny interessent fra landingssiden") +
+        '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
+        felt("Navn", lead.name) +
+        felt("E-post", lead.email) +
+        felt("Telefon", lead.phone ?? "—") +
+        felt("Borettslag/sameie", lead.company ?? "—") +
+        felt("Melding", lead.message ?? "—") +
+        "</table>" +
+        knapp("Åpne plattformpanelet", `${APP_URL}/plattform/leads`),
+    ),
+  );
+}

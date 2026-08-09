@@ -30,6 +30,9 @@ services:
       BASE_URL: ${BASE_URL:-http://localhost:3008}
       # Domenevakt — se .env.example. MÅ settes i test.
       EPOST_TILLATTE_DOMENER: ${EPOST_TILLATTE_DOMENER:-}
+      # Hvem som varsles om nye henvendelser fra landingssiden. Er den tom, lagres leaden
+      # fortsatt — men det logges HØYT, for en lead ingen vet om er en tapt kunde.
+      LEADS_NOTIFY_EMAIL: ${LEADS_NOTIFY_EMAIL:-}
     ports:
       - "3008:3008"
     volumes:

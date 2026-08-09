@@ -1351,3 +1351,132 @@ textarea.qr-input { resize: vertical; }
   .pf-brukerrad > *:nth-child(3), .pf-brukerrad > *:nth-child(4) { display: none; }
   .pf-brukerrad > *:last-child { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* ══ LANDINGSSIDEN ══
+ *
+ * Egen visuell tone: appen er et arbeidsverktøy, dette er en side folk lander på i noen få
+ * sekunder. Samme tokens og samme logo, men luftigere og med større typografi.
+ *
+ * Lyse farger uansett systemtema. En marketingside som skifter utseende med besøkendes
+ * innstillinger er vanskelig å designe for, og det finnes ingen «bruker» å respektere ennå.
+ */
+.mk {
+  --mk-blekk: #0d1b2a;
+  --mk-dempet: #55617a;
+  --mk-kant: #e2e8f0;
+  background: #fff; color: var(--mk-blekk);
+  min-height: 100dvh; display: flex; flex-direction: column;
+}
+.mk a { color: var(--accent); }
+
+.mk-topp {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 16px 24px; border-bottom: 1px solid var(--mk-kant);
+  position: sticky; top: 0; background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px); z-index: 10;
+}
+.mk-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.mk-ord { font-weight: 800; font-size: var(--fs-md); letter-spacing: -0.5px; color: var(--mk-blekk); }
+.mk-ord span { color: var(--accent); }
+.mk-nav { display: flex; align-items: center; gap: 20px; font-size: var(--fs-sm); }
+.mk-nav a { color: var(--mk-dempet); text-decoration: none; }
+.mk-nav a:hover { color: var(--mk-blekk); }
+.mk-knapp-liten {
+  border: 1px solid var(--mk-kant); border-radius: 9px; padding: 7px 14px;
+  color: var(--mk-blekk) !important; font-weight: 600;
+}
+@media (max-width: 620px) { .mk-nav a:not(.mk-knapp-liten) { display: none; } }
+
+.mk-hero {
+  padding: 72px 24px 56px; max-width: 780px; margin: 0 auto; text-align: center;
+}
+.mk-merkelapp {
+  display: inline-block; font-size: var(--fs-label); font-weight: 700;
+  background: rgba(15, 186, 129, 0.12); color: #0a8f63;
+  border-radius: 20px; padding: 5px 13px; margin-bottom: 22px;
+}
+.mk-hero h1 {
+  font-size: clamp(30px, 5.2vw, 50px); font-weight: 800; line-height: 1.12;
+  letter-spacing: -1px; margin: 0 0 20px;
+}
+.mk-hero h1 em { font-style: normal; color: var(--accent); }
+.mk-ingress { font-size: var(--fs-md); line-height: 1.7; color: var(--mk-dempet); margin: 0 auto 26px; }
+.mk-knapper { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* `.mk .mk-knapp`, ikke bare `.mk-knapp`: den generelle `.mk a` over har spesifisitet
+   (0,1,1) og ville ellers vunnet, slik at knappen ble blå tekst på blå bakgrunn. */
+.mk .mk-knapp, .mk-knapp {
+  display: inline-block; border: none; border-radius: 11px;
+  background: var(--accent); color: #fff; text-decoration: none;
+  padding: 13px 26px; font-size: var(--fs-md); font-weight: 700;
+  font-family: var(--font-sans); cursor: pointer;
+}
+.mk-knapp:disabled { opacity: 0.55; cursor: default; }
+.mk .mk-knapp.sekundaer { background: #fff; color: var(--mk-blekk); border: 1px solid var(--mk-kant); }
+.mk-liten { font-size: var(--fs-label); color: var(--mk-dempet); margin-top: 14px; }
+
+.mk-seksjon { padding: 56px 24px; max-width: 1080px; margin: 0 auto; width: 100%; }
+.mk-seksjon.smal { max-width: 680px; }
+.mk-overtittel {
+  display: block; font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.4px; color: var(--accent); margin-bottom: 8px;
+}
+.mk-seksjon h1, .mk-seksjon h2 {
+  font-size: clamp(23px, 3.4vw, 32px); font-weight: 800;
+  letter-spacing: -0.5px; margin: 0 0 26px;
+}
+
+.mk-rutenett { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; }
+.mk-kort { border: 1px solid var(--mk-kant); border-radius: 14px; padding: 22px; background: #fafbff; }
+.mk-kort h3 { font-size: var(--fs-md); font-weight: 700; margin: 0 0 9px; }
+.mk-kort p { font-size: var(--fs-sm); line-height: 1.65; color: var(--mk-dempet); margin: 0; }
+
+.mk-skjema { display: flex; flex-direction: column; gap: 14px; }
+.mk-felt-rad { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.mk-felt { display: flex; flex-direction: column; gap: 6px; }
+.mk-felt > span { font-size: var(--fs-sm); font-weight: 600; }
+.mk-felt input, .mk-felt textarea {
+  /* 16px: under det zoomer iOS Safari inn ved fokus, og siden hopper. */
+  font-size: 16px; font-family: var(--font-sans); color: var(--mk-blekk);
+  padding: 12px 13px; border: 1.5px solid #d7dee8; border-radius: 11px;
+  background: #fff; width: 100%; box-sizing: border-box; resize: vertical;
+}
+.mk-felt input:focus, .mk-felt textarea:focus { outline: none; border-color: var(--accent); }
+/* Honningkrukka: helt ute av visningen, men til stede i HTML-en. `display: none` unngås —
+   noen roboter hopper over skjulte felter, og da mister fella sin funksjon. */
+.mk-honning {
+  position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;
+}
+.mk-feil { font-size: var(--fs-sm); color: var(--danger); margin: 0; }
+
+.mk-kvittering {
+  border: 1px solid rgba(15, 186, 129, 0.3); background: rgba(15, 186, 129, 0.06);
+  border-radius: 14px; padding: 30px; text-align: center;
+}
+.mk-hake {
+  width: 54px; height: 54px; border-radius: 50%; background: var(--accent2); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; margin: 0 auto 14px;
+}
+.mk-kvittering h3 { font-size: var(--fs-lg); margin: 0 0 6px; }
+.mk-kvittering p { font-size: var(--fs-sm); color: var(--mk-dempet); margin: 0; }
+
+.mk-tekst h2 { font-size: var(--fs-lg); font-weight: 700; margin: 28px 0 10px; }
+.mk-tekst p { font-size: var(--fs-sm); line-height: 1.75; color: var(--mk-dempet); margin: 0 0 12px; }
+
+.mk-fot { margin-top: auto; border-top: 1px solid var(--mk-kant); background: #fafbff; }
+.mk-fot-inn {
+  max-width: 1080px; margin: 0 auto; padding: 22px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  font-size: var(--fs-label); color: var(--mk-dempet);
+}
+.mk-fot-lenker { display: flex; gap: 18px; }
+
+/* Panelets lead-rad */
+.pf-lead {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.pf-lead:last-child { border-bottom: none; }
+.pf-lead-melding {
+  font-size: var(--fs-sm); line-height: 1.6; margin: 7px 0 0; white-space: pre-wrap;
+}

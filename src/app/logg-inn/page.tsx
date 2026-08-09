@@ -16,8 +16,8 @@ import { signIn } from "@/lib/auth-klient";
  * hele skjemaet server-rendres som resten av appen.
  */
 function returSti(): string {
-  if (typeof window === "undefined") return "/";
-  return new URLSearchParams(window.location.search).get("retur") || "/";
+  if (typeof window === "undefined") return "/dashboard";
+  return new URLSearchParams(window.location.search).get("retur") || "/dashboard";
 }
 
 export default function LoggInn() {

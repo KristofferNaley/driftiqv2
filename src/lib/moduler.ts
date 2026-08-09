@@ -86,7 +86,7 @@ export type Menypunkt = { sti: string; etikett: string; gruppe: string; ikon: st
  * den uten å dra inn et komponentbibliotek.
  */
 export const MENY: Readonly<Partial<Record<ModulNokkel, Menypunkt>>> = {
-  dashboard: { sti: "/", etikett: "Dashboard", gruppe: "Daglig drift", ikon: "LayoutDashboard" },
+  dashboard: { sti: "/dashboard", etikett: "Dashboard", gruppe: "Daglig drift", ikon: "LayoutDashboard" },
   tasks: { sti: "/oppgaver", etikett: "Oppgaver", gruppe: "Daglig drift", ikon: "ClipboardCheck" },
   avvik: { sti: "/avvik", etikett: "Avvik", gruppe: "Daglig drift", ikon: "TriangleAlert" },
   driftslogg: { sti: "/driftslogg", etikett: "Driftslogg", gruppe: "Daglig drift", ikon: "NotebookPen" },

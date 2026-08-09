@@ -104,6 +104,9 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // Leses også av abonnementssperren fra innloggingen, som ikke har org-kontekst.
   // En RLS-policy her ville gjort at sperren aldri fant kontraktene.
   platform_contracts: "plattformtabell (abonnement), superadmin + tilgangssperren i auth",
+  // En lead har ingen org_id — den er nettopp noen som ENNÅ ikke er kunde. RLS har
+  // ingenting å filtrere på, og tabellen er kun for plattformadmin.
+  leads: "plattformtabell, ingen org_id å filtrere på",
   // Globalt register over boligbyggelag. Har ingen org-eier — flere kunder kan være
   // tilknyttet samme lag, og registeret føres uavhengig av om noen kunde bruker laget.
   bbl: "globalt register over boligbyggelag, ingen org-eier",
