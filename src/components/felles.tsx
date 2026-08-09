@@ -236,5 +236,23 @@ export function initialer(navn: string): string {
   return (deler[0]![0]! + deler[deler.length - 1]![0]!).toUpperCase();
 }
 
+/**
+ * Dato MED klokkeslett.
+ *
+ * Brukes der rekkefølgen innad i en dag betyr noe: behandlingsjournalen og historikken er
+ * dokumentasjon, og «09. aug.» på fire innlegg sier ingenting om hva som skjedde først.
+ * Lister og frister bruker `dato()` — der er klokkeslettet bare støy.
+ */
+export const datoTid = (d: string | null | undefined) =>
+  d
+    ? new Date(d).toLocaleString("nb-NO", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+
 export const dato = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("nb-NO", { day: "2-digit", month: "short", year: "numeric" }) : "—";

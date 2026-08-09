@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import Layout from "@/components/Layout";
-import { Feil, Kort, Tom, dato, initialer, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, dato, datoTid, initialer, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
 import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
@@ -116,7 +116,7 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
           {lukket && (
             <div className="lukket-blokk">
               <Meta etikett="Lukket av">{data.resolvedBy ?? "—"}</Meta>
-              <Meta etikett="Lukket dato">{dato(data.resolvedAt)}</Meta>
+              <Meta etikett="Lukket dato">{datoTid(data.resolvedAt)}</Meta>
               {data.resolutionNotes && (
                 <div style={{ gridColumn: "1 / -1" }}>
                   <Meta etikett="Løsning">{data.resolutionNotes}</Meta>
@@ -140,7 +140,7 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
               <span className="avatar liten">{initialer(b.createdBy)}</span>
               <div style={{ minWidth: 0 }}>
                 <div className="list-meta">
-                  <strong style={{ color: "var(--text)" }}>{b.createdBy}</strong> · {dato(b.createdAt)}
+                  <strong style={{ color: "var(--text)" }}>{b.createdBy}</strong> · {datoTid(b.createdAt)}
                 </div>
                 <div
                   style={{
@@ -173,7 +173,7 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
               <div key={l.id} className="logg-rad">
                 <div style={{ fontSize: "var(--fs-sm)" }}>{l.event}</div>
                 <div className="list-meta">
-                  {l.changedBy} · {dato(l.changedAt)}
+                  {l.changedBy} · {datoTid(l.changedAt)}
                 </div>
               </div>
             ))
