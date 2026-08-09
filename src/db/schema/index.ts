@@ -20,5 +20,6 @@ export * from "./parking";
 export * from "./arshjul";
 export * from "./driftslogg";
 export * from "./units";
+export * from "./avvik";
 export * from "./vendors";
 export * from "./tasks";

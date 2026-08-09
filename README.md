@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 2 — fire moduler portert** (Parkering, Årshjul, Driftslogg, Enhetsregister). Det som finnes er
+**Status: fase 2 — seks moduler portert** (Parkering, Årshjul, Driftslogg, Enhetsregister, Oppgaver, Avvik). Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
@@ -118,7 +118,9 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 | Parkering | komplett |
 | Årshjul | komplett |
 | Driftslogg | komplett |
-| Enhetsregister | mangler bulk-import og adressesøk mot Kartverket; `apneAvvik` venter på Avvik |
+| Enhetsregister | mangler bulk-import og adressesøk mot Kartverket |
+| Oppgaver | mangler QR-bildegenerering, anonymt innsendingsskjema og bilder på utkvitteringer |
+| Avvik | mangler vedlegg (fillagring) og koblingen til vernerunde (Internkontroll) |
 
 Alle fire er dekket av migreringsskriptet.
 

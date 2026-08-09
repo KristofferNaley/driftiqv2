@@ -100,11 +100,13 @@ const TABELLER: Tabell[] = [
     navn: "tasks",
     // qr_token kopieres UENDRET. Se modulkommentaren.
     kilde: `SELECT id, org_id, vendor_id, responsible_user_id, title, description, location,
-                   frequency::text AS frequency, start_date, due_date, qr_token,
+                   frequency::text AS frequency, start_date, due_date, qr_token, unit_id,
+                   COALESCE(active, true) AS active,
+                   COALESCE(show_on_arshjul, false) AS show_on_arshjul,
                    COALESCE(created_at, now()) AS created_at
             FROM tasks`,
-    kolonner: ["id", "org_id", "vendor_id", "responsible_user_id", "title", "description", "location", "frequency", "start_date", "due_date", "qr_token", "created_at"],
-    oppdater: ["title", "description", "location", "frequency", "start_date", "due_date", "responsible_user_id"],
+    kolonner: ["id", "org_id", "vendor_id", "responsible_user_id", "title", "description", "location", "frequency", "start_date", "due_date", "qr_token", "unit_id", "active", "show_on_arshjul", "created_at"],
+    oppdater: ["title", "description", "location", "frequency", "start_date", "due_date", "responsible_user_id", "unit_id", "active", "show_on_arshjul"],
   },
   {
     navn: "task_checklist_items",
@@ -139,6 +141,49 @@ const TABELLER: Tabell[] = [
             FROM log_entries`,
     kolonner: ["id", "org_id", "vendor_id", "title", "description", "entry_date", "created_by", "created_at"],
     oppdater: ["vendor_id", "title", "description", "entry_date"],
+  },
+  {
+    navn: "completions",
+    kilde: `SELECT id, task_id, COALESCE(completed_at, now()) AS completed_at, completed_by,
+                   notes, COALESCE(has_deviation, false) AS has_deviation, deviation_description,
+                   COALESCE(manual, false) AS manual
+            FROM completions`,
+    kolonner: ["id", "task_id", "completed_at", "completed_by", "notes", "has_deviation", "deviation_description", "manual"],
+    oppdater: ["notes", "has_deviation", "deviation_description"],
+  },
+  {
+    navn: "completion_checklist_results",
+    kilde: `SELECT id, completion_id, item_id, text, COALESCE(checked, false) AS checked,
+                   COALESCE("order", 0) AS "order"
+            FROM completion_checklist_results`,
+    kolonner: ["id", "completion_id", "item_id", "text", "checked", "order"],
+    oppdater: [],
+  },
+  {
+    navn: "deviations",
+    kilde: `SELECT id, org_id, number, task_id, completion_id, vendor_id, unit_id, title,
+                   description, category, severity, COALESCE(status, 'ny') AS status,
+                   reported_by, COALESCE(reported_at, now()) AS reported_at,
+                   responsible_user_id, assigned_to, due_date, resolved_at, resolved_by,
+                   resolution_notes
+            FROM deviations`,
+    kolonner: ["id", "org_id", "number", "task_id", "completion_id", "vendor_id", "unit_id", "title", "description", "category", "severity", "status", "reported_by", "reported_at", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
+    oppdater: ["title", "description", "category", "severity", "status", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
+  },
+  {
+    navn: "deviation_treatments",
+    kilde: `SELECT id, deviation_id, text, created_by, COALESCE(created_at, now()) AS created_at
+            FROM deviation_treatments`,
+    kolonner: ["id", "deviation_id", "text", "created_by", "created_at"],
+    // Append-only: et innlegg skal ALDRI oppdateres, heller ikke av migreringen.
+    oppdater: [],
+  },
+  {
+    navn: "deviation_logs",
+    kilde: `SELECT id, deviation_id, changed_by, COALESCE(changed_at, now()) AS changed_at, event
+            FROM deviation_logs`,
+    kolonner: ["id", "deviation_id", "changed_by", "changed_at", "event"],
+    oppdater: [],
   },
   {
     navn: "parking_spots",

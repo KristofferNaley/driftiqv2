@@ -15,9 +15,9 @@
  * - `POST /import` — bulk-import fra regneark, med sammenslåing mot eksisterende rader
  * - `GET /adressesok` — oppslag mot Kartverkets API
  *
- * Feltet `apneAvvik` mangler også: det teller ikke-lukkede avvik per enhet, og `deviations`
- * er ikke portert. Det er bevisst utelatt HELT i stedet for å returnere 0 — et felt som
- * mangler er synlig, et felt som alltid er null ser riktig ut og er det ikke.
+ * `apneAvvik` er på plass siden Avvik ble portert — feltet sto bevisst tomt fram til da,
+ * i stedet for å returnere 0. Et felt som mangler er synlig; et som alltid er null ser
+ * riktig ut og er det ikke.
  */
 
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { Db } from "../db/client";
 import { units } from "../db/schema/units";
 import { ikkeFunnet, ugyldig } from "./api";
+import { apneAvvikPerEnhet } from "./avvik";
 
 export const ENHETSTYPER = ["bolig", "fellesareal"] as const;
 
@@ -90,11 +91,18 @@ async function andelsnrErTatt(
 export async function hentEnheter(db: Db, orgId: string, opts: { medArkiverte?: boolean } = {}) {
   const betingelser = [eq(units.orgId, orgId)];
   if (!opts.medArkiverte) betingelser.push(isNull(units.archivedAt));
-  return db
-    .select()
-    .from(units)
-    .where(and(...betingelser))
-    .orderBy(asc(units.andelsnr), asc(units.oppgang), asc(units.leilighetsnr));
+
+  const [rader, apne] = await Promise.all([
+    db
+      .select()
+      .from(units)
+      .where(and(...betingelser))
+      .orderBy(asc(units.andelsnr), asc(units.oppgang), asc(units.leilighetsnr)),
+    // Én spørring for hele org-en, ikke én per rad.
+    apneAvvikPerEnhet(db, orgId),
+  ]);
+
+  return rader.map((r) => ({ ...r, apneAvvik: apne.get(r.id) ?? 0 }));
 }
 
 export async function hentEnhet(db: Db, orgId: string, unitId: string) {
