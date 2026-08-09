@@ -76,9 +76,12 @@ export const FILTABELLER: readonly string[] = [
 // Kvote
 // ---------------------------------------------------------------------------------------
 
-function formatterStorrelse(n: number): string {
-  // MB under 1 GB, ellers GB. Fast GB-formatering ga «0,0 av 0,0 GB» for små kvoter —
-  // altså en feilmelding uten informasjon.
+export function formatterStorrelse(n: number): string {
+  // Tre trinn, ikke to. v1 lærte at fast GB-formatering ga «0,0 av 0,0 GB» for små kvoter —
+  // en feilmelding uten informasjon. MB alene har samme problem ett nivå ned: 7 kB ble
+  // «0 MB», og kunden kunne ikke se forskjell på «litt brukt» og «ingenting».
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} kB`;
   if (n < 1024 * 1024 * 1024) return `${Math.round(n / 1024 / 1024)} MB`;
   return `${(n / 1024 / 1024 / 1024).toFixed(1).replace(".", ",")} GB`;
 }

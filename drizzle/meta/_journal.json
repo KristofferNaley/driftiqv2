@@ -134,6 +134,13 @@
       "when": 1786264466581,
       "tag": "0018_dapper_psylocke",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786269328928,
+      "tag": "0019_real_cammi",
+      "breakpoints": true
     }
   ]
 }

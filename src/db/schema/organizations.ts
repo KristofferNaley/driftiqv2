@@ -22,6 +22,17 @@ export const organizations = pgTable("organizations", {
    * Da slipper vi å backfylle alle kunder, og standarden kan endres ett sted.
    */
   storageQuota: bigint("storage_quota", { mode: "number" }),
+  /**
+   * «Om bygget» — fri tekst styret fyller ut. Mates inn i AI-rådgiverens systemprompt og
+   * brukes i det daglige, så den regnes som DRIFTSINNHOLD: `redigering` kan endre den.
+   */
+  buildingInfo: text("building_info"),
+  /**
+   * Avgjør hvilke lover internkontrollen må dekke. Uten ansatte gjelder verken
+   * arbeidsmiljøloven eller forurensningsloven (jf. internkontrollforskriften § 2), og
+   * kravene avgrenses til brannvern, el-sikkerhet og produktkontroll.
+   */
+  hasEmployees: boolean("has_employees").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

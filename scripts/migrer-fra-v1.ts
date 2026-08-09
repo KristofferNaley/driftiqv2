@@ -282,7 +282,12 @@ const TABELLER: Tabell[] = [
     kilde: `SELECT id, org_id, vendor_id, title, category, annual_sum, start_date::date AS start_date,
                    end_date::date AS end_date, notes, contact_name, contact_email, contact_phone,
                    regexp_replace(file_path, '^.*/', '') AS file_name,
-                   file_name AS file_original_name, file_size,
+                   file_name AS file_original_name,
+                   -- En størrelse UTEN fil er et fantom: den teller mot lagringskvoten for
+                   -- alltid uten at kunden kan slette noe for å bli kvitt den. v1s
+                   -- testbase har 13 slike kontrakter (28 MB til sammen), sannsynligvis
+                   -- etter at filer forsvant uten at file_size ble nullet.
+                   CASE WHEN file_path IS NULL THEN NULL ELSE file_size END AS file_size,
                    COALESCE(ai_readable, false) AS ai_readable,
                    archived_at, archive_note, predecessor_id,
                    COALESCE(created_at, now()) AS created_at

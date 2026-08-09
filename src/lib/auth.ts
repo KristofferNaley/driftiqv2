@@ -139,6 +139,14 @@ export const auth = betterAuth({
             throw e;
           }
 
+          // Sist innlogget — ETT felt, ikke en logg (BL-121). v1 satte det i /auth/login;
+          // Better Auth gjør det ikke selv, så uten dette sto det «aldri logget inn» på alle
+          // brukere for alltid. «Hvem bruker det ikke» trenger én dato, ikke historikk.
+          await authDb
+            .update(users)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(users.id, sesjon.userId));
+
           return { data: sesjon };
         },
       },

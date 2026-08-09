@@ -322,6 +322,31 @@ export const dashbord = {
   hent: (o: string) => api.hent<Dashbord>(org(o, "/dashboard")),
 };
 
+export type OrgInfo = {
+  id: string; name: string; slug: string; orgNr: string | null; orgForm: string | null;
+  municipality: string | null; unitCount: number | null; enabledModules: string | null;
+  buildingInfo: string | null; hasEmployees: boolean;
+  lagring: { brukt: number; kvote: number; prosent: number };
+};
+
+export const organisasjon = {
+  hent: (o: string) => api.hent<OrgInfo>(`/organizations/${o}`),
+  endre: (o: string, d: unknown) => api.endre<OrgInfo>(`/organizations/${o}`, d),
+  settModuler: (o: string, moduler: string[]) => api.endre(`/organizations/${o}/modules`, { moduler }),
+};
+
+export type OrgBruker = {
+  id: string; name: string; email: string; active: boolean; lastLoginAt: string | null;
+  platformRole: string; nivaa: string; title: string | null; harSattPassord: boolean;
+};
+
+export const brukere = {
+  liste: (o: string) => api.hent<OrgBruker[]>(org(o, "/users")),
+  inviter: (o: string, d: unknown) => api.send(org(o, "/users"), d),
+  endre: (o: string, id: string, d: unknown) => api.endre(org(o, `/users/${id}`), d),
+  fjern: (o: string, id: string) => api.slett(org(o, `/users/${id}`)),
+};
+
 export type MegSvar = {
   id: string;
   name: string;
