@@ -78,6 +78,13 @@
       "when": 1786260963926,
       "tag": "0010_famous_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786261344710,
+      "tag": "0011_ambiguous_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }

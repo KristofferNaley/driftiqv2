@@ -22,11 +22,18 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3008}
+      UPLOAD_DIR: /app/uploads
     ports:
       - "3008:3008"
+    volumes:
+      # Filene må overleve at containeren bygges på nytt.
+      - uploads:/app/uploads
     networks:
       default:
       edge:
+
+volumes:
+  uploads:
 
 # Nettet opprettes én gang per maskin med:  docker network create edge
 networks:

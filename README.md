@@ -124,6 +124,15 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 
 Alle fire er dekket av migreringsskriptet.
 
+## Fillagring
+
+`src/lib/lagring.ts` eier opplasting og kvote. Lagrer modulen din filer, skal tabellen inn i
+`FILTABELLER` — ellers teller ikke filene mot kvoten, og `lagring.test.ts` blir rød. Kvoten
+er 5 GB som standard, overstyrbar per kunde via `organizations.storage_quota`.
+
+Filer havner under `uploads/orgs/{orgId}/<modul>/` med uuid-navn; brukerens filnavn lagres
+kun som visningsnavn og treffer aldri filsystemet.
+
 ## Å porte en modul
 
 Fem steg, i denne rekkefølgen:

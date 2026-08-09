@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /** Et borettslag eller sameie. Står i UNNTATT — listes på tvers av plattformpanelet. */
 export const organizations = pgTable("organizations", {
@@ -17,6 +17,11 @@ export const organizations = pgTable("organizations", {
    * faller tilbake til standard og ikke til «alt av».
    */
   enabledModules: text("enabled_modules"),
+  /**
+   * Lagringskvote i bytes. NULL = ingen egen kvote ⇒ `STANDARD_KVOTE` i lib/lagring.ts.
+   * Da slipper vi å backfylle alle kunder, og standarden kan endres ett sted.
+   */
+  storageQuota: bigint("storage_quota", { mode: "number" }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
