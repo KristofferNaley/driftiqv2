@@ -1877,7 +1877,9 @@ textarea.qr-input { resize: vertical; }
 .arkiv-sti-lenke:hover { color: var(--accent); text-decoration: underline; }
 
 /* --- Org-velger i sidemenyen ------------------------------------------------------- */
-.org-velger { position: relative; padding: 0 10px; margin-bottom: 4px; }
+/* Luft over: uten den klistrer velgeren seg til skillelinjen under logoblokken og ser ut
+   som en del av den, i stedet for som starten på menyen under. */
+.org-velger { position: relative; padding: 12px 10px 0; margin-bottom: 10px; }
 .org-blokk {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; padding: 9px 11px; border-radius: 9px;
@@ -1886,7 +1888,7 @@ textarea.qr-input { resize: vertical; }
   color: inherit; cursor: pointer;
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600; text-align: left;
 }
-.org-blokk.statisk { margin: 0 10px 4px; cursor: default; }
+.org-blokk.statisk { margin: 12px 10px 10px; cursor: default; }
 .org-blokk:not(.statisk):hover { border-color: var(--accent); }
 .org-blokk-navn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
