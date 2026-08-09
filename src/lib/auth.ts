@@ -41,9 +41,30 @@ function paakrevd(navn: string): string {
   return verdi;
 }
 
+/**
+ * Origins som får logge inn.
+ *
+ * Better Auth avviser forespørsler fra en annen origin enn `baseURL` med `INVALID_ORIGIN`.
+ * Det er riktig som standard — det er CSRF-vernet — men appen nås fra flere verter:
+ * `localhost` under utvikling, maskinens LAN-adresse fra en telefon på samme nett, og et
+ * ekte domene i drift. Uten denne lista svarer innloggingen 403 fra alle unntatt én.
+ *
+ * Oppdaget først da siden ble åpnet fra en annen maskin på nettet — verken bygg, typesjekk,
+ * lint eller testene så den, og curl mot localhost gjorde det heller ikke.
+ */
+function tillatteOrigins(): string[] {
+  const base = process.env.BETTER_AUTH_URL ?? "http://localhost:3008";
+  const ekstra = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set([base, ...ekstra])];
+}
+
 export const auth = betterAuth({
   secret: paakrevd("BETTER_AUTH_SECRET"),
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3008",
+  trustedOrigins: tillatteOrigins(),
 
   database: drizzleAdapter(authDb, {
     provider: "pg",
