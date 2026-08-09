@@ -48,10 +48,23 @@ async function send(til: string, emne: string, html: string): Promise<void> {
     return;
   }
   try {
-    await new Resend(API_KEY).emails.send({ from: FRA, to: [til], subject: emne, html });
+    const svar = await new Resend(API_KEY).emails.send({
+      from: FRA,
+      to: [til],
+      subject: emne,
+      html,
+    });
+    // Resends SDK KASTER IKKE ved API-feil — den returnerer `{ data, error }`. Uten denne
+    // sjekken ser en avvist sending (uverifisert avsenderdomene er det vanlige) nøyaktig ut
+    // som en vellykket, og feilen oppdages først når noen sier at e-posten aldri kom.
+    if (svar.error) {
+      console.error(`[epost] Resend avviste sending til ${til}: ${svar.error.message}`);
+      return;
+    }
+    console.log(`[epost] Sendt til ${til} (${svar.data?.id ?? "uten id"}) — «${emne}»`);
   } catch (e) {
-    // Sendingen skal aldri velte kallet som utløste den. Brukeren har gjort noe som
-    // lyktes; at varselet ikke kom fram er en driftssak, ikke en feil i handlingen.
+    // Nettverksfeil o.l. Sendingen skal aldri velte kallet som utløste den: brukeren har
+    // gjort noe som lyktes, og at varselet ikke kom fram er en driftssak.
     console.error(`[epost] Feil ved sending til ${til}:`, e);
   }
 }
@@ -114,7 +127,9 @@ function ramme(innhold: string): string {
 
 /** Blå på både lys og mørk flate — trenger ingen mørk overstyring. */
 const knapp = (tekst: string, url: string) =>
-  `<a href="${url}" style="display:inline-block;margin-top:16px;padding:11px 22px;background:#1459e0;color:#ffffff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;font-family:${FONT};">${tekst}</a>`;
+  // Bunnmarg også: teksten som følger etter en knapp har `margin-top: 0`, og uten dette
+  // klistrer den seg til knappen. E-postklienter kollapser ikke marginer likt som nettlesere.
+  `<a href="${url}" style="display:inline-block;margin:16px 0 20px;padding:11px 22px;background:#1459e0;color:#ffffff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;font-family:${FONT};">${tekst}</a>`;
 
 const h = (tekst: string) =>
   `<h2 class="em-h" style="margin:0 0 16px;font-size:17px;font-weight:700;color:#0d1b2a;">${tekst}</h2>`;
