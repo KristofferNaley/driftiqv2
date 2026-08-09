@@ -302,6 +302,26 @@ export const enheter = {
   arkiver: (o: string, id: string) => api.slett(org(o, `/units/${id}`)),
 };
 
+export type Dashbord = {
+  moduler: Record<string, boolean>;
+  kpi: { oppgaver: number | null; aJour: number | null; forsinket: number | null; apneAvvik: number | null };
+  oppfolging: Array<{ slag: string; alvor: "hoy" | "middels" | "lav"; tekst: string; detalj: string; sti: string }>;
+  frister: Array<{ dato: string; navn: string; kilde: string }>;
+  oppgaveliste: Array<{ id: string; title: string; vendorName: string | null; nesteFrist: string | null; forsinket: boolean }> | null;
+  avviksliste: Array<{ id: string; number: number | null; title: string; status: string; severity: string | null }> | null;
+  utlopende: Array<{ id: string; title: string; vendorName: string | null; endDate: string | null }> | null;
+  tilstand: Array<{ tg: string; antall: number }> | null;
+  parkering: { totalt: number; ledige: number; utleid: number } | null;
+  rutinerTilRevisjon: Array<{ id: string; title: string; lastReviewedAt: string | null }> | null;
+  aktivitet: Array<{ id: string; title: string; entryDate: string; createdBy: string }> | null;
+  antallDokumenter: number | null;
+  leverandorer: { aktive: number; inaktive: number } | null;
+};
+
+export const dashbord = {
+  hent: (o: string) => api.hent<Dashbord>(org(o, "/dashboard")),
+};
+
 export type MegSvar = {
   id: string;
   name: string;
