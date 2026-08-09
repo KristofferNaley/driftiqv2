@@ -18,7 +18,9 @@ function storrelse(n: number): string {
 }
 
 export default function Innstillinger() {
-  const [fane, setFane] = useState<"org" | "kategorier" | "moduler" | "enheter">("org");
+  const [fane, setFane] = useState<
+    "org" | "kategorier" | "moduler" | "leiligheter" | "fellesomrader"
+  >("org");
   return (
     <Layout
       tittel="Innstillinger"
@@ -30,7 +32,8 @@ export default function Innstillinger() {
             { nokkel: "org", etikett: "Organisasjonen" },
             { nokkel: "kategorier", etikett: "Avvikskategorier" },
             { nokkel: "moduler", etikett: "Moduler" },
-            { nokkel: "enheter", etikett: "Enhetsregister" },
+            { nokkel: "leiligheter", etikett: "Leiligheter" },
+            { nokkel: "fellesomrader", etikett: "Fellesområder" },
           ]}
         />
       }
@@ -39,7 +42,8 @@ export default function Innstillinger() {
         {fane === "org" && <Organisasjonen />}
         {fane === "kategorier" && <Kategorier />}
         {fane === "moduler" && <Moduler />}
-        {fane === "enheter" && <Enheter />}
+        {fane === "leiligheter" && <Enheter visning="bolig" />}
+        {fane === "fellesomrader" && <Enheter visning="fellesareal" />}
       </div>
     </Layout>
   );
@@ -373,14 +377,27 @@ function Moduler() {
 
 // ---------------------------------------------------------------------------------------
 
-function Enheter() {
+/**
+ * Leiligheter og fellesområder — to faner over samme register.
+ *
+ * Delt fordi de svarer på ulike spørsmål og identifiseres ulikt: en leilighet kjennes på
+ * nummer (H0305, andel 26), et fellesområde på navn («Bossrom oppgang B»). I én liste
+ * blandet 84 leiligheter bort de fire fellesområdene folk faktisk leter etter.
+ *
+ * Samme tabell under — `units.type` skiller dem. Avvik peker hit via `unitId` uansett
+ * hvilken av de to det er, og det er nettopp derfor de deler register.
+ */
+function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
+  const fellesareal = visning === "fellesareal";
   const [medArkiverte, setMedArkiverte] = useState(false);
   const { data, feil, setFeil, laster, last, orgId } = useOrgData(
     (o) => enheter.liste(o, medArkiverte),
     [medArkiverte],
   );
   const [nyEnhet, setNyEnhet] = useState(false);
-  const liste = data ?? [];
+  const liste = (data ?? []).filter((e) =>
+    fellesareal ? e.type === "fellesareal" : e.type !== "fellesareal",
+  );
 
   async function arkiver(e: Enhet) {
     if (!orgId) return;
@@ -397,7 +414,7 @@ function Enheter() {
       <Feil melding={feil} />
 
       <Kort
-        tittel={`Enheter (${liste.length})`}
+        tittel={`${fellesareal ? "Fellesområder" : "Leiligheter"} (${liste.length})`}
         handling={
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "7px", cursor: "pointer" }}>
@@ -409,7 +426,7 @@ function Enheter() {
               <span className="list-meta">Vis arkiverte</span>
             </label>
             <button className="btn btn-ghost" onClick={() => setNyEnhet(true)}>
-              Ny enhet
+              {fellesareal ? "Nytt fellesområde" : "Ny leilighet"}
             </button>
           </div>
         }
@@ -417,14 +434,19 @@ function Enheter() {
         {laster ? (
           <Tom tekst="Henter …" />
         ) : liste.length === 0 ? (
-          <Tom tekst="Ingen enheter registrert." />
+          <Tom
+            tekst={
+              fellesareal
+                ? "Ingen fellesområder registrert. Bossrom, takterrasse, vaskeri — det man melder avvik på uten at det tilhører en bestemt leilighet."
+                : "Ingen leiligheter registrert."
+            }
+          />
         ) : (
           liste.map((e) => (
             <Rad
               key={e.id}
               tittel={e.navn ?? e.leilighetsnr ?? `Andel ${e.andelsnr ?? "?"}`}
               meta={[
-                e.type === "fellesareal" ? "Fellesareal" : "Bolig",
                 e.andelsnr && `andel ${e.andelsnr}`,
                 e.oppgang && `oppg. ${e.oppgang}`,
                 e.etasje && `${e.etasje}. etasje`,
@@ -456,13 +478,31 @@ function Enheter() {
         Enheter arkiveres, aldri slettes — avvikshistorikken skal overleve.
       </div>
 
-      {nyEnhet && <NyEnhet orgId={orgId!} onLukk={() => setNyEnhet(false)} onLagret={last} />}
+      {nyEnhet && (
+        <NyEnhet
+          orgId={orgId!}
+          fellesareal={fellesareal}
+          onLukk={() => setNyEnhet(false)}
+          onLagret={last}
+        />
+      )}
     </>
   );
 }
 
-function NyEnhet({ orgId, onLukk, onLagret }: { orgId: string; onLukk: () => void; onLagret: () => Promise<void> }) {
-  const [type, setType] = useState<"bolig" | "fellesareal">("bolig");
+function NyEnhet({
+  orgId,
+  fellesareal,
+  onLukk,
+  onLagret,
+}: {
+  orgId: string;
+  fellesareal: boolean;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+}) {
+  // Typen følger av fanen man står i — ingen avkryssingsboks å glemme.
+  const type = fellesareal ? "fellesareal" : "bolig";
   const [navn, setNavn] = useState("");
   const [andelsnr, setAndelsnr] = useState("");
   const [leilighetsnr, setLeilighetsnr] = useState("");
@@ -473,7 +513,7 @@ function NyEnhet({ orgId, onLukk, onLagret }: { orgId: string; onLukk: () => voi
   });
 
   return (
-    <Modal tittel="Ny enhet" onLukk={onLukk}>
+    <Modal tittel={fellesareal ? "Nytt fellesområde" : "Ny leilighet"} onLukk={onLukk}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -490,14 +530,14 @@ function NyEnhet({ orgId, onLukk, onLagret }: { orgId: string; onLukk: () => voi
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
-        <Avkryssing
-          etikett="Dette er et fellesareal"
-          verdi={type === "fellesareal"}
-          onEndre={(v) => setType(v ? "fellesareal" : "bolig")}
-          notat="Bossrom, takterrasse, utleielokale. Fellesarealer identifiseres med navn; boliger med nummer."
-        />
-        {type === "fellesareal" ? (
-          <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} plassholder="Bossrom oppgang B" />
+        {fellesareal ? (
+          <Tekstfelt
+            etikett="Navn"
+            verdi={navn}
+            onEndre={setNavn}
+            plassholder="Bossrom oppgang B"
+            notat="Fellesområder kjennes på navn, ikke nummer — bossrom, takterrasse, vaskeri."
+          />
         ) : (
           <>
             <div className="field-row">
