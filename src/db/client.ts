@@ -192,6 +192,17 @@ export async function withoutRls<T>(grunn: RlsUnntak, fn: (db: Db) => Promise<T>
 }
 
 /**
+ * Databasehåndtaket Better Auth får. Dette ER `withoutRls("innlogging")`, materialisert —
+ * biblioteket tar en `db`-instans og kan ikke ta en callback.
+ *
+ * Det er trygt, men bare på grunn av én invariant: Better Auth rører KUN tabeller som står i
+ * `UNNTATT` (`users`, `session`, `account`, `verification`, `jwks`). Ingen av dem har `org_id`,
+ * og ingen inneholder kundedata. Legger noen en org-eid tabell inn i auth-skjemaet, faller
+ * invarianten — og testen `ingen tenanttabell uten dekning` er det som sier fra.
+ */
+export const authDb: Db = drizzle(adminPool, { schema });
+
+/**
  * Rå tilgang til eierrollen for oppsett som må styre transaksjonen selv (RLS-policyer,
  * migrasjoner). Ikke for forespørsler.
  */

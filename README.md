@@ -3,9 +3,9 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 0 — fundament.** Ingen moduler er portert. Det som finnes er databaselaget,
-RLS-håndhevingen og sikkerhetstestene. Det er med vilje: sikkerhetslaget skal stå og være
-grønt før den første modulen flyttes, ikke etterpå.
+**Status: fase 1 — auth.** Ingen forretningsmoduler er portert. Det som finnes er
+databaselaget, RLS-håndhevingen, Better Auth og sikkerhetstestene (20 grønne). Det er med
+vilje: sikkerhetslaget skal stå og være grønt før den første modulen flyttes, ikke etterpå.
 
 | Miljø | App | Backend | Database |
 |---|---|---|---|
@@ -29,7 +29,7 @@ automatisk ved oppstart og skal *ikke* ha den.
 **2. Miljøfil:**
 
 ```bash
-cp .env.v2.example .env.v2
+cp .env.example .env
 ```
 
 Fyll inn passordet fra steg 1, et nytt til approllen, og `openssl rand -hex 32` til Better Auth.
@@ -38,13 +38,13 @@ Fyll inn passordet fra steg 1, et nytt til approllen, og `openssl rand -hex 32` 
 sjekkes inn):
 
 ```bash
-docker run --rm -v "$PWD/v2:/app" -w /app node:22-alpine sh -c "npm install && npx drizzle-kit generate"
+docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npm install && npx drizzle-kit generate"
 ```
 
 **4. Start:**
 
 ```bash
-docker compose -p driftiq-v2 --env-file .env.v2 -f docker-compose.v2.yaml up -d --build
+docker compose up -d --build
 ```
 
 Merk `-p driftiq-v2`. Uten prosjektnavnet blir det `driftiq`, og du får et sett containere som
@@ -54,13 +54,13 @@ kolliderer med prod på porter — samme felle som er dokumentert for testmiljø
 
 ```bash
 # Sikkerhetstestene. Krever ekte Postgres og kjøres derfor i containeren, som v1-suiten.
-docker compose -p driftiq-v2 --env-file .env.v2 -f docker-compose.v2.yaml exec app npm run test
+docker compose exec app npm run test
 ```
 
 ```bash
 # Typesjekk. Next-bygget alene beviser ikke at koden kan kjøre — samme lærdom som at
 # `vite build` i v1 bygget grønt med en glemt import.
-docker compose -p driftiq-v2 --env-file .env.v2 -f docker-compose.v2.yaml exec app npm run typecheck
+docker compose exec app npm run typecheck
 ```
 
 ## Hva som er annerledes fra v1, og hvorfor
@@ -106,7 +106,11 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 
 ## Neste steg
 
-1. Fase 1 — Better Auth med JWT-plugin og JWKS, så v1s FastAPI kan validere de samme
-   sesjonene mens den fortsatt lever. Bcrypt-hashene fra `users.password_hash` beholdes via
-   custom hashing. 2FA og passkeys følger nesten gratis.
+1. **Fase 1 gjenstår:** 2FA (TOTP) og passkeys — begge er plugins nå som Better Auth står.
+   Og de to sperrene fra v1s innlogging som ennå ikke er portert: deaktivert organisasjon og
+   utløpt abonnement. De hører til `organizations` og `platform_contracts`, som kommer med
+   fase 2 — **til da slipper en utløpt kunde inn i v2 selv om v1 stenger dem ute.**
 2. Fase 2 — første modul ende til ende. Parkering eller Årshjul, ikke Internkontroll.
+3. Datamigrering. Kun én testkunde finnes, og data + filer kan eksporteres som JSON når som
+   helst. Det eneste som ikke kan gjenskapes gratis er **de fysiske QR-kodene som henger i
+   bygget**: `tasks.qr_token` må bevares uendret, ellers må alle oppslag printes på nytt.

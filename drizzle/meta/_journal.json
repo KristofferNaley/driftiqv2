@@ -8,6 +8,13 @@
       "when": 1786234628357,
       "tag": "0000_equal_starfox",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786235000965,
+      "tag": "0001_demonic_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

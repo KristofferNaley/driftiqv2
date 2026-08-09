@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 /**
@@ -38,9 +38,19 @@ export const users = pgTable("users", {
   phone: varchar("phone"),
   role: roleEnum("role").notNull().default("member"),
   active: boolean("active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
   /** Sist vellykkede innlogging — ETT felt, ikke en logg (BL-121). */
   lastLoginAt: timestamp("last_login_at"),
+
+  // --- Påkrevd av Better Auth. Biblioteket peker på DENNE tabellen, ikke en egen `user`. ---
+  emailVerified: boolean("email_verified").notNull().default(false),
+  /**
+   * Profilbilde-URL. v1 lagret sti + filnavn i `avatar_path`/`avatar_name` og lekket aldri
+   * stien til frontend — filnavnet var selve tilgangsnøkkelen. Den modellen kommer tilbake
+   * når filhåndteringen portes; feltet her er Better Auths, ikke erstatningen.
+   */
+  image: text("image"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 /** Selve tilgangstabellen. Står i UNNTATT — org-velgeren må lese medlemskap på tvers. */

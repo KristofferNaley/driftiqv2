@@ -115,6 +115,7 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   session: "Better Auth: sesjonsoppslag skjer før org-kontekst finnes",
   account: "Better Auth: innloggingsmetoder knyttet til global bruker",
   verification: "Better Auth: engangstokens, slås opp uten org-kontekst",
+  jwks: "Better Auth: nøkkelpar for JWT-signering, ingen kundedata",
 };
 
 /**
