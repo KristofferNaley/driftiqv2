@@ -1136,3 +1136,36 @@ textarea.qr-input { resize: vertical; }
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 }
+
+/* ── OPPGAVETABELLEN ──
+   Samme mekanikk som avvikstabellen: `minmax(0, …)` på fr-kolonnene, og en scroll-container
+   rundt i stedet for å presse kolonnene til uleselige på smale skjermer. */
+.oppgave-rad {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 110px 110px 100px;
+  gap: 12px; align-items: center; width: 100%; min-width: 860px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  background: none; border-left: none; border-right: none; border-top: none;
+  text-align: left; cursor: pointer; font-family: var(--font-sans);
+}
+.oppgave-rad:hover { background: var(--surface2); }
+.oppgave-rad.hode {
+  background: var(--bg); cursor: default; padding: 11px 20px;
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+}
+.oppgave-rad.hode:hover { background: var(--bg); }
+.oppgave-navn {
+  display: block; font-size: var(--fs-sm); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.oppgave-lev {
+  display: block; font-size: var(--fs-label); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.avvik-celle.mangler { color: var(--warn); }
+
+@media (max-width: 700px) {
+  .oppgave-rad { grid-template-columns: minmax(0, 1fr) 110px 100px; min-width: 0; }
+  .oppgave-rad .kol-vekk { display: none; }
+}

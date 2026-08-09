@@ -106,6 +106,7 @@ export type Oppgave = {
   id: string; title: string; description: string | null; location: string | null;
   frequency: string; startDate: string | null; dueDate: string | null; active: boolean;
   qrToken: string | null; vendorId: string; vendorName: string | null; unitNavn: string | null;
+  ansvarligNavn: string | null;
   lastCompletedAt: string | null; nesteFrist: string | null; forsinket: boolean;
 };
 

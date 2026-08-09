@@ -23,6 +23,7 @@ import {
 } from "../db/schema/tasks";
 import { deviations } from "../db/schema/avvik";
 import { units } from "../db/schema/units";
+import { users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { erForsinket, nesteFrist } from "./oppgaveregler";
@@ -114,10 +115,16 @@ function berik<T extends { id: string; frequency: string; active: boolean; start
 
 export async function hentOppgaver(db: Db, orgId: string) {
   const rader = await db
-    .select({ oppgave: tasks, vendorName: vendors.name, unitNavn: units.navn })
+    .select({
+      oppgave: tasks,
+      vendorName: vendors.name,
+      unitNavn: units.navn,
+      ansvarligNavn: users.name,
+    })
     .from(tasks)
     .leftJoin(vendors, eq(vendors.id, tasks.vendorId))
     .leftJoin(units, eq(units.id, tasks.unitId))
+    .leftJoin(users, eq(users.id, tasks.responsibleUserId))
     .where(eq(tasks.orgId, orgId))
     .orderBy(asc(tasks.title));
 
@@ -126,6 +133,7 @@ export async function hentOppgaver(db: Db, orgId: string) {
     ...berik(r.oppgave, sist.get(r.oppgave.id) ?? null),
     vendorName: r.vendorName,
     unitNavn: r.unitNavn,
+    ansvarligNavn: r.ansvarligNavn,
   }));
 }
 
@@ -133,10 +141,16 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
   // Joinene MÅ være de samme som i `hentOppgaver`. Uten dem viste detaljsiden «—» for
   // leverandør mens lista viste navnet — samme oppgave, to ulike svar.
   const rader = await db
-    .select({ oppgave: tasks, vendorName: vendors.name, unitNavn: units.navn })
+    .select({
+      oppgave: tasks,
+      vendorName: vendors.name,
+      unitNavn: units.navn,
+      ansvarligNavn: users.name,
+    })
     .from(tasks)
     .leftJoin(vendors, eq(vendors.id, tasks.vendorId))
     .leftJoin(units, eq(units.id, tasks.unitId))
+    .leftJoin(users, eq(users.id, tasks.responsibleUserId))
     .where(and(eq(tasks.id, taskId), eq(tasks.orgId, orgId)))
     .limit(1);
   const rad = rader[0];
@@ -153,6 +167,7 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
     ...berik(oppgave, sist.get(taskId) ?? null),
     vendorName: rad.vendorName,
     unitNavn: rad.unitNavn,
+    ansvarligNavn: rad.ansvarligNavn,
     sjekkliste,
     utkvitteringer,
   };
