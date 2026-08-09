@@ -15,5 +15,6 @@
 export * from "./organizations";
 export * from "./users";
 export * from "./auth";
+export * from "./platform";
 export * from "./vendors";
 export * from "./tasks";

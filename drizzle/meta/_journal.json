@@ -15,6 +15,13 @@
       "when": 1786235000965,
       "tag": "0001_demonic_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786237020986,
+      "tag": "0002_sweet_warbird",
+      "breakpoints": true
     }
   ]
 }

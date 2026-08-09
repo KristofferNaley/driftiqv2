@@ -33,6 +33,7 @@ import bcrypt from "bcryptjs";
 import { authDb } from "../db/client";
 import { account, jwks, session, verification } from "../db/schema/auth";
 import { users } from "../db/schema/users";
+import { Tilgangsfeil, sjekkInnloggingssperrer } from "./tilgang";
 
 function paakrevd(navn: string): string {
   const verdi = process.env[navn];
@@ -89,23 +90,34 @@ export const auth = betterAuth({
       create: {
         /**
          * Sperrene fra v1s `/auth/login`. Better Auth kjenner bare passordet — alt annet om
-         * hvem som får slippe inn er vårt.
+         * hvem som får slippe inn er vårt: deaktivert bruker, deaktivert organisasjon og
+         * utløpt abonnement.
          *
-         * v1 sperret på tre ting: deaktivert bruker, deaktivert organisasjon og utløpt
-         * abonnement. Bare den første er portert her; de to andre hører til `organizations`
-         * og `platform_contracts`, som kommer med fase 2. **Legges de ikke til der, slipper
-         * en utløpt kunde inn i v2 selv om v1 stengte dem ute.**
+         * De kjøres når sesjonen opprettes, altså etter at passordet er verifisert. Samme
+         * rekkefølge som v1, og av samme grunn: et 403 «Brukeren er deaktivert» til noen som
+         * ikke kan passordet, ville røpet at kontoen finnes.
          */
         before: async (sesjon) => {
           const rad = await authDb
-            .select({ active: users.active })
+            .select()
             .from(users)
             .where(eq(users.id, sesjon.userId))
             .limit(1);
 
-          if (!rad[0]?.active) {
+          const bruker = rad[0];
+          if (!bruker?.active) {
             throw new APIError("FORBIDDEN", { message: "Brukeren er deaktivert" });
           }
+
+          try {
+            await sjekkInnloggingssperrer(authDb, bruker);
+          } catch (e) {
+            if (e instanceof Tilgangsfeil) {
+              throw new APIError("FORBIDDEN", { message: e.message });
+            }
+            throw e;
+          }
+
           return { data: sesjon };
         },
       },
