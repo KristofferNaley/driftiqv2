@@ -156,6 +156,55 @@ const TABELLER: Tabell[] = [
     oppdater: ["type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at"],
   },
   {
+    navn: "building_elements",
+    kilde: `SELECT id, org_id, name, COALESCE(icon, '🏗') AS icon, category, installed_year,
+                   condition_grade, expected_lifetime_years, next_action_year, estimated_cost,
+                   vendor_id, warranty_years, warranty_expires, notes,
+                   COALESCE(created_at, now()) AS created_at
+            FROM building_elements`,
+    kolonner: ["id", "org_id", "name", "icon", "category", "installed_year", "condition_grade", "expected_lifetime_years", "next_action_year", "estimated_cost", "vendor_id", "warranty_years", "warranty_expires", "notes", "created_at"],
+    oppdater: ["name", "icon", "category", "installed_year", "condition_grade", "expected_lifetime_years", "next_action_year", "estimated_cost", "vendor_id", "warranty_years", "warranty_expires", "notes"],
+  },
+  {
+    navn: "element_documents",
+    kilde: `SELECT id, element_id, org_id, COALESCE(fdv_type, 'annet') AS fdv_type, title,
+                   filename, original_name, content_type, file_size, uploaded_by,
+                   COALESCE(uploaded_at, now()) AS uploaded_at
+            FROM element_documents`,
+    kolonner: ["id", "element_id", "org_id", "fdv_type", "title", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at"],
+    oppdater: ["fdv_type", "title"],
+  },
+  {
+    navn: "element_services",
+    kilde: `SELECT id, element_id, org_id, service_date, title, performed_by, notes,
+                   COALESCE(created_at, now()) AS created_at
+            FROM element_services`,
+    kolonner: ["id", "element_id", "org_id", "service_date", "title", "performed_by", "notes", "created_at"],
+    oppdater: ["service_date", "title", "performed_by", "notes"],
+  },
+  {
+    navn: "unit_works",
+    kilde: `SELECT id, org_id, unit_id, unit_label, element_id,
+                   COALESCE(category, 'annet') AS category,
+                   COALESCE(work_type, 'vedlikehold') AS work_type,
+                   work_date, title, description, vendor_id, performed_by,
+                   COALESCE(paid_by, 'borettslag') AS paid_by, cost, created_by,
+                   COALESCE(created_at, now()) AS created_at
+            FROM unit_works`,
+    kolonner: ["id", "org_id", "unit_id", "unit_label", "element_id", "category", "work_type", "work_date", "title", "description", "vendor_id", "performed_by", "paid_by", "cost", "created_by", "created_at"],
+    // unit_label er et snapshot og skal ALDRI oppdateres — se kommentaren på kolonnen.
+    oppdater: ["element_id", "category", "work_type", "work_date", "title", "description", "vendor_id", "performed_by", "paid_by", "cost"],
+  },
+  {
+    navn: "unit_work_documents",
+    kilde: `SELECT id, work_id, org_id, COALESCE(doc_type, 'annet') AS doc_type, title,
+                   filename, original_name, content_type, file_size, uploaded_by,
+                   COALESCE(uploaded_at, now()) AS uploaded_at
+            FROM unit_work_documents`,
+    kolonner: ["id", "work_id", "org_id", "doc_type", "title", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at"],
+    oppdater: ["doc_type", "title"],
+  },
+  {
     navn: "annual_events",
     kilde: `SELECT id, org_id, title, description, COALESCE(category, 'annet') AS category,
                    start_date, event_date, COALESCE(is_recurring, false) AS is_recurring,
