@@ -27,11 +27,11 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { jwt } from "better-auth/plugins";
+import { jwt, twoFactor } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { authDb } from "../db/client";
-import { account, jwks, session, verification } from "../db/schema/auth";
+import { account, jwks, session, twoFactor as twoFactorTabell, verification } from "../db/schema/auth";
 import { users } from "../db/schema/users";
 import { Tilgangsfeil, sjekkInnloggingssperrer } from "./tilgang";
 
@@ -50,7 +50,7 @@ export const auth = betterAuth({
     // Nøklene her må hete det samme som modellnavnene Better Auth slår opp — altså `users`
     // og ikke `user`, siden `user.modelName` under peker på den eksisterende tabellen.
     // Stemmer de ikke overens, feiler adapteren først ved første innlogging, ikke ved oppstart.
-    schema: { users, session, account, verification, jwks },
+    schema: { users, session, account, verification, jwks, twoFactor: twoFactorTabell },
   }),
 
   emailAndPassword: {
@@ -125,6 +125,27 @@ export const auth = betterAuth({
   },
 
   plugins: [
+    /**
+     * Tofaktor med authenticator-app (TOTP).
+     *
+     * Dette var opprinnelig et eget prosjekt i v1: egne kolonner, egen to-trinns
+     * innloggingsflyt, egne endepunkter for oppsett, backup-koder og admin-nullstilling —
+     * anslått til 2–3 dager. Her er det en plugin, fordi Better Auth allerede eier
+     * innloggingsflyten.
+     *
+     * `skipVerificationOnEnable` står bevisst AV: brukeren må taste en gyldig kode før
+     * tofaktor slås på. Uten det kan noen aktivere 2FA med en QR-kode de aldri skannet, og
+     * låse seg selv ute ved neste innlogging.
+     */
+    twoFactor({
+      issuer: "DriftIQ",
+      skipVerificationOnEnable: false,
+      totpOptions: {
+        digits: 6,
+        period: 30,
+      },
+    }),
+
     jwt({
       jwt: {
         // Kort levetid: tokenet er en bærer, og v1 kan ikke slå opp om sesjonen er trukket

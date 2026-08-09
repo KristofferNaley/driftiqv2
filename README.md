@@ -3,9 +3,10 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 1 — auth.** Ingen forretningsmoduler er portert. Det som finnes er
-databaselaget, RLS-håndhevingen, Better Auth og sikkerhetstestene (20 grønne). Det er med
-vilje: sikkerhetslaget skal stå og være grønt før den første modulen flyttes, ikke etterpå.
+**Status: fase 1 ferdig — auth med 2FA.** Ingen forretningsmoduler er portert. Det som finnes er
+databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
+sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
+den første modulen flyttes, ikke etterpå.
 
 | Miljø | App | Backend | Database |
 |---|---|---|---|
@@ -106,10 +107,7 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 
 ## Neste steg
 
-1. **Fase 1 gjenstår:** 2FA (TOTP) og passkeys — begge er plugins nå som Better Auth står.
-   Og de to sperrene fra v1s innlogging som ennå ikke er portert: deaktivert organisasjon og
-   utløpt abonnement. De hører til `organizations` og `platform_contracts`, som kommer med
-   fase 2 — **til da slipper en utløpt kunde inn i v2 selv om v1 stenger dem ute.**
+1. Passkeys — en plugin til, nå som Better Auth står.
 2. Fase 2 — første modul ende til ende. Parkering eller Årshjul, ikke Internkontroll.
 3. Datamigrering. Kun én testkunde finnes, og data + filer kan eksporteres som JSON når som
    helst. Det eneste som ikke kan gjenskapes gratis er **de fysiske QR-kodene som henger i

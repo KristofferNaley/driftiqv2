@@ -49,6 +49,8 @@ export const users = pgTable("users", {
    * når filhåndteringen portes; feltet her er Better Auths, ikke erstatningen.
    */
   image: text("image"),
+  /** Settes av twoFactor-pluginen når brukeren har bekreftet sin første TOTP-kode. */
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

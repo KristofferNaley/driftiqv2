@@ -116,6 +116,7 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   account: "Better Auth: innloggingsmetoder knyttet til global bruker",
   verification: "Better Auth: engangstokens, slås opp uten org-kontekst",
   jwks: "Better Auth: nøkkelpar for JWT-signering, ingen kundedata",
+  two_factor: "Better Auth: TOTP-hemmelighet, verifiseres før org-kontekst finnes",
 };
 
 /**
