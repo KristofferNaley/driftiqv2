@@ -74,41 +74,74 @@ export const ALLTID_PA: ReadonlySet<ModulNokkel> = new Set(["dashboard"]);
  */
 export type Menypunkt = { sti: string; etikett: string; gruppe: string; ikon: string };
 
+/**
+ * Menypunktet for hver modul. **Gruppene er ordrett v1s `NAV`** — se Sidebar.jsx der.
+ *
+ * Jeg fant først på en annen inndeling med syv grupper. Det var unødvendig endring: en
+ * omskriving skal flytte koden, ikke flytte på ting styret allerede vet hvor er. Fire
+ * grupper, samme navn, samme rekkefølge.
+ *
+ * `ikon` er navnet på et lucide-ikon; komponenten slår det opp. En streng her framfor en
+ * importert komponent holder fila fri for React, så rutelaget på serversiden kan importere
+ * den uten å dra inn et komponentbibliotek.
+ */
 export const MENY: Readonly<Partial<Record<ModulNokkel, Menypunkt>>> = {
-  dashboard: { sti: "/", etikett: "Dashbord", gruppe: "Oversikt", ikon: "LayoutDashboard" },
+  dashboard: { sti: "/", etikett: "Dashboard", gruppe: "Daglig drift", ikon: "LayoutDashboard" },
   tasks: { sti: "/oppgaver", etikett: "Oppgaver", gruppe: "Daglig drift", ikon: "ClipboardCheck" },
   avvik: { sti: "/avvik", etikett: "Avvik", gruppe: "Daglig drift", ikon: "TriangleAlert" },
   driftslogg: { sti: "/driftslogg", etikett: "Driftslogg", gruppe: "Daglig drift", ikon: "NotebookPen" },
-  parkering: { sti: "/parkering", etikett: "Parkering", gruppe: "Daglig drift", ikon: "SquareParking" },
-  internkontroll: { sti: "/internkontroll", etikett: "Internkontroll", gruppe: "Dokumentasjon", ikon: "ShieldCheck" },
-  rutiner: { sti: "/rutiner", etikett: "Rutiner", gruppe: "Dokumentasjon", ikon: "ListChecks" },
-  dokumentarkiv: { sti: "/dokumentarkiv", etikett: "Dokumentarkiv", gruppe: "Dokumentasjon", ikon: "FolderOpen" },
-  arshjul: { sti: "/arshjul", etikett: "Årshjul", gruppe: "Planlegging", ikon: "CalendarDays" },
-  vedlikehold: { sti: "/vedlikehold", etikett: "Vedlikehold", gruppe: "Planlegging", ikon: "Wrench" },
-  kontrakter: { sti: "/kontrakter", etikett: "Kontrakter", gruppe: "Leverandører", ikon: "FileText" },
-  leverandorer: { sti: "/leverandorer", etikett: "Leverandører", gruppe: "Leverandører", ikon: "Truck" },
-  ai_radgiver: { sti: "/ai-radgiver", etikett: "AI-rådgiver", gruppe: "Verktøy", ikon: "Sparkles" },
-  brukere: { sti: "/brukere", etikett: "Brukere", gruppe: "Konto", ikon: "Users" },
+  ai_radgiver: { sti: "/ai-radgiver", etikett: "AI-rådgiver", gruppe: "Daglig drift", ikon: "Sparkles" },
+
+  arshjul: { sti: "/arshjul", etikett: "Årshjul", gruppe: "Planlegging og HMS", ikon: "CalendarDays" },
+  vedlikehold: { sti: "/vedlikehold", etikett: "Vedlikehold", gruppe: "Planlegging og HMS", ikon: "Wrench" },
+  internkontroll: { sti: "/internkontroll", etikett: "Internkontroll", gruppe: "Planlegging og HMS", ikon: "ShieldCheck" },
+  rutiner: { sti: "/rutiner", etikett: "Rutiner", gruppe: "Planlegging og HMS", ikon: "ListChecks" },
+
+  kontrakter: { sti: "/kontrakter", etikett: "Kontrakter", gruppe: "Arkiv og avtaler", ikon: "FileText" },
+  dokumentarkiv: { sti: "/dokumentarkiv", etikett: "Dokumentarkiv", gruppe: "Arkiv og avtaler", ikon: "FolderOpen" },
+  parkering: { sti: "/parkering", etikett: "Parkering", gruppe: "Arkiv og avtaler", ikon: "SquareParking" },
+
+  leverandorer: { sti: "/leverandorer", etikett: "Leverandører", gruppe: "Administrasjon", ikon: "Truck" },
+  brukere: { sti: "/brukere", etikett: "Brukere", gruppe: "Administrasjon", ikon: "Users" },
 };
 
-/** Rekkefølgen gruppene vises i menyen. */
+/**
+ * Punkter som ikke er moduler og derfor aldri gates. Innstillinger kan ikke slås av — der
+ * ligger blant annet enhetsregisteret og modulvalget selv.
+ */
+export const FASTE_PUNKTER: ReadonlyArray<Menypunkt> = [
+  { sti: "/innstillinger", etikett: "Innstillinger", gruppe: "Administrasjon", ikon: "Settings" },
+];
+
+/** Rekkefølgen gruppene vises i. */
 export const GRUPPER = [
-  "Oversikt",
   "Daglig drift",
-  "Dokumentasjon",
-  "Planlegging",
-  "Leverandører",
-  "Verktøy",
-  "Konto",
+  "Planlegging og HMS",
+  "Arkiv og avtaler",
+  "Administrasjon",
 ] as const;
 
-/** Menypunktene kunden faktisk skal se, gruppert. Låste moduler faller ut. */
-export function menyFor(lagret: string | null | undefined) {
+/**
+ * Menypunktene kunden skal se, gruppert. Låste moduler faller ut.
+ *
+ * `lagret === undefined` betyr «vet ikke ennå» — økten er ikke hentet. Da returneres INGEN
+ * punkter, i stedet for standardsettet. Ellers tegnes feil meny i et halvsekund og bytter
+ * når svaret kommer; det var nettopp blaffingen v1 hadde.
+ */
+export function menyFor(lagret: string | null | undefined, kjent = true) {
+  if (!kjent) return [];
+  // Rekkefølgen INNE i gruppen følger `MENY`, ikke `ALLE_MODULER`. De to listene har ulik
+  // orden — registeret er sortert etter når modulene kom til, menyen etter hvordan styret
+  // leser den. Itererte man registeret, havnet Internkontroll foran Årshjul.
+  const iRekkefolge = Object.keys(MENY) as ModulNokkel[];
   return GRUPPER.map((gruppe) => ({
     gruppe,
-    punkter: ALLE_MODULER.filter(
-      (n) => MENY[n]?.gruppe === gruppe && modulErAktivert(lagret, n),
-    ).map((n) => ({ nokkel: n, ...MENY[n]! })),
+    punkter: [
+      ...iRekkefolge
+        .filter((n) => MENY[n]?.gruppe === gruppe && modulErAktivert(lagret, n))
+        .map((n) => ({ nokkel: n as string, ...MENY[n]! })),
+      ...FASTE_PUNKTER.filter((p) => p.gruppe === gruppe).map((p) => ({ nokkel: p.sti, ...p })),
+    ],
   })).filter((g) => g.punkter.length > 0);
 }
 

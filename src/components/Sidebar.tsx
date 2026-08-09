@@ -17,17 +17,20 @@ export default function Sidebar({
   apen,
   sammenslatt,
   aktiverteModuler,
+  oktKjent,
   versjon,
   onLukk,
 }: {
   apen: boolean;
   sammenslatt: boolean;
   aktiverteModuler: string | null;
+  /** Er økten hentet? Før den er det, tegnes ingen punkter — se `menyFor`. */
+  oktKjent: boolean;
   versjon: string;
   onLukk: () => void;
 }) {
   const sti = usePathname();
-  const grupper = menyFor(aktiverteModuler);
+  const grupper = menyFor(aktiverteModuler, oktKjent);
 
   return (
     <nav

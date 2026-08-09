@@ -33,7 +33,7 @@ export default function Layout({
   aside?: ReactNode;
   children: ReactNode;
 }) {
-  const { bruker, aktivOrg, versjon } = useOkt();
+  const { bruker, aktivOrg, versjon, laster } = useOkt();
   const [apen, setApen] = useState(false);
   const [sammenslatt, setSammenslatt] = useState(false);
 
@@ -61,6 +61,7 @@ export default function Layout({
         apen={apen}
         sammenslatt={sammenslatt}
         aktiverteModuler={aktivOrg?.enabledModules ?? null}
+        oktKjent={!laster}
         versjon={versjon}
         onLukk={() => setApen(false)}
       />
