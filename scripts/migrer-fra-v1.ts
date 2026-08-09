@@ -156,6 +156,59 @@ const TABELLER: Tabell[] = [
     oppdater: ["type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at"],
   },
   {
+    navn: "hms_templates",
+    kilde: `SELECT id, template_type, name, description,
+                   COALESCE(is_default, false) AS is_default, COALESCE(active, true) AS active,
+                   COALESCE(created_at, now()) AS created_at
+            FROM hms_templates`,
+    kolonner: ["id", "template_type", "name", "description", "is_default", "active", "created_at"],
+    oppdater: ["name", "description", "is_default", "active"],
+  },
+  {
+    navn: "hms_template_categories",
+    kilde: `SELECT id, template_id, template_type, key, label, icon,
+                   COALESCE("order", 0) AS "order", COALESCE(created_at, now()) AS created_at
+            FROM hms_template_categories`,
+    kolonner: ["id", "template_id", "template_type", "key", "label", "icon", "order", "created_at"],
+    oppdater: ["label", "icon", "order"],
+  },
+  {
+    navn: "hms_template_items",
+    kilde: `SELECT id, category_id, text, COALESCE("order", 0) AS "order",
+                   COALESCE(created_at, now()) AS created_at
+            FROM hms_template_items`,
+    kolonner: ["id", "category_id", "text", "order", "created_at"],
+    oppdater: ["text", "order"],
+  },
+  {
+    navn: "routines",
+    kilde: `SELECT id, org_id, title, description, category, responsible, applies_to,
+                   COALESCE(is_critical, false) AS is_critical, review_interval_months,
+                   COALESCE(status, 'utkast') AS status, last_reviewed_at,
+                   COALESCE(version, 1) AS version, qr_token, vendor_id, contract_id,
+                   document_id, task_id, COALESCE(created_at, now()) AS created_at
+            FROM routines`,
+    kolonner: ["id", "org_id", "title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "qr_token", "vendor_id", "contract_id", "document_id", "task_id", "created_at"],
+    oppdater: ["title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "vendor_id", "contract_id", "document_id", "task_id"],
+  },
+  {
+    navn: "routine_steps",
+    kilde: `SELECT id, routine_id, COALESCE("order", 0) AS "order", title, description,
+                   COALESCE(is_critical, false) AS is_critical, callout_type, callout_text
+            FROM routine_steps`,
+    kolonner: ["id", "routine_id", "order", "title", "description", "is_critical", "callout_type", "callout_text"],
+    oppdater: ["order", "title", "description", "is_critical", "callout_type", "callout_text"],
+  },
+  {
+    navn: "routine_versions",
+    kilde: `SELECT id, routine_id, org_id, version_number, content_snapshot, changed_by,
+                   COALESCE(changed_at, now()) AS changed_at
+            FROM routine_versions`,
+    kolonner: ["id", "routine_id", "org_id", "version_number", "content_snapshot", "changed_by", "changed_at"],
+    // Versjonshistorikk er uforanderlig — ingen oppdatering, heller ikke fra migreringen.
+    oppdater: [],
+  },
+  {
     navn: "building_elements",
     kilde: `SELECT id, org_id, name, COALESCE(icon, '🏗') AS icon, category, installed_year,
                    condition_grade, expected_lifetime_years, next_action_year, estimated_cost,

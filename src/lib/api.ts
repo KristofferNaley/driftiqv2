@@ -30,6 +30,7 @@ import { modulErAktivert, type ModulNokkel } from "./moduler";
 import {
   Tilgangsfeil,
   krevOrgAdmin,
+  krevPlattformadmin,
   krevOrgRedigering,
   krevOrgTilgang,
 } from "./tilgang";
@@ -132,6 +133,42 @@ export function orgRute<P extends Record<string, string> = Record<string, string
         if (opts.modul) await krevModul(db, orgId, opts.modul);
         return opts.handler({ db, orgId, bruker, params, req });
       });
+
+      const status = opts.status ?? 200;
+      if (status === 204) return new Response(null, { status: 204 });
+      return Response.json(resultat, { status });
+    } catch (e) {
+      return tilSvar(e);
+    }
+  };
+}
+
+/**
+ * Rute for PLATTFORMDATA — data som ikke tilhører én kunde.
+ *
+ * HMS-malene er det første tilfellet: samme mal brukes på tvers av alle borettslag, og bare
+ * plattformadmin kan endre dem. Lesetilgangen er åpen for innloggede brukere fordi
+ * kunde-appen må kunne hente spørsmålslista.
+ *
+ * Merk at det IKKE er noen org-kontekst her, og derfor ingen `withOrg`. Det er trygt bare så
+ * lenge handleren utelukkende rører tabeller uten `org_id` — de står da utenfor RLS uansett.
+ * Trenger du kundedata, er `orgRute` riktig verktøy.
+ */
+export function plattformRute<P extends Record<string, string> = Record<string, string>>(opts: {
+  /** `alle` = enhver innlogget bruker. `plattformadmin` = kun DriftIQ-ansatte. */
+  nivaa: "alle" | "plattformadmin";
+  handler: (ctx: { db: Db; bruker: User; params: P; req: Request }) => Promise<unknown>;
+  status?: number;
+}) {
+  return async (req: Request, ctx: { params: Promise<P> }) => {
+    try {
+      const params = await ctx.params;
+      const bruker = await hentBruker(req);
+      if (opts.nivaa === "plattformadmin") krevPlattformadmin(bruker);
+
+      const resultat = await withoutRls("plattformpanel", (db) =>
+        opts.handler({ db, bruker, params, req }),
+      );
 
       const status = opts.status ?? 200;
       if (status === 204) return new Response(null, { status: 204 });

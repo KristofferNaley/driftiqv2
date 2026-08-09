@@ -24,5 +24,7 @@ export * from "./avvik";
 export * from "./kontrakter";
 export * from "./dokumenter";
 export * from "./vedlikehold";
+export * from "./rutiner";
+export * from "./maler";
 export * from "./vendors";
 export * from "./tasks";
