@@ -1,0 +1,170 @@
+/**
+ * Rutebyggeren for org-endepunkter. Dette er mønsteret alle moduler følger.
+ *
+ * ## Hva den løser
+ *
+ * v1 krevde at hvert endepunkt husket `require_org_access()` som sin første linje — 359
+ * kallsteder, hvert av dem en mulighet til å glemme det. Modulgaten måtte i tillegg henges
+ * på routeren, og org-konteksten kom fra URL-prefikset: la noen et endepunkt utenfor
+ * `/organizations/{org_id}/`, fikk det ingen kontekst og hver RLS-tabell svarte null rader
+ * uten feilmelding.
+ *
+ * Her er alt det strukturelt. `orgRute()` gjør, i denne rekkefølgen:
+ *
+ *   1. henter sesjonen — ingen sesjon ⇒ 401
+ *   2. åpner `withOrg(orgId)` slik at RLS-konteksten er satt for alt som følger
+ *   3. kjører tilgangsgaten for det nivået ruta krever
+ *   4. sjekker at modulen er aktivert — ETTER tilgangsgaten, så modulstatusen ikke røpes
+ *      til noen utenfor organisasjonen
+ *   5. kaller handleren, som får en `db` som allerede har kontekst
+ *
+ * Å hoppe over et steg er ikke mulig: det finnes ingen annen vei til `db`.
+ */
+
+import { eq } from "drizzle-orm";
+import { withOrg, withoutRls, type Db } from "../db/client";
+import { organizations } from "../db/schema/organizations";
+import { users, type User } from "../db/schema/users";
+import { auth } from "./auth";
+import { modulErAktivert, type ModulNokkel } from "./moduler";
+import {
+  Tilgangsfeil,
+  krevOrgAdmin,
+  krevOrgRedigering,
+  krevOrgTilgang,
+} from "./tilgang";
+
+/** Hva ruta krever av den innloggede. Speiler de tre gatene i tilgang.ts. */
+export type Nivaa = "lesing" | "redigering" | "admin";
+
+export type Kontekst<P = Record<string, string>> = {
+  db: Db;
+  orgId: string;
+  bruker: User;
+  params: P;
+  req: Request;
+};
+
+/** Feil med en HTTP-status handleren selv vil styre. */
+export class ApiFeil extends Error {
+  constructor(
+    readonly status: number,
+    melding: string,
+  ) {
+    super(melding);
+    this.name = "ApiFeil";
+  }
+}
+
+export const ikkeFunnet = (hva: string) => new ApiFeil(404, `${hva} ikke funnet`);
+export const ugyldig = (melding: string) => new ApiFeil(400, melding);
+
+async function hentBruker(req: Request): Promise<User> {
+  const sesjon = await auth.api.getSession({ headers: req.headers });
+  if (!sesjon?.user?.id) throw new ApiFeil(401, "Ikke innlogget");
+
+  // Sesjonen bærer en kopi av brukeren, men gatene skal se den FERSKE raden: en deaktivering
+  // gjort for ett minutt siden skal gjelde nå, ikke ved neste innlogging. Det var symptomet i
+  // v1 der tilgangsnivået lå i localStorage og var et snapshot per økt — knappene forsvant
+  // uten forklaring, eller ble stående etter at tilgangen var trukket.
+  //
+  // `users` står i UNNTATT og har ingen policy, så oppslaget trenger ingen org-kontekst.
+  const rader = await withoutRls("innlogging", (db) =>
+    db.select().from(users).where(eq(users.id, sesjon.user.id)).limit(1),
+  );
+  const bruker = rader[0];
+  if (!bruker || !bruker.active) throw new ApiFeil(401, "Ikke innlogget");
+  return bruker;
+}
+
+async function krevNivaa(db: Db, orgId: string, bruker: User, nivaa: Nivaa): Promise<void> {
+  if (nivaa === "lesing") await krevOrgTilgang(db, orgId, bruker);
+  else if (nivaa === "redigering") await krevOrgRedigering(db, orgId, bruker);
+  else await krevOrgAdmin(db, orgId, bruker);
+}
+
+async function krevModul(db: Db, orgId: string, modul: ModulNokkel): Promise<void> {
+  const rader = await db
+    .select({ enabledModules: organizations.enabledModules })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  if (!modulErAktivert(rader[0]?.enabledModules, modul)) {
+    throw new ApiFeil(403, "Modulen er ikke aktivert for denne organisasjonen");
+  }
+}
+
+function tilSvar(e: unknown): Response {
+  if (e instanceof ApiFeil) {
+    return Response.json({ detail: e.message }, { status: e.status });
+  }
+  if (e instanceof Tilgangsfeil) {
+    return Response.json({ detail: e.message }, { status: e.status });
+  }
+  console.error("[api] uventet feil:", e);
+  return Response.json({ detail: "Noe gikk galt" }, { status: 500 });
+}
+
+/**
+ * Bygger en Next-rutehandler for et org-endepunkt.
+ *
+ * `modul` er valgfri bare for endepunkter som ikke tilhører en modul (org-metadata,
+ * brukerliste). Alt annet skal oppgi den.
+ */
+export function orgRute<P extends Record<string, string> = Record<string, string>>(opts: {
+  nivaa: Nivaa;
+  modul?: ModulNokkel;
+  handler: (ctx: Kontekst<P>) => Promise<unknown>;
+  /** Status ved suksess. 204 sender ingen kropp — brukes av DELETE, som i v1. */
+  status?: number;
+}) {
+  return async (req: Request, ctx: { params: Promise<P & { orgId: string }> }) => {
+    try {
+      const params = await ctx.params;
+      const orgId = params.orgId;
+      if (!orgId) throw new ApiFeil(400, "Mangler organisasjon i URL-en");
+
+      const bruker = await hentBruker(req);
+
+      const resultat = await withOrg(orgId, async (db) => {
+        await krevNivaa(db, orgId, bruker, opts.nivaa);
+        if (opts.modul) await krevModul(db, orgId, opts.modul);
+        return opts.handler({ db, orgId, bruker, params, req });
+      });
+
+      const status = opts.status ?? 200;
+      if (status === 204) return new Response(null, { status: 204 });
+      return Response.json(resultat, { status });
+    } catch (e) {
+      return tilSvar(e);
+    }
+  };
+}
+
+/** Leser og validerer JSON-kroppen med et Zod-skjema. */
+export async function lesKropp<T>(
+  req: Request,
+  skjema: { safeParse: (v: unknown) => { success: boolean; data?: T; error?: unknown } },
+): Promise<T> {
+  let raa: unknown;
+  try {
+    raa = await req.json();
+  } catch {
+    throw ugyldig("Ugyldig JSON i forespørselen");
+  }
+  const resultat = skjema.safeParse(raa);
+  if (!resultat.success || resultat.data === undefined) {
+    throw ugyldig(feilmelding(resultat.error));
+  }
+  return resultat.data;
+}
+
+/** Plukker den første feilmeldingen ut av en Zod-feil, på norsk der skjemaet har satt en. */
+function feilmelding(feil: unknown): string {
+  const issues = (feil as { issues?: Array<{ path: unknown[]; message: string }> })?.issues;
+  const forste = issues?.[0];
+  if (!forste) return "Ugyldige data";
+  const felt = forste.path.join(".");
+  return felt ? `${felt}: ${forste.message}` : forste.message;
+}
