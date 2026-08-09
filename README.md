@@ -3,10 +3,12 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 3 — kundeappen er i praksis komplett.** Dashbord, tolv modulsider, ni detaljvisninger, org-velger, innstillinger og brukere. Gjenstår: modulkatalogen på /moduler og admin-panelet. Det som finnes er
-databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
-sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
-den første modulen flyttes, ikke etterpå.
+**Status: fase 1 og 2 ferdig.** Kundeappen er komplett — dashbord med flyttbare widgets,
+alle modulsidene, detaljvisninger, anonym QR-flyt, utskriftsark og varselsjobber.
+Plattformpanelet er også komplett: kunder, prismodell, boligbyggelag, statistikk,
+systemhelse, HMS-maler og support-sesjoner. 382 tester grønne over 28 filer.
+
+Gjenstår (fase 3): leverandørportalen (null brukere i dag) og modulkatalogen på `/moduler`.
 
 | Miljø | App | Backend | Database |
 |---|---|---|---|
@@ -61,6 +63,16 @@ egen norske melding.
 Testbruker i v2-databasen: `claude@driftiq.test`, medlem (orgadmin) i to organisasjoner, så
 org-velgeren faktisk har noe å vise. Passordet er satt lokalt og finnes ikke i repoet.
 
+**Plattformpanelet kan ikke UI-testes av en agent.** Begge plattformadmin-kontoene er ekte
+brukere, og en agent skriver ikke passord inn i innloggingsfelt — og skal heller ikke heve
+rollen til en testbruker for å komme rundt det. Panelet dekkes derfor av tester
+(`tests/plattform.test.ts`, `tests/kundedetalj.test.ts`), og UI-et må klikkes gjennom manuelt.
+
+**En plattformadmin med medlemskap i en org får ingen tilgang av medlemskapet.** Alle
+gatene i `lib/tilgang.ts` sjekker rollen først og krever support-sesjon uansett. Org-en
+dukker likevel opp i org-velgeren, og alle kall svarer 403 til sesjonen er startet — se
+`docs/`-notatene hvis dette skal forbedres.
+
 ## Kommandoer
 
 ```bash
@@ -73,6 +85,12 @@ docker compose exec app npm run test
 # `vite build` i v1 bygget grønt med en glemt import.
 docker compose exec app npm run typecheck
 ```
+
+## Verktøy
+
+`.mcp.json` setter opp to MCP-servere for Claude Code — Next.js-devtools og Better Auth.
+Begge kjøres i Docker fordi det ikke er installert Node på verten. Se
+[docs/mcp-servere.md](docs/mcp-servere.md) for hva de faktisk gir, og hva de ikke gir.
 
 ## Hva som er annerledes fra v1, og hvorfor
 
@@ -102,45 +120,58 @@ samtidig.
 
 ## Hva som IKKE er portert
 
-`src/db/schema/` inneholder bare `organizations`, `users`, `user_org_memberships`, `vendors`,
-`tasks` og `task_checklist_items` — nok til å bevise isolasjonsmodellen i begge former (direkte
-`org_id` og barnetabell via forelder).
+**Leverandørportalen.** v1 lar en leverandør logge inn og kvittere ut sine egne oppgaver.
+Null brukere i dag, derfor sist.
 
-`src/db/rls/tables.ts` bærer derimot **hele** tabellista fra v1 fra dag én. `settOpp()` hopper
-over tabeller som ikke finnes ennå. Rekkefølgen er bevisst: sikkerhetsspesifikasjonen skal være
-komplett før modulene kommer, ikke vokse etter dem.
+**Modulkatalogen på `/moduler`.** Salgssiden for moduler kunden ikke har. Modulgaten selv
+virker — direktenavigering til en avslått modul gir `ModuleLocked`.
 
-Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respektive faser:
-`test_access_tier.py` og `test_support_session_utlop.py` (fase 1, sammen med Better Auth),
-`test_ratelimit.py` (fase 1), `test_ai_samtale_isolasjon.py` og
-`test_ai_tools_org_isolation.py` (fase 3, med AI-rådgiveren).
+**Vernerunde-PDF-en** (`report.py`, ReportLab) og **Unloc**. Begge bekreftet ubrukt
+09.08.2026 og dermed ute av portens omfang, ikke bare utsatt.
+
+**Tidslinjevisningen på årshjulet.** v1 har en andre visning med canvas-målte brikker og
+kollisjonsbaner. Månedsrutenettet svarer på det samme, og tidslinja er den dyreste delen av
+v1s 624 linjer.
+
+**Bulk-import av enheter og adressesøk mot Kartverket.**
+
+### Sikkerhetslaget sto først
+
+`src/db/rls/tables.ts` bar **hele** tabellista fra v1 fra dag én, mens skjemaet ennå bare
+hadde en håndfull tabeller. `settOpp()` hoppet over det som ikke fantes. Rekkefølgen var
+bevisst: sikkerhetsspesifikasjonen skulle være komplett før modulene kom, ikke vokse etter
+dem. Skjemaet har nå 56 tabeller, og `test_ingen_tenanttabell_uten_dekning` feiler hvis en ny
+en mangler dekning.
 
 ## Neste steg
 
-1. Passkeys — en plugin til, nå som Better Auth står.
-2. Fase 2 — første modul ende til ende. Parkering eller Årshjul, ikke Internkontroll.
-3. Flere moduler, i samme mønster som Parkering. Se «Å porte en modul» under.
+1. Fase 3 — leverandørportalen og modulkatalogen.
+2. Passkeys — en plugin til, nå som Better Auth står.
+3. Webanalyse. v1 serverer Umami førsteparts under `/stats/`; v2 har ingenting. Bevisst
+   utsatt, ikke glemt.
+4. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
 
 ## Portert så langt
 
 | Modul | Merknad |
 |---|---|
 | Parkering | komplett |
-| Årshjul | komplett |
+| Årshjul | komplett — månedsrutenett; tidslinjevisningen er ikke portert |
 | Driftslogg | komplett |
-| Enhetsregister | mangler bulk-import og adressesøk mot Kartverket |
-| Oppgaver | mangler QR-bildegenerering, anonymt innsendingsskjema og bilder på utkvitteringer |
-| Avvik | mangler vedlegg og koblingen til vernerunde (Internkontroll) |
+| Leiligheter og fellesområder | mangler bulk-import og adressesøk mot Kartverket |
+| Oppgaver | komplett — inkl. QR, anonymt skjema, bilder og utskriftsark |
+| Avvik | komplett — inkl. vedlegg |
 | Kontrakter | komplett — første modul med filopplasting |
-| Dokumentarkiv | komplett |
-| Leverandører | mangler portalbruker og Unloc-nøkler |
+| Dokumentarkiv | komplett — mapper, undermapper, speilmapper og søk |
+| Leverandører | mangler portalbruker (fase 3). Unloc er ute av omfang |
 | Vedlikehold | komplett |
 | Rutiner | komplett |
 | HMS-maler | komplett (plattformdata — `plattformRute`, ikke `orgRute`) |
-| Internkontroll | mangler PDF-rapport fra vernerunde |
-| AI-rådgiver | komplett |
+| Internkontroll | komplett — PDF-rapporten er ute av omfang, se over |
+| AI-rådgiver | komplett — krever `ANTHROPIC_API_KEY`, se `.env.example` |
+| Plattformpanel | komplett — kunder, prismodell, boligbyggelag, statistikk, system, maler |
 
-Alle fire er dekket av migreringsskriptet.
+Alt er dekket av migreringsskriptet.
 
 ## Frontend
 
