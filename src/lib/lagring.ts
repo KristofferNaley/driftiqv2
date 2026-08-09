@@ -64,9 +64,9 @@ export const TILLATTE_TYPER: Readonly<Record<string, string>> = {
  * uten at framdriftslinja beveger seg.
  */
 export const FILTABELLER: readonly string[] = [
-  // Fylles etter hvert som modulene portes. `contracts`, `documents`,
-  // `deviation_attachments`, `completion_photos`, `element_documents` og
-  // `unit_work_documents` kommer med sine respektive moduler.
+  "contracts",
+  // Fylles etter hvert som modulene portes: `documents`, `deviation_attachments`,
+  // `completion_photos`, `element_documents` og `unit_work_documents`.
 ];
 
 // ---------------------------------------------------------------------------------------
@@ -163,24 +163,41 @@ export type Opplasting = {
  * Rekkefølgen er ikke valgfri: type og størrelse sjekkes FØR kvoten, og kvoten FØR disken.
  * En avvist fil skal aldri ha vært innom filsystemet.
  */
+export type Opplastingsregler = {
+  /** Undersett av `TILLATTE_TYPER`. Utelatt = alle tillatte typer. */
+  typer?: readonly string[];
+  maksStorrelse?: number;
+  /**
+   * Størrelsen på fila som ERSTATTES, om noen. Bare differansen teller mot kvoten — ellers
+   * ville det å bytte ut et vedlegg med et like stort blitt regnet som ny bruk, og en kunde
+   * på taket kunne aldri oppdatert en fil.
+   */
+  erstatter?: number | null;
+};
+
 export async function lagreFil(
   db: Db,
   orgId: string,
   modul: string,
   fil: File,
+  regler: Opplastingsregler = {},
 ): Promise<Opplasting> {
   const endelse = TILLATTE_TYPER[fil.type];
-  if (!endelse) {
+  const tillatt = regler.typer ? regler.typer.includes(fil.type) : Boolean(endelse);
+  if (!endelse || !tillatt) {
     throw ugyldig(
-      "Filtypen støttes ikke. Tillatt: bilder (JPG, PNG, GIF, WebP), PDF og Word-dokumenter.",
+      regler.typer
+        ? `Filtypen støttes ikke her. Tillatt: ${regler.typer.map((t) => TILLATTE_TYPER[t] ?? t).join(", ")}.`
+        : "Filtypen støttes ikke. Tillatt: bilder (JPG, PNG, GIF, WebP), PDF og Word-dokumenter.",
     );
   }
-  if (fil.size > MAKS_FILSTORRELSE) {
-    throw ugyldig(`Filen er for stor. Maks ${formatterStorrelse(MAKS_FILSTORRELSE)} per fil.`);
+  const maks = regler.maksStorrelse ?? MAKS_FILSTORRELSE;
+  if (fil.size > maks) {
+    throw ugyldig(`Filen er for stor. Maks ${formatterStorrelse(maks)} per fil.`);
   }
   if (fil.size <= 0) throw ugyldig("Filen er tom.");
 
-  await krevLagringsplass(db, orgId, fil.size);
+  await krevLagringsplass(db, orgId, fil.size - (regler.erstatter ?? 0));
 
   const filnavn = `${randomUUID()}${endelse}`;
   const mappe = orgSti(orgId, modul);

@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 2 — seks moduler portert** (Parkering, Årshjul, Driftslogg, Enhetsregister, Oppgaver, Avvik). Det som finnes er
+**Status: fase 2 — sju moduler portert**, og fillagringen står. Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
@@ -120,7 +120,8 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 | Driftslogg | komplett |
 | Enhetsregister | mangler bulk-import og adressesøk mot Kartverket |
 | Oppgaver | mangler QR-bildegenerering, anonymt innsendingsskjema og bilder på utkvitteringer |
-| Avvik | mangler vedlegg (fillagring) og koblingen til vernerunde (Internkontroll) |
+| Avvik | mangler vedlegg og koblingen til vernerunde (Internkontroll) |
+| Kontrakter | komplett — første modul med filopplasting |
 
 Alle fire er dekket av migreringsskriptet.
 
@@ -160,6 +161,19 @@ DATABASE_URL_V1=postgresql://... npx tsx scripts/migrer-fra-v1.ts --torrkjor
 Skriptet verifiserer til slutt at **hver eneste `tasks.qr_token` er uendret**. Det er den ene
 sjekken som ikke kan hoppes over: QR-kodene er trykt på fysiske oppslag i bygget, og en
 migrering som stille genererte nye tokens ville sett vellykket ut helt til noen skannet et.
+
+### Filer
+
+Skriptet kopierer **rader, ikke filer.** Kontraktdokumenter og andre vedlegg ligger på v1s
+disk og må kopieres separat, inn i den nye org-først-strukturen:
+
+```bash
+rsync -a --info=progress2 v1:/sti/til/uploads/orgs/ ./uploads/orgs/
+```
+
+Filnavnene i basen er allerede uuid-baserte i begge versjoner, så filene beholder navn.
+Radene peker på filer som ikke finnes før dette er gjort — nedlasting svarer da «Fil ikke
+funnet på disk», som er ærlig, men ubrukelig for kunden.
 
 Passordene flyttes fra `users.password_hash` til `account.password`. Formatet er identisk
 (bcrypt/12), så brukerne logger inn med passordet de har. Brukere uten passord i v1 får ingen

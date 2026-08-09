@@ -143,6 +143,30 @@ const TABELLER: Tabell[] = [
     oppdater: ["vendor_id", "title", "description", "entry_date"],
   },
   {
+    navn: "contracts",
+    // v1 lagret HELE stien i file_path; v2 lagrer bare filnavnet og utleder stien.
+    // regexp_replace tar basename. MERK: selve FILENE kopieres ikke av dette skriptet —
+    // se «Filer» i README. Uten den kopien peker radene på filer som ikke finnes.
+    kilde: `SELECT id, org_id, vendor_id, title, category, annual_sum, start_date::date AS start_date,
+                   end_date::date AS end_date, notes, contact_name, contact_email, contact_phone,
+                   regexp_replace(file_path, '^.*/', '') AS file_name,
+                   file_name AS file_original_name, file_size,
+                   COALESCE(ai_readable, false) AS ai_readable,
+                   archived_at, archive_note, predecessor_id,
+                   COALESCE(created_at, now()) AS created_at
+            FROM contracts`,
+    kolonner: ["id", "org_id", "vendor_id", "title", "category", "annual_sum", "start_date", "end_date", "notes", "contact_name", "contact_email", "contact_phone", "file_name", "file_original_name", "file_size", "ai_readable", "archived_at", "archive_note", "predecessor_id", "created_at"],
+    oppdater: ["title", "category", "annual_sum", "start_date", "end_date", "notes", "contact_name", "contact_email", "contact_phone", "file_name", "file_original_name", "file_size", "ai_readable", "archived_at", "archive_note"],
+  },
+  {
+    navn: "contract_price_history",
+    kilde: `SELECT id, contract_id, effective_date, annual_sum, note,
+                   COALESCE(created_at, now()) AS created_at
+            FROM contract_price_history`,
+    kolonner: ["id", "contract_id", "effective_date", "annual_sum", "note", "created_at"],
+    oppdater: ["effective_date", "annual_sum", "note"],
+  },
+  {
     navn: "completions",
     kilde: `SELECT id, task_id, COALESCE(completed_at, now()) AS completed_at, completed_by,
                    notes, COALESCE(has_deviation, false) AS has_deviation, deviation_description,

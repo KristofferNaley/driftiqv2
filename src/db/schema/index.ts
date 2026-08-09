@@ -21,5 +21,6 @@ export * from "./arshjul";
 export * from "./driftslogg";
 export * from "./units";
 export * from "./avvik";
+export * from "./kontrakter";
 export * from "./vendors";
 export * from "./tasks";
