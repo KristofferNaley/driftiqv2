@@ -167,6 +167,24 @@ const TABELLER: Tabell[] = [
     oppdater: ["effective_date", "annual_sum", "note"],
   },
   {
+    navn: "document_folders",
+    kilde: `SELECT id, org_id, parent_id, name, COALESCE(icon, '📁') AS icon,
+                   COALESCE(created_at, now()) AS created_at
+            FROM document_folders`,
+    kolonner: ["id", "org_id", "parent_id", "name", "icon", "created_at"],
+    oppdater: ["parent_id", "name", "icon"],
+  },
+  {
+    navn: "documents",
+    kilde: `SELECT id, org_id, COALESCE(folder, 'annet') AS folder, document_date, title,
+                   description, filename, original_name, content_type, file_size, uploaded_by,
+                   COALESCE(uploaded_at, now()) AS uploaded_at,
+                   COALESCE(ai_readable, false) AS ai_readable
+            FROM documents`,
+    kolonner: ["id", "org_id", "folder", "document_date", "title", "description", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at", "ai_readable"],
+    oppdater: ["folder", "document_date", "title", "description", "ai_readable"],
+  },
+  {
     navn: "completions",
     kilde: `SELECT id, task_id, COALESCE(completed_at, now()) AS completed_at, completed_by,
                    notes, COALESCE(has_deviation, false) AS has_deviation, deviation_description,

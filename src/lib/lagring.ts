@@ -65,6 +65,7 @@ export const TILLATTE_TYPER: Readonly<Record<string, string>> = {
  */
 export const FILTABELLER: readonly string[] = [
   "contracts",
+  "documents",
   // Fylles etter hvert som modulene portes: `documents`, `deviation_attachments`,
   // `completion_photos`, `element_documents` og `unit_work_documents`.
 ];
