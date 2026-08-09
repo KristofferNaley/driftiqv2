@@ -1927,3 +1927,66 @@ textarea.qr-input { resize: vertical; }
 @media (max-width: 768px) {
   .sidebar.collapsed .tema-knapp { justify-content: flex-start; width: calc(100% - 20px); margin: 0 10px 4px; }
 }
+
+/* --- Årshjul ---------------------------------------------------------------------- */
+.ah-intro { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
+.ah-topp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Tar plassen som er igjen, så årsvelgeren blir stående på samme linje i stedet for å
+   brekke ned til sin egen rad med et hull over. */
+.ah-filtre { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+.ah-chip {
+  padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-label); font-weight: 600;
+}
+.ah-chip:hover { color: var(--text); }
+.ah-chip.valgt { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ah-aar { display: flex; align-items: center; gap: 4px; flex-shrink: 0; font-weight: 600; }
+
+/* auto-fit: fire kolonner på bred skjerm, brekker til to og én av seg selv. */
+.ah-rutenett {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;
+}
+.ah-maned {
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  padding: 10px; min-height: 104px;
+}
+.ah-maned-hode {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px;
+}
+.ah-antall { color: var(--muted); }
+.ah-tom { font-size: var(--fs-label); color: var(--muted); padding: 8px 2px; }
+.ah-brikke {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 6px 8px; margin-bottom: 4px; border: none; border-radius: 7px;
+  background: var(--surface2); color: inherit; text-align: left;
+  font-family: var(--font-sans); font-size: var(--fs-label);
+}
+.ah-brikke-tekst { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ah-prikk { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.ah-legende {
+  display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
+  font-size: var(--fs-label); color: var(--muted);
+}
+.ah-legende-punkt { display: inline-flex; align-items: center; gap: 6px; }
+
+.ah-rad {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+}
+.ah-rad:last-child { border-bottom: none; }
+.ah-rad-tittel { display: block; font-size: var(--fs-sm); font-weight: 600; }
+.ah-rad-tittel.lenke {
+  border: none; background: none; padding: 0; color: inherit; cursor: pointer;
+  font-family: var(--font-sans); text-align: left;
+}
+.ah-rad-tittel.lenke:hover { color: var(--accent); text-decoration: underline; }
+.ah-rad-meta { display: block; font-size: var(--fs-label); color: var(--muted); }
+.ah-merke { font-size: var(--fs-label); color: var(--muted); }
+.ah-oppgavevalg {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.ah-oppgavevalg:last-of-type { border-bottom: none; }

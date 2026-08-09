@@ -304,6 +304,23 @@ export const arshjul = {
   ny: (o: string, d: unknown) => api.send<Hendelse>(org(o, "/annual-events"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Hendelse>(org(o, `/annual-events/${id}`), d),
   slett: (o: string, id: string) => api.slett(org(o, `/annual-events/${id}`)),
+  hjul: (o: string, aar: number) => api.hent<Arshjulsdata>(org(o, `/arshjul/hjul?aar=${aar}`)),
+};
+
+export type Hjulhendelse = {
+  id: string; tittel: string; under: string;
+  kategori: "oppgave" | "dugnad" | "budsjett" | "frist" | "hms" | "annet";
+  dato: string; startDato: string | null;
+  kilde: "manuell" | "oppgaver" | "internkontroll";
+  gjentas: boolean;
+};
+
+export type Arshjulsdata = {
+  aar: number;
+  hendelser: Hjulhendelse[];
+  oppgavevalg: Array<{
+    id: string; tittel: string; frekvens: string; leverandor: string | null; vises: boolean;
+  }>;
 };
 
 export type Rutine = {
