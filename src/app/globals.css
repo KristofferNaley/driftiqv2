@@ -1175,3 +1175,83 @@ textarea.qr-input { resize: vertical; }
   .oppgave-rad { grid-template-columns: minmax(0, 1fr) 110px 100px; min-width: 0; }
   .oppgave-rad .kol-vekk { display: none; }
 }
+
+/* ══ PLATTFORMPANELET ══
+ *
+ * Ser bevisst annerledes ut enn kunde-appen. Panelet deler origin med den (se
+ * (plattform)/layout.tsx), så det VISUELLE skillet er det eneste som minner deg på om du
+ * står i DriftIQs panel eller inne hos en kunde. Å ikke vite det er nettopp slik man gjør
+ * noe man ikke mente.
+ */
+.pf-side { min-height: 100dvh; background: var(--bg); display: flex; flex-direction: column; }
+.pf-topp {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 0 22px; height: var(--topbar-h);
+  background: #0d1b2a; border-bottom: 2px solid var(--accent);
+  position: sticky; top: 0; z-index: 5;
+}
+.pf-merke {
+  display: flex; align-items: center; gap: 10px;
+  color: #fff; font-weight: 800; font-size: var(--fs-md); text-decoration: none;
+}
+.pf-merke .iq { color: #00c2ff; }
+.pf-tag {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: 1.4px;
+  background: var(--accent); color: #fff; border-radius: 5px; padding: 2px 7px; margin-left: 4px;
+}
+.pf-topp-hoyre { display: flex; align-items: center; gap: 12px; }
+.pf-topp-hoyre .pf-dempet { color: rgba(255, 255, 255, 0.7); }
+
+.pf-innhold {
+  flex: 1; padding: 22px; max-width: var(--content-max); width: 100%; margin-inline: auto;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.pf-innhold > * { flex-shrink: 0; }
+.pf-tittel { font-size: var(--fs-lg); font-weight: 700; margin: 0; }
+.pf-dempet { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
+.pf-tekst { font-size: var(--fs-sm); line-height: 1.6; margin: 0 0 12px; }
+
+.pf-kort { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.pf-kort-hode {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 13px 18px; border-bottom: 1px solid var(--border);
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+}
+.pf-kort-kropp { padding: 16px 18px; }
+/* Amber kantlinje når innsyn er aktivt — kortet skal rope. */
+.pf-kort.support.aktiv { border-color: var(--warn); }
+.pf-kort.support.aktiv .pf-kort-hode { border-bottom-color: var(--warn); }
+
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+.pf-rad {
+  display: grid; grid-template-columns: minmax(0, 2fr) 130px 80px 80px 150px;
+  gap: 12px; align-items: center; padding: 12px 18px;
+  border-bottom: 1px solid var(--border); color: inherit; text-decoration: none;
+}
+.pf-rad:last-child { border-bottom: none; }
+.pf-rad:not(.hode):hover { background: var(--surface2); }
+.pf-rad.hode {
+  background: var(--bg);
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+}
+.pf-navn { display: block; font-size: var(--fs-sm); font-weight: 600; }
+.pf-under { display: block; font-size: var(--fs-label); color: var(--muted); }
+.pf-celle { font-size: var(--fs-label); }
+
+.pf-felt, .pf-modul, .pf-bruker, .pf-sesjon {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.pf-felt:last-child, .pf-modul:last-child, .pf-bruker:last-child, .pf-sesjon:last-child {
+  border-bottom: none;
+}
+.pf-modul { flex-direction: column; align-items: flex-start; gap: 1px; }
+.pf-felt span:last-child { font-size: var(--fs-sm); font-weight: 500; text-align: right; }
+
+@media (max-width: 760px) {
+  .pf-rad { grid-template-columns: minmax(0, 1fr) 110px; }
+  .pf-rad > *:nth-child(2), .pf-rad > *:nth-child(3), .pf-rad > *:nth-child(4) { display: none; }
+}
