@@ -56,6 +56,7 @@ export default ts.config(
         HTMLTextAreaElement: "readonly",
         HTMLSelectElement: "readonly",
         HTMLElement: "readonly",
+        KeyboardEvent: "readonly",
       },
     },
     rules: {

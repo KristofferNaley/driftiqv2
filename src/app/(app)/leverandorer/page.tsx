@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Hurtigskjema, Kort, Rad, Tom, useOrgData } from "@/components/felles";
 import { leverandorer } from "@/lib/klient";
@@ -11,6 +12,7 @@ const RELASJON: Record<string, string> = {
 };
 
 export default function Leverandorer() {
+  const router = useRouter();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => leverandorer.liste(o));
   const liste = data ?? [];
 
@@ -52,6 +54,7 @@ export default function Leverandorer() {
                   {g.rader.map((l) => (
                     <Rad
                       key={l.id}
+                      onClick={() => router.push(`/leverandorer/${l.id}`)}
                       tittel={l.name}
                       meta={[l.category, l.orgNumber, l.customerNumber && `kundenr ${l.customerNumber}`]
                         .filter(Boolean)

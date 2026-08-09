@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Hurtigskjema, Kort, Nokkeltall, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { avvik } from "@/lib/klient";
@@ -13,6 +14,7 @@ const ETIKETT: Record<string, string> = {
 };
 
 export default function Avvik() {
+  const router = useRouter();
   const [fane, setFane] = useState<"apne" | "lukkede">("apne");
   const { data, feil, setFeil, laster, last, orgId } = useOrgData(
     (o) => avvik.liste(o, fane === "lukkede"),
@@ -69,6 +71,7 @@ export default function Avvik() {
             liste.map((a) => (
               <Rad
                 key={a.id}
+                onClick={() => router.push(`/avvik/${a.id}`)}
                 tittel={`#${a.number ?? "?"} ${a.title}`}
                 meta={[a.assignedTo, a.unitNavn, a.dueDate ? `frist ${dato(a.dueDate)}` : null]
                   .filter(Boolean)

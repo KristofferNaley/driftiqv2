@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Kort, Nokkeltall, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { oppgaver } from "@/lib/klient";
@@ -13,6 +14,7 @@ import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
  * si ulike ting. Det var nettopp den feilen v1 hadde i sju kopier.
  */
 export default function Oppgaver() {
+  const router = useRouter();
   const { data, feil, laster } = useOrgData((o) => oppgaver.liste(o));
   const liste = data ?? [];
   const forsinkede = liste.filter((t) => t.forsinket);
@@ -40,6 +42,7 @@ export default function Oppgaver() {
             {forsinkede.map((t) => (
               <Rad
                 key={t.id}
+                onClick={() => router.push(`/oppgaver/${t.id}`)}
                 tittel={t.title}
                 meta={`${t.vendorName ?? "Ingen leverandør"} · frist ${dato(t.nesteFrist)}`}
                 hoyre={<span className="badge danger">Forsinket</span>}
@@ -57,6 +60,7 @@ export default function Oppgaver() {
             liste.map((t) => (
               <Rad
                 key={t.id}
+                onClick={() => router.push(`/oppgaver/${t.id}`)}
                 tittel={t.title}
                 meta={[
                   FREQ_ETIKETTER[t.frequency] ?? t.frequency,

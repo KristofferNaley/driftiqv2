@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Hurtigskjema, Kort, Nokkeltall, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { rutiner } from "@/lib/klient";
@@ -19,6 +20,7 @@ const ETIKETT: Record<string, string> = {
  * skrudd av 12-måneders-varselet ved å sette statusen til «aktiv».
  */
 export default function Rutiner() {
+  const router = useRouter();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => rutiner.liste(o));
   const liste = data ?? [];
   const trengerGjennomgang = liste.filter((r) => r.effektivStatus === "trenger_gjennomgang");
@@ -66,6 +68,7 @@ export default function Rutiner() {
             liste.map((r) => (
               <Rad
                 key={r.id}
+                onClick={() => router.push(`/rutiner/${r.id}`)}
                 tittel={
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                     {r.isCritical && (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Paperclip } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Kort, Nokkeltall, Rad, Tom, dato, kr, useOrgData } from "@/components/felles";
 import { kontrakter } from "@/lib/klient";
@@ -9,6 +10,7 @@ import { kontrakter } from "@/lib/klient";
 const iDag = () => new Date().toISOString().slice(0, 10);
 
 export default function Kontrakter() {
+  const router = useRouter();
   const [fane, setFane] = useState<"aktive" | "arkiverte">("aktive");
   const { data, feil, laster } = useOrgData(
     (o) => kontrakter.liste(o, fane === "arkiverte"),
@@ -55,6 +57,7 @@ export default function Kontrakter() {
             {utlopte.map((k) => (
               <Rad
                 key={k.id}
+                onClick={() => router.push(`/kontrakter/${k.id}`)}
                 tittel={k.title}
                 meta={`${k.vendorName ?? "Ukjent leverandør"} · utløp ${dato(k.endDate)}`}
                 hoyre={<span className="badge warn">Utløpt</span>}
@@ -72,6 +75,7 @@ export default function Kontrakter() {
             liste.map((k) => (
               <Rad
                 key={k.id}
+                onClick={() => router.push(`/kontrakter/${k.id}`)}
                 tittel={k.title}
                 meta={[k.vendorName, k.category, kr(k.annualSum), k.endDate ? `til ${dato(k.endDate)}` : "løpende"]
                   .filter(Boolean)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Hurtigskjema, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { internkontroll } from "@/lib/klient";
@@ -106,6 +107,7 @@ function Risiko() {
 }
 
 function Vernerunder() {
+  const router = useRouter();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => internkontroll.runder(o));
   const liste = data ?? [];
 
@@ -131,6 +133,7 @@ function Vernerunder() {
           liste.map((r) => (
             <Rad
               key={r.id}
+              onClick={() => router.push(`/internkontroll/vernerunde/${r.id}`)}
               tittel={r.title}
               meta={dato(r.roundDate)}
               hoyre={
