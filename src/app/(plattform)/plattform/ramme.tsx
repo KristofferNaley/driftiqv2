@@ -21,6 +21,7 @@ import { erPlattformadminRolle } from "@/lib/nivaer";
 const MENY = [
   { sti: "/plattform", etikett: "Dashboard" },
   { sti: "/plattform/kunder", etikett: "Kunder" },
+  { sti: "/plattform/brukere", etikett: "Plattformbrukere" },
   { sti: "/plattform/support", etikett: "Support-modus" },
 ];
 

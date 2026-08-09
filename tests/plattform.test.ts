@@ -15,7 +15,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
 import { lukkPooler, withoutRls } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
-import { avsluttSupport, hentKunde, hentKunder, startSupport } from "../src/lib/plattform";
+import {
+  avsluttSupport,
+  endrePlattformbruker,
+  hentKunde,
+  hentKunder,
+  hentPlattformbrukere,
+  opprettPlattformbruker,
+  startSupport,
+} from "../src/lib/plattform";
 import { SUPPORT_SESJON_MAKS_TIMER } from "../src/lib/tilgang";
 
 let eierPool: Pool;
@@ -35,6 +43,10 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  // Sett tilbake alle vi midlertidig degraderte, FØR noe annet ryddes.
+  for (const id of gjemte.splice(0)) {
+    await eier.query("UPDATE users SET role = 'superadmin' WHERE id = $1", [id]);
+  }
   for (const id of ryddOrg.splice(0)) {
     await eier.query("DELETE FROM support_access_log WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM user_org_memberships WHERE org_id = $1", [id]);
@@ -66,6 +78,26 @@ async function nyAdmin(navn = "Plattform Admin"): Promise<{ id: string; name: st
 
 const i = <T>(fn: (db: Parameters<Parameters<typeof withoutRls>[1]>[0]) => Promise<T>) =>
   withoutRls("plattformpanel", fn);
+
+/**
+ * Skjuler plattformadmins som IKKE er laget av testen, for tester som trenger å styre
+ * hvor mange som finnes.
+ *
+ * Første utkast kjørte `UPDATE users SET role='member' WHERE role='superadmin'` uten å
+ * rydde opp — og degraderte den ekte kontoen i testbasen. En test skal aldri kunne endre
+ * rader den ikke har opprettet selv uten å sette dem tilbake.
+ */
+const gjemte: string[] = [];
+async function gjemAndreAdmins() {
+  const { rows } = await eier.query<{ id: string }>(
+    "SELECT id FROM users WHERE role = 'superadmin' AND id <> ALL($1::text[])",
+    [ryddBruker],
+  );
+  for (const r of rows) {
+    gjemte.push(r.id);
+    await eier.query("UPDATE users SET role = 'member' WHERE id = $1", [r.id]);
+  }
+}
 
 const feilFra = async (fn: () => Promise<unknown>) => {
   try {
@@ -192,5 +224,96 @@ describe("kundeoversikten", () => {
     expect(kunde.sesjoner).toHaveLength(1);
     expect(kunde.sesjoner[0]!.reason).toBe("Synlig i panelet");
     expect(kunde.maksTimer).toBe(SUPPORT_SESJON_MAKS_TIMER);
+  });
+});
+
+
+describe("plattformbrukere", () => {
+  it("oppretter uten passord", async () => {
+    // Ingen setter passordet for noen andre — brukeren får en engangslenke og velger selv.
+    const epost = `ny-${randomUUID()}@driftiq.test`;
+    const { id, nyKonto } = await i((db) =>
+      opprettPlattformbruker(db, { name: "Ny Admin", email: epost }),
+    );
+    ryddBruker.push(id);
+    expect(nyKonto).toBe(true);
+
+    const { rows } = await eier.query<{ role: string; n: string }>(
+      `SELECT u.role, (SELECT count(*) FROM account a WHERE a.user_id = u.id) AS n
+       FROM users u WHERE u.id = $1`,
+      [id],
+    );
+    expect(rows[0]!.role).toBe("superadmin");
+    expect(rows[0]!.n).toBe("0");
+  });
+
+  it("hever en eksisterende konto i stedet for å lage en til", async () => {
+    // To kontoer på samme adresse ville brutt innloggingen uansett — e-post er unik.
+    const eksisterende = await nyAdmin();
+    await eier.query("UPDATE users SET role = 'member' WHERE id = $1", [eksisterende.id]);
+    const { rows: f } = await eier.query<{ email: string }>("SELECT email FROM users WHERE id = $1", [
+      eksisterende.id,
+    ]);
+
+    const { id, nyKonto } = await i((db) =>
+      opprettPlattformbruker(db, { name: "Uansett", email: f[0]!.email }),
+    );
+    expect(nyKonto).toBe(false);
+    expect(id).toBe(eksisterende.id);
+
+    const { rows } = await eier.query<{ role: string }>("SELECT role FROM users WHERE id = $1", [id]);
+    expect(rows[0]!.role).toBe("superadmin");
+  });
+
+  it("hindrer at du endrer din EGEN rolle eller aktivstatus", async () => {
+    // Hindrer utestenging, og gjør loggen entydig: en rolleendring er alltid noe én person
+    // gjorde med en ANNEN.
+    const meg = await nyAdmin();
+    await nyAdmin(); // så sperren for «siste admin» ikke er den som slår inn
+
+    const rolle = await feilFra(() => i((db) => endrePlattformbruker(db, meg.id, meg.id, { role: "member" })));
+    expect(rolle.status).toBe(400);
+    expect(rolle.message).toMatch(/din egen/i);
+
+    const aktiv = await feilFra(() => i((db) => endrePlattformbruker(db, meg.id, meg.id, { active: false })));
+    expect(aktiv.status).toBe(400);
+  });
+
+  it("lar deg endre ditt eget NAVN", async () => {
+    // Navnet er ikke tilgang. Sperren gjelder rolle og aktivstatus, ikke alt.
+    const meg = await nyAdmin();
+    const endret = await i((db) => endrePlattformbruker(db, meg.id, meg.id, { name: "Nytt Navn" }));
+    expect(endret.name).toBe("Nytt Navn");
+  });
+
+  it("nekter å fjerne den SISTE aktive plattformadminen", async () => {
+    // Uten den finnes ingen vei inn i panelet igjen, og ingen kan starte en support-sesjon
+    // for å rette det opp.
+    await gjemAndreAdmins();
+    const eneste = await nyAdmin();
+    const annen = await nyAdmin();
+    await eier.query("UPDATE users SET role = 'member' WHERE id = $1", [annen.id]);
+
+    const feil = await feilFra(() =>
+      i((db) => endrePlattformbruker(db, annen.id, eneste.id, { role: "member" })),
+    );
+    expect(feil.status).toBe(400);
+    expect(feil.message).toMatch(/minst én aktiv/i);
+  });
+
+  it("lister bare plattformadmins, med kundemedlemskapene deres", async () => {
+    await gjemAndreAdmins();
+    const admin = await nyAdmin("Med Medlemskap");
+    const orgId = await nyOrg("Kundelaget");
+    await eier.query(
+      "INSERT INTO user_org_memberships (id, user_id, org_id, role) VALUES ($1,$2,$3,'orgadmin')",
+      [randomUUID(), admin.id, orgId],
+    );
+
+    const liste = await i((db) => hentPlattformbrukere(db));
+    expect(liste).toHaveLength(1);
+    // Medlemskapet vises fordi gaten IGNORERER det — det gir en falsk trygghet om at
+    // personen «har tilgang til» laget sitt.
+    expect(liste[0]!.kundemedlemskap).toEqual(["Kundelaget"]);
   });
 });
