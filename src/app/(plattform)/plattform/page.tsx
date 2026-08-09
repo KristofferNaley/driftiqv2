@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useOkt } from "@/components/OktProvider";
 import { api } from "@/lib/klient";
-import { erPlattformadminRolle } from "@/lib/nivaer";
 import { Ramme } from "./ramme";
 
 type Dashbord = {
@@ -20,7 +18,6 @@ type Dashbord = {
 };
 
 export default function PlattformDashbord() {
-  const { bruker, laster } = useOkt();
   const [d, setD] = useState<Dashbord | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
 
@@ -30,15 +27,6 @@ export default function PlattformDashbord() {
       .then(setD)
       .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke hente tallene"));
   }, []);
-
-  // Klientsidesjekk = hva som TEGNES. Serveren avviser uansett.
-  if (!laster && bruker && !erPlattformadminRolle(bruker.role)) {
-    return (
-      <Ramme tittel="Plattform">
-        <p className="pf-dempet">Denne siden krever plattformadmin-tilgang.</p>
-      </Ramme>
-    );
-  }
 
   return (
     <Ramme tittel="Dashboard">
