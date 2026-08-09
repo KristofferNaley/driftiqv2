@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Temaveksler } from "./temaveksler";
+import { MARKED_URL } from "@/lib/urler";
 
 /**
  * Landingssiden. Egen rutegruppe, ingen `OktProvider`.
@@ -18,7 +19,8 @@ import { Temaveksler } from "./temaveksler";
  */
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.BASE_URL ?? "https://driftiq.no"),
+    // MARKED_URL, ikke BASE_URL: metadata skal peke på markedsdomenet, ikke kunde-appen.
+  metadataBase: new URL(MARKED_URL),
   title: "DriftIQ — driftsforvaltning for borettslag og sameier",
   description:
     "Oppgaver, avvik, internkontroll, vedlikeholdsplan og dokumentasjon samlet ett sted. " +

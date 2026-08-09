@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { MARKED_URL } from "@/lib/urler";
 
 /**
  * Alt bak innlogging holdes ute av indeksen.
@@ -8,7 +9,7 @@ import type { MetadataRoute } from "next";
  * bare et hint til søkemotorer; det ekte forsvaret er at tokenet må gjettes.
  */
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.BASE_URL ?? "https://driftiq.no";
+  const base = MARKED_URL;
   return {
     rules: {
       userAgent: "*",

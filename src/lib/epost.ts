@@ -6,10 +6,13 @@
  */
 
 import { Resend } from "resend";
+import { APP_URL } from "./urler";
+
+export { APP_URL };
 
 const API_KEY = process.env.RESEND_API_KEY ?? "";
 const FRA = process.env.FROM_EMAIL ?? "DriftIQ <noreply@driftiq.no>";
-export const APP_URL = process.env.BASE_URL ?? "http://localhost:3008";
+
 
 /**
  * ## Domenevakt for test- og utviklingsmiljø
