@@ -49,6 +49,13 @@ export default ts.config(
         TextDecoder: "readonly",
         TextEncoder: "readonly",
         NodeJS: "readonly",
+        // DOM-grensesnitt brukt i hendelsestyper (`React.ChangeEvent<HTMLInputElement>`).
+        // De er ekte globaler i nettleserkode, i motsetning til et navn noen glemte å importere.
+        HTMLInputElement: "readonly",
+        HTMLFormElement: "readonly",
+        HTMLTextAreaElement: "readonly",
+        HTMLSelectElement: "readonly",
+        HTMLElement: "readonly",
       },
     },
     rules: {

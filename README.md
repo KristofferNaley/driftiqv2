@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 3 — frontend påbegynt.** Backenden er komplett for kundemodulene (fjorten moduler); frontend har fundamentet og én modulside. Det som finnes er
+**Status: fase 3 — tolv modulsider bygget.** Backenden er komplett for kundemodulene; frontend har fundamentet og alle hovedsidene. Detaljvisninger, dashbord og admin-panel gjenstår. Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
