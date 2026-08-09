@@ -6,6 +6,8 @@ import { Feil, Kort, Nokkeltall, Rad, Tom, dato, useOrgData } from "@/components
 import { oppgaver } from "@/lib/klient";
 import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
 
+const iDag = () => new Date().toISOString().slice(0, 10);
+
 /**
  * Oppgaver.
  *
@@ -31,7 +33,15 @@ export default function Oppgaver() {
             etikett="Neste frist"
             verdi={
               <span style={{ fontSize: "var(--fs-lg)" }}>
-                {dato(liste.map((t) => t.nesteFrist).filter(Boolean).sort()[0])}
+                {/* Neste KOMMENDE frist. Uten datofilteret viste tallet den eldste
+                    forsinkede fristen — altså en dato i fortiden, under overskriften
+                    «Neste frist». Det forsinkede har allerede sin egen KPI. */}
+                {dato(
+                  liste
+                    .map((t) => t.nesteFrist)
+                    .filter((d): d is string => Boolean(d) && d! >= iDag())
+                    .sort()[0],
+                )}
               </span>
             }
           />

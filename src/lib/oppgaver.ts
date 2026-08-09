@@ -126,13 +126,18 @@ export async function hentOppgaver(db: Db, orgId: string) {
 }
 
 export async function hentOppgave(db: Db, orgId: string, taskId: string) {
+  // Joinene MÅ være de samme som i `hentOppgaver`. Uten dem viste detaljsiden «—» for
+  // leverandør mens lista viste navnet — samme oppgave, to ulike svar.
   const rader = await db
-    .select()
+    .select({ oppgave: tasks, vendorName: vendors.name, unitNavn: units.navn })
     .from(tasks)
+    .leftJoin(vendors, eq(vendors.id, tasks.vendorId))
+    .leftJoin(units, eq(units.id, tasks.unitId))
     .where(and(eq(tasks.id, taskId), eq(tasks.orgId, orgId)))
     .limit(1);
-  const oppgave = rader[0];
-  if (!oppgave) throw ikkeFunnet("Oppgave");
+  const rad = rader[0];
+  if (!rad) throw ikkeFunnet("Oppgave");
+  const oppgave = rad.oppgave;
 
   const [sjekkliste, utkvitteringer, sist] = await Promise.all([
     db.select().from(taskChecklistItems).where(eq(taskChecklistItems.taskId, taskId)).orderBy(asc(taskChecklistItems.order)),
@@ -140,7 +145,13 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
     sisteUtkvitteringer(db, [taskId]),
   ]);
 
-  return { ...berik(oppgave, sist.get(taskId) ?? null), sjekkliste, utkvitteringer };
+  return {
+    ...berik(oppgave, sist.get(taskId) ?? null),
+    vendorName: rad.vendorName,
+    unitNavn: rad.unitNavn,
+    sjekkliste,
+    utkvitteringer,
+  };
 }
 
 export async function opprettOppgave(db: Db, orgId: string, data: z.infer<typeof oppgaveInn>) {
