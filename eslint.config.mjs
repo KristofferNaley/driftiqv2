@@ -39,6 +39,7 @@ export default ts.config(
         Request: "readonly",
         Headers: "readonly",
         URL: "readonly",
+        URLSearchParams: "readonly",
         Buffer: "readonly",
         console: "readonly",
         process: "readonly",

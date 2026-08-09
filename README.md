@@ -51,6 +51,16 @@ docker compose up -d --build
 Merk `-p driftiq-v2`. Uten prosjektnavnet blir det `driftiq`, og du får et sett containere som
 kolliderer med prod på porter — samme felle som er dokumentert for testmiljøet i CLAUDE.md.
 
+## Kjørende miljø
+
+Stacken er verifisert oppe på port 3008 mot ekte migrerte data: innlogging, sesjon,
+`/api/meg`, alle modulendepunktene, skriving, validering, modulgate og tenantisolasjon.
+En bruker uten medlemskap i org-en får 403, og en avslått modul får 403 — begge med API-ets
+egen norske melding.
+
+Testbruker i v2-databasen: `claude@driftiq.test`, medlem (orgadmin) i to organisasjoner, så
+org-velgeren faktisk har noe å vise. Passordet er satt lokalt og finnes ikke i repoet.
+
 ## Kommandoer
 
 ```bash

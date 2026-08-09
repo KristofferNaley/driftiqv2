@@ -1,12 +1,26 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-klient";
 
-function Skjema() {
+/**
+ * Retur-stien leses fra `window.location` ved innsending, ikke med `useSearchParams()`.
+ *
+ * `useSearchParams` tvinger hele treet under seg til klientrendring — Next svarer da med
+ * `BAILOUT_TO_CLIENT_SIDE_RENDERING`, og innloggingssiden er BLANK til JS-en har lastet.
+ * Verifisert i den kjørende containeren: skjemaet fantes ikke i HTML-en i det hele tatt.
+ *
+ * Stien trengs bare i det øyeblikket vi navigerer, så et oppslag der er nok — og da kan
+ * hele skjemaet server-rendres som resten av appen.
+ */
+function returSti(): string {
+  if (typeof window === "undefined") return "/";
+  return new URLSearchParams(window.location.search).get("retur") || "/";
+}
+
+export default function LoggInn() {
   const router = useRouter();
-  const retur = useSearchParams().get("retur") ?? "/";
   const [epost, setEpost] = useState("");
   const [passord, setPassord] = useState("");
   const [kode, setKode] = useState("");
@@ -23,7 +37,7 @@ function Skjema() {
       if (trengerKode) {
         const { error } = await authVerifiser(kode);
         if (error) throw new Error(error.message ?? "Feil kode");
-        router.replace(retur);
+        router.replace(returSti());
         return;
       }
 
@@ -33,7 +47,7 @@ function Skjema() {
         setTrengerKode(true);
         return;
       }
-      router.replace(retur);
+      router.replace(returSti());
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Innlogging feilet");
     } finally {
@@ -42,7 +56,8 @@ function Skjema() {
   }
 
   return (
-    <form className="logg-inn-kort" onSubmit={send}>
+    <main className="logg-inn-side">
+      <form className="logg-inn-kort" onSubmit={send}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <span className="logo-mark" aria-hidden>IQ</span>
         <span className="logo-tekst" style={{ fontSize: "var(--fs-lg)" }}>
@@ -80,10 +95,11 @@ function Skjema() {
         </>
       )}
 
-      <button className="btn btn-primary" style={{ justifyContent: "center" }} disabled={laster}>
-        {laster ? "Logger inn …" : trengerKode ? "Bekreft" : "Logg inn"}
-      </button>
-    </form>
+        <button className="btn btn-primary" style={{ justifyContent: "center" }} disabled={laster}>
+          {laster ? "Logger inn …" : trengerKode ? "Bekreft" : "Logg inn"}
+        </button>
+      </form>
+    </main>
   );
 }
 
@@ -91,14 +107,4 @@ function Skjema() {
 async function authVerifiser(kode: string) {
   const { authKlient } = await import("@/lib/auth-klient");
   return authKlient.twoFactor.verifyTotp({ code: kode });
-}
-
-export default function LoggInn() {
-  return (
-    <main className="logg-inn-side">
-      <Suspense fallback={null}>
-        <Skjema />
-      </Suspense>
-    </main>
-  );
 }
