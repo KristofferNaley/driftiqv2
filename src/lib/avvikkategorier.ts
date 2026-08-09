@@ -55,3 +55,28 @@ export const STATUS_VISNING: Record<string, { etikett: string; kort: string; mer
   under_behandling: { etikett: "Under behandling", kort: "Behandles", merke: "warn" },
   lukket: { etikett: "Løst og lukket", kort: "Lukket", merke: "ok" },
 };
+
+/**
+ * Lager en `verdi` av en etikett.
+ *
+ * Verdien er det som LAGRES på avviket, og den kan aldri endres etterpå — gamle rader peker
+ * på den. Derfor utledes den én gang ved opprettelse, og etiketten kan endres fritt uten at
+ * historikken påvirkes.
+ */
+export function lagVerdi(etikett: string, opptatt: string[]): string {
+  const grunn =
+    etikett
+      .toLowerCase()
+      .replace(/[æ]/g, "ae")
+      .replace(/[ø]/g, "o")
+      .replace(/[å]/g, "a")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "kategori";
+
+  if (!opptatt.includes(grunn)) return grunn;
+  for (let n = 2; ; n++) {
+    const kandidat = `${grunn}_${n}`;
+    if (!opptatt.includes(kandidat)) return kandidat;
+  }
+}

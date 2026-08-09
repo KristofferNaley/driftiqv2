@@ -7,6 +7,7 @@ import { Feil, Kort, Tom, dato, datoTid, initialer, useOrgData } from "@/compone
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
 import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
+import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 
 const ALVORLIGHET = [
   { verdi: "", etikett: "Ikke vurdert" },
@@ -378,7 +379,7 @@ function RedigerAvvik({
   const [unitId, setUnitId] = useState(a.unitId ?? "");
   const [folk, setFolk] = useState<Array<{ id: string; navn: string }>>([]);
   const [firmaer, setFirmaer] = useState<Array<{ id: string; navn: string }>>([]);
-  const [steder, setSteder] = useState<Array<{ id: string; navn: string }>>([]);
+  const [steder, setSteder] = useState<VelgbarEnhet[]>([]);
 
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
@@ -388,7 +389,7 @@ function RedigerAvvik({
   useEffect(() => {
     void brukere.liste(orgId).then((b) => setFolk(b.map((u) => ({ id: u.id, navn: u.name })))).catch(() => {});
     void leverandorer.liste(orgId).then((v) => setFirmaer(v.map((f) => ({ id: f.id, navn: f.name })))).catch(() => {});
-    void enheter.liste(orgId).then((e) => setSteder(e.map((u) => ({ id: u.id, navn: u.navn ?? u.andelsnr ?? u.id })))).catch(() => {});
+    void enheter.liste(orgId).then(setSteder).catch(() => {});
   }, [orgId]);
 
   return (
@@ -433,11 +434,14 @@ function RedigerAvvik({
 
         {steder.length > 0 && (
           <div className="field">
-            <label className="field-label" htmlFor="sted">Sted</label>
-            <select id="sted" className="input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-              <option value="">Ingen bestemt enhet</option>
-              {steder.map((u) => <option key={u.id} value={u.id}>{u.navn}</option>)}
-            </select>
+            <label className="field-label">Sted</label>
+            <EnhetVelger
+              verdi={unitId}
+              onEndre={setUnitId}
+              enheter={steder}
+              tomEtikett="Ingen bestemt enhet"
+              ariaEtikett="Sted"
+            />
           </div>
         )}
 

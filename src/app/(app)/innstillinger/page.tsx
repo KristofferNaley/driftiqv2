@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Faner, Feil, Kort, Rad, Tom, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { enheter, organisasjon, type Enhet, type OrgInfo } from "@/lib/klient";
 import { ALLE_MODULER, MENY, modulErAktivert } from "@/lib/moduler";
+import { lesKategorier } from "@/lib/avvikkategorier";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
 function storrelse(n: number): string {
@@ -17,7 +18,7 @@ function storrelse(n: number): string {
 }
 
 export default function Innstillinger() {
-  const [fane, setFane] = useState<"org" | "moduler" | "enheter">("org");
+  const [fane, setFane] = useState<"org" | "kategorier" | "moduler" | "enheter">("org");
   return (
     <Layout
       tittel="Innstillinger"
@@ -27,6 +28,7 @@ export default function Innstillinger() {
           onVelg={setFane}
           faner={[
             { nokkel: "org", etikett: "Organisasjonen" },
+            { nokkel: "kategorier", etikett: "Avvikskategorier" },
             { nokkel: "moduler", etikett: "Moduler" },
             { nokkel: "enheter", etikett: "Enhetsregister" },
           ]}
@@ -35,6 +37,7 @@ export default function Innstillinger() {
     >
       <div className="page-content">
         {fane === "org" && <Organisasjonen />}
+        {fane === "kategorier" && <Kategorier />}
         {fane === "moduler" && <Moduler />}
         {fane === "enheter" && <Enheter />}
       </div>
@@ -207,6 +210,119 @@ function RedigerOrg({
 }
 
 // ---------------------------------------------------------------------------------------
+
+/**
+ * Avvikskategoriene kunden velger mellom.
+ *
+ * ## Navnet kan endres, verdien ikke
+ *
+ * Hver kategori har en `verdi` som lagres på avviket. Endres den, peker gamle avvik på noe
+ * som ikke finnes lenger, og de mister merkelappen uten at noen får beskjed. Derfor sendes
+ * verdien uendret tilbake for eksisterende kategorier, og utledes bare for nye.
+ *
+ * ## Ingen sletting, bare av
+ *
+ * Av samme grunn. «Av» tar kategorien ut av nedtrekket for NYE avvik; gamle beholder navnet
+ * sitt i lista og i rapportene.
+ */
+function Kategorier() {
+  const { aktivOrg } = useOkt();
+  const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => organisasjon.hent(o));
+  const [rader, setRader] = useState<Array<{ verdi?: string; etikett: string; aktiv: boolean }>>([]);
+  const [lagrer, setLagrer] = useState(false);
+  const kanEndre = aktivOrg?.nivaa === "orgadmin" || aktivOrg?.nivaa === "redigering";
+
+  useEffect(() => {
+    if (!data) return;
+    setRader(lesKategorier(data.deviationCategories).map((k) => ({ ...k, aktiv: k.aktiv !== false })));
+  }, [data]);
+
+  async function lagre() {
+    if (!orgId) return;
+    setLagrer(true);
+    setFeil(null);
+    try {
+      await organisasjon.settKategorier(orgId, rader.filter((r) => r.etikett.trim()));
+      await last();
+    } catch (e) {
+      setFeil(e instanceof Error ? e.message : "Kunne ikke lagre kategoriene");
+    } finally {
+      setLagrer(false);
+    }
+  }
+
+  if (laster || !data) {
+    return (
+      <>
+        <Feil melding={feil} />
+        {!feil && <Tom tekst="Henter …" />}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Feil melding={feil} />
+      <Kort
+        tittel="Avvikskategorier"
+        handling={
+          kanEndre && (
+            <button className="btn btn-primary" onClick={() => void lagre()} disabled={lagrer}>
+              {lagrer ? "Lagrer …" : "Lagre"}
+            </button>
+          )
+        }
+      >
+        {rader.map((r, i) => (
+          <div key={r.verdi ?? `ny-${i}`} className="list-item">
+            <input
+              className="input"
+              style={{ flex: 1, minWidth: 0 }}
+              value={r.etikett}
+              disabled={!kanEndre}
+              aria-label={`Navn på kategori ${i + 1}`}
+              // En ny rad tar fokus selv. Uten det legger man til raden, skriver — og
+              // ingenting skjer, fordi teksten gikk til siden i stedet for feltet.
+              autoFocus={r.verdi === undefined && i === rader.length - 1}
+              placeholder="Navn på kategorien"
+              onChange={(e) =>
+                setRader(rader.map((x, j) => (j === i ? { ...x, etikett: e.target.value } : x)))
+              }
+            />
+            <label className="kategori-av">
+              <input
+                type="checkbox"
+                checked={r.aktiv}
+                disabled={!kanEndre}
+                onChange={(e) =>
+                  setRader(rader.map((x, j) => (j === i ? { ...x, aktiv: e.target.checked } : x)))
+                }
+              />
+              <span>{r.aktiv ? "I bruk" : "Av"}</span>
+            </label>
+          </div>
+        ))}
+
+        {kanEndre && (
+          <div className="list-item">
+            <button
+              className="btn btn-ghost"
+              onClick={() => setRader([...rader, { etikett: "", aktiv: true }])}
+            >
+              ＋ Ny kategori
+            </button>
+          </div>
+        )}
+      </Kort>
+
+      <div className="field-note">
+        Navnet kan endres når som helst — gamle avvik følger med. En kategori kan ikke
+        slettes, bare settes til «Av»: da forsvinner den fra nedtrekket for nye avvik, mens
+        avvikene som allerede bruker den beholder merkelappen sin.
+      </div>
+    </>
+  );
+}
 
 /**
  * Modulene kunden har — som LESEVISNING.

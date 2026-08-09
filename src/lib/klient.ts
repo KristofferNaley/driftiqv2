@@ -375,6 +375,8 @@ export const dashbord = {
 
 export type OrgInfo = {
   id: string; name: string; slug: string; orgNr: string | null; orgForm: string | null;
+  /** Kundens egne avvikskategorier som JSON, eller null for standardsettet. */
+  deviationCategories: string | null;
   municipality: string | null; unitCount: number | null; enabledModules: string | null;
   buildingInfo: string | null; hasEmployees: boolean;
   lagring: { brukt: number; kvote: number; prosent: number };
@@ -387,6 +389,11 @@ export const organisasjon = {
    * Modulvalg — plattformadmin. Blir stående her fordi plattformpanelet skal bruke det;
    * kundens innstillinger gjør det IKKE, og API-et avviser dem uansett.
    */
+  settKategorier: (o: string, kategorier: Array<{ verdi?: string; etikett: string; aktiv: boolean }>) =>
+    api.endre<{ kategorier: Array<{ verdi: string; etikett: string; aktiv?: boolean }> }>(
+      `/organizations/${o}/avvikskategorier`,
+      { kategorier },
+    ),
   settModuler: (o: string, moduler: string[]) => api.endre(`/organizations/${o}/modules`, { moduler }),
 };
 
@@ -434,6 +441,11 @@ export type MegSvar = {
   phone: string | null;
   role: string;
   organisasjoner: Array<{ id: string; name: string; nivaa: string; enabledModules: string | null }>;
+};
+
+export const navtall = {
+  hent: (o: string) =>
+    api.hent<{ forsinkedeOppgaver: number; apneAvvik: number }>(org(o, "/navtall")),
 };
 
 export const meg = {

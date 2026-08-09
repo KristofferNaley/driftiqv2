@@ -15,6 +15,7 @@
 
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { lagVerdi, lesKategorier } from "./avvikkategorier";
 import type { Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet, ugyldig } from "./api";
@@ -94,4 +95,53 @@ export function krevGyldigOrgnr(orgNr: string | null | undefined) {
   if (!/^\d{9}$/.test(orgNr.replace(/\s/g, ""))) {
     throw ugyldig("Organisasjonsnummeret må være ni siffer.");
   }
+}
+
+
+/**
+ * Lagrer kundens avvikskategorier.
+ *
+ * ## `verdi` er uforanderlig
+ *
+ * Den lagres på hvert avvik. Endres den, peker gamle avvik på en kategori som ikke lenger
+ * finnes, og de blir stående uten — uten at noen får beskjed. Derfor tar API-et imot
+ * verdien for eksisterende kategorier og utleder den bare for NYE.
+ *
+ * ## Sletting finnes ikke, bare deaktivering
+ *
+ * Av samme grunn: fjernes en kategori helt, mister avvikene som brukte den merkelappen sin.
+ * `aktiv: false` tar den ut av nedtrekket for nye avvik, mens gamle beholder navnet.
+ */
+export const kategoriValg = z.object({
+  kategorier: z
+    .array(
+      z.object({
+        verdi: z.string().trim().max(40).optional(),
+        etikett: z.string().trim().min(1, "Kategorien må ha et navn").max(120),
+        aktiv: z.boolean().default(true),
+      }),
+    )
+    .max(40, "Maks 40 kategorier"),
+});
+
+export async function settKategorier(
+  db: Db,
+  orgId: string,
+  data: z.infer<typeof kategoriValg>,
+) {
+  await hentOrg(db, orgId);
+
+  const brukt: string[] = [];
+  const rene = data.kategorier.map((k) => {
+    const verdi = k.verdi?.trim() || lagVerdi(k.etikett, brukt);
+    brukt.push(verdi);
+    return { verdi, etikett: k.etikett, aktiv: k.aktiv };
+  });
+
+  const [endret] = await db
+    .update(organizations)
+    .set({ deviationCategories: JSON.stringify(rene) })
+    .where(eq(organizations.id, orgId))
+    .returning();
+  return { kategorier: lesKategorier(endret!.deviationCategories) };
 }

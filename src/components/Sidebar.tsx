@@ -15,12 +15,30 @@ import { initialer } from "./felles";
  * inn i den, fikk den gate, rute og katalogkort, men ble usynlig i menyen når den var
  * aktivert. Den feilen kan ikke oppstå nå.
  */
+/**
+ * Tallet på et menypunkt, eller `null` om det ikke skal vises.
+ *
+ * Bare to punkter har et: forsinkede oppgaver og åpne avvik. Det er de to som krever
+ * handling — et merke på alt ville gjort alle like uviktige.
+ */
+function merke(
+  nokkel: string,
+  tall: { forsinkedeOppgaver: number; apneAvvik: number } | null,
+): number | null {
+  if (!tall) return null;
+  if (nokkel === "tasks" && tall.forsinkedeOppgaver > 0) return tall.forsinkedeOppgaver;
+  if (nokkel === "avvik" && tall.apneAvvik > 0) return tall.apneAvvik;
+  return null;
+}
+
 export default function Sidebar({
   apen,
   sammenslatt,
   aktiverteModuler,
   oktKjent,
   bruker,
+  orgNavn,
+  tall,
   versjon,
   onLukk,
   onProfil,
@@ -29,6 +47,10 @@ export default function Sidebar({
   sammenslatt: boolean;
   aktiverteModuler: string | null;
   bruker: { navn: string; tittel: string | null } | null;
+  /** Kundens navn i toppen — det er DERES system, ikke vårt. */
+  orgNavn: string | null;
+  /** Merker på Oppgaver og Avvik. `null` før tallene er hentet — se kommentaren i Layout. */
+  tall: { forsinkedeOppgaver: number; apneAvvik: number } | null;
   /** Er økten hentet? Før den er det, tegnes ingen punkter — se `menyFor`. */
   oktKjent: boolean;
   versjon: string;
@@ -44,15 +66,24 @@ export default function Sidebar({
       className={`sidebar${apen ? " apen" : ""}${sammenslatt ? " collapsed" : ""}`}
       aria-label="Hovedmeny"
     >
+      {/* Kundens navn står øverst, ikke vårt.
+          Systemet er deres arbeidsflate — de bruker det hver uke og vet godt hvem som har
+          laget det. DriftIQ-merket flyttes til foten, der det hører hjemme. */}
       <div className="sidebar-logo">
-        {/* Logoen er et avrundet kvadrat med radius = 25 % av bredden, identisk med
-            favicon.svg. Tegn den aldri på nytt fra en mockup. */}
-        <span className="logo-mark" aria-hidden>
-          IQ
-        </span>
-        <span className="logo-tekst">
-          Drift<span className="iq">IQ</span>
-        </span>
+        {orgNavn ? (
+          <span className="org-navn" title={orgNavn}>{orgNavn}</span>
+        ) : (
+          <>
+            {/* Logoen er et avrundet kvadrat med radius = 25 % av bredden, identisk med
+                favicon.svg. Tegn den aldri på nytt fra en mockup. */}
+            <span className="logo-mark" aria-hidden>
+              IQ
+            </span>
+            <span className="logo-tekst">
+              Drift<span className="iq">IQ</span>
+            </span>
+          </>
+        )}
       </div>
 
       <div className="sidebar-nav">
@@ -73,6 +104,13 @@ export default function Sidebar({
                 >
                   <Ikon size={17} strokeWidth={1.9} aria-hidden />
                   <span className="nav-tekst">{p.etikett}</span>
+                  {/* Merket vises bare når tallet er over null. En permanent «0» er støy og
+                      gjør at man slutter å legge merke til at det står noe der. */}
+                  {merke(p.nokkel, tall) !== null && (
+                    <span className={`nav-merke ${p.nokkel === "avvik" ? "avvik" : "oppgaver"}`}>
+                      {merke(p.nokkel, tall)}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -92,7 +130,11 @@ export default function Sidebar({
           <Settings size={15} strokeWidth={1.9} aria-hidden />
         </button>
       )}
-      <div className="sidebar-fot">v{versjon}</div>
+      {/* Merket i foten: kundens navn har toppen. */}
+      <div className="sidebar-fot">
+        <span className="logo-mark liten" aria-hidden>IQ</span>
+        <span>Drift<span className="iq">IQ</span> v{versjon}</span>
+      </div>
     </nav>
   );
 }

@@ -8,6 +8,7 @@ import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave } from "@/lib/klient";
 import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
+import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 
 /**
  * Oppgaver.
@@ -197,7 +198,7 @@ function NyOppgave({
   const [sted, setSted] = useState("");
   const [firmaer, setFirmaer] = useState<Array<{ id: string; navn: string }>>([]);
   const [folk, setFolk] = useState<Array<{ id: string; navn: string }>>([]);
-  const [steder, setSteder] = useState<Array<{ id: string; navn: string }>>([]);
+  const [steder, setSteder] = useState<VelgbarEnhet[]>([]);
 
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
@@ -207,7 +208,7 @@ function NyOppgave({
   useEffect(() => {
     void levKlient.liste(orgId).then((v) => setFirmaer(v.map((f) => ({ id: f.id, navn: f.name })))).catch(() => {});
     void brukere.liste(orgId).then((b) => setFolk(b.map((u) => ({ id: u.id, navn: u.name })))).catch(() => {});
-    void enheter.liste(orgId).then((e) => setSteder(e.map((u) => ({ id: u.id, navn: u.navn ?? u.andelsnr ?? u.id })))).catch(() => {});
+    void enheter.liste(orgId).then(setSteder).catch(() => {});
   }, [orgId]);
 
   return (
@@ -272,12 +273,16 @@ function NyOppgave({
         />
 
         {steder.length > 0 ? (
-          <Nedtrekk
-            etikett="Sted"
-            verdi={unitId}
-            onEndre={setUnitId}
-            valg={[{ verdi: "", etikett: "Ingen bestemt enhet" }, ...steder.map((u) => ({ verdi: u.id, etikett: u.navn }))]}
-          />
+          <div className="field">
+            <label className="field-label">Sted</label>
+            <EnhetVelger
+              verdi={unitId}
+              onEndre={setUnitId}
+              enheter={steder}
+              tomEtikett="Ingen bestemt enhet"
+              ariaEtikett="Sted"
+            />
+          </div>
         ) : (
           <Tekstfelt etikett="Sted" verdi={sted} onEndre={setSted} plassholder="F.eks. «Teknisk rom, loft»" />
         )}

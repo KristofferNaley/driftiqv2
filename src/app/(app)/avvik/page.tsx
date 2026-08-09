@@ -7,6 +7,7 @@ import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik, enheter, leverandorer, oppgaver, type Avvik, type AvvikSok } from "@/lib/klient";
 import { STATUS_VISNING, kategoriEtikett, lesKategorier } from "@/lib/avvikkategorier";
+import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 
 /** Kolonnene. `sorter` er feltet API-et godtar — mangler det, er kolonnen ikke sorterbar. */
 const KOLONNER: Array<{ sorter?: string; etikett: string; synkendeForst?: boolean; smal?: boolean }> = [
@@ -319,7 +320,13 @@ function Sider({
   );
 }
 
-/** Stedsfilteret vises bare når enhetsregisteret faktisk er tatt i bruk. */
+/**
+ * Stedsfilteret vises bare når enhetsregisteret faktisk er tatt i bruk — en tom
+ * nedtrekksliste er støy for kunder som ikke har lagt inn enheter.
+ *
+ * Søkbar velger, ikke en `<select>`: registeret har 84 rader her, alle med et H-nummer, og
+ * i en `<select>` kan man bare hoppe med førstebokstav — som er «H» for samtlige.
+ */
 function Stedsfilter({
   orgId,
   verdi,
@@ -329,25 +336,23 @@ function Stedsfilter({
   verdi: string;
   onEndre: (v: string) => void;
 }) {
-  const [liste, setListe] = useState<Array<{ id: string; navn: string }>>([]);
+  const [liste, setListe] = useState<VelgbarEnhet[]>([]);
   useEffect(() => {
     if (!orgId) return;
-    enheter
-      .liste(orgId)
-      .then((e) => setListe(e.map((u) => ({ id: u.id, navn: u.navn ?? u.andelsnr ?? u.id }))))
-      .catch(() => setListe([]));
+    enheter.liste(orgId).then(setListe).catch(() => setListe([]));
   }, [orgId]);
 
   if (liste.length === 0) return null;
   return (
-    <select className="input" aria-label="Filtrer på sted" value={verdi} onChange={(e) => onEndre(e.target.value)}>
-      <option value="">Alle steder</option>
-      {liste.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.navn}
-        </option>
-      ))}
-    </select>
+    <div style={{ minWidth: "190px" }}>
+      <EnhetVelger
+        verdi={verdi}
+        onEndre={onEndre}
+        enheter={liste}
+        tomEtikett="Alle steder"
+        ariaEtikett="Filtrer på sted"
+      />
+    </div>
   );
 }
 
@@ -375,7 +380,7 @@ function MeldAvvik({
   const [unitId, setUnitId] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [taskId, setTaskId] = useState("");
-  const [steder, setSteder] = useState<Array<{ id: string; navn: string }>>([]);
+  const [steder, setSteder] = useState<VelgbarEnhet[]>([]);
   const [firmaer, setFirmaer] = useState<Array<{ id: string; navn: string }>>([]);
   const [oppgaveliste, setOppgaveliste] = useState<Array<{ id: string; navn: string }>>([]);
 
@@ -386,7 +391,7 @@ function MeldAvvik({
 
   useEffect(() => {
     // Feiler ett av oppslagene, skal skjemaet fortsatt kunne brukes — feltene er valgfrie.
-    void enheter.liste(orgId).then((e) => setSteder(e.map((u) => ({ id: u.id, navn: u.navn ?? u.andelsnr ?? u.id })))).catch(() => {});
+    void enheter.liste(orgId).then(setSteder).catch(() => {});
     void leverandorer.liste(orgId).then((v) => setFirmaer(v.map((f) => ({ id: f.id, navn: f.name })))).catch(() => {});
     void oppgaver.liste(orgId).then((t) => setOppgaveliste(t.map((o) => ({ id: o.id, navn: o.title })))).catch(() => {});
   }, [orgId]);
@@ -431,13 +436,19 @@ function MeldAvvik({
         <Tekstfelt etikett="Frist for tiltak" type="date" verdi={frist} onEndre={setFrist} />
 
         {steder.length > 0 && (
-          <Nedtrekk
-            etikett="Sted"
-            verdi={unitId}
-            onEndre={setUnitId}
-            valg={[{ verdi: "", etikett: "Ingen bestemt enhet" }, ...steder.map((u) => ({ verdi: u.id, etikett: u.navn }))]}
-            notat="Et avvik i et fellesareal hører ikke til noen enhet — tomt er et gyldig svar."
-          />
+          <div className="field">
+            <label className="field-label">Sted</label>
+            <EnhetVelger
+              verdi={unitId}
+              onEndre={setUnitId}
+              enheter={steder}
+              tomEtikett="Ingen bestemt enhet"
+              ariaEtikett="Sted"
+            />
+            <div className="field-note">
+              Et avvik i et fellesareal hører ikke til noen enhet — tomt er et gyldig svar.
+            </div>
+          </div>
         )}
         {firmaer.length > 0 && (
           <Nedtrekk

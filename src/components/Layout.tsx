@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import OrgVelger from "./OrgVelger";
 import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
 import { NIVA_ETIKETT } from "@/lib/nivaer";
 import ProfilModal from "./ProfilModal";
 import { MeldFeil } from "./MeldFeil";
+import { navtall } from "@/lib/klient";
 
 const erMobil = () =>
   typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
@@ -50,7 +52,27 @@ export default function Layout({
   const { bruker, aktivOrg, versjon, laster } = useOkt();
   const [apen, setApen] = useState(false);
   const [sammenslatt, setSammenslatt] = useState(false);
+  const sti = usePathname();
   const [profil, setProfil] = useState(false);
+  /**
+   * Tallene i sidemenyen. `null` til de er hentet — da tegnes ingen merker, i stedet for at
+   * de blinker fra 0 til riktig verdi ved hver navigasjon.
+   */
+  const [navtallene, setNavtallene] = useState<{ forsinkedeOppgaver: number; apneAvvik: number } | null>(null);
+
+  useEffect(() => {
+    if (!aktivOrg) return;
+    let avbrutt = false;
+    navtall
+      .hent(aktivOrg.id)
+      .then((t) => !avbrutt && setNavtallene(t))
+      .catch(() => {});
+    return () => {
+      avbrutt = true;
+    };
+    // Nye tall ved orgbytte OG ved hver sidenavigasjon: kvitterer du ut en oppgave, skal
+    // merket falle med én uten at du må laste siden på nytt.
+  }, [aktivOrg, sti]);
 
   // Leses etter montering, ikke i initialverdien: `localStorage` finnes ikke på serveren,
   // og en initialverdi som avviker mellom server og klient gir hydreringsfeil.
@@ -79,6 +101,8 @@ export default function Layout({
         sammenslatt={sammenslatt}
         aktiverteModuler={aktivOrg?.enabledModules ?? null}
         oktKjent={!laster}
+        orgNavn={aktivOrg?.name ?? null}
+        tall={navtallene}
         bruker={
           bruker
             ? {

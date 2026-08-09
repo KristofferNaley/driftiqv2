@@ -1603,3 +1603,66 @@ textarea.qr-input { resize: vertical; }
 
 .vedlegg-lenke { color: var(--accent); text-decoration: none; }
 .vedlegg-lenke:hover { text-decoration: underline; }
+
+.kategori-av { display: flex; align-items: center; gap: 7px; font-size: var(--fs-label); color: var(--muted); flex-shrink: 0; }
+.kategori-av input { accent-color: var(--accent); }
+
+/* Kundens navn øverst i sidemenyen. Ellipse: et langt borettslagsnavn skal ikke sprenge
+   menyen, og hele navnet ligger i `title`. */
+.org-navn {
+  font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar.collapsed .org-navn { display: none; }
+@media (max-width: 768px) { .sidebar.collapsed .org-navn { display: revert; } }
+
+/* Merker på Oppgaver og Avvik. Bare de to — et merke på alt gjør alle like uviktige. */
+.nav-merke {
+  margin-left: auto; flex-shrink: 0;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.nav-merke.oppgaver { background: rgba(245, 166, 35, 0.18); color: var(--warn); }
+.nav-merke.avvik { background: rgba(240, 64, 64, 0.16); color: var(--danger); }
+.sidebar.collapsed .nav-merke { display: none; }
+@media (max-width: 768px) { .sidebar.collapsed .nav-merke { display: inline-flex; } }
+
+.sidebar-fot { display: flex; align-items: center; gap: 7px; }
+.logo-mark.liten { width: 20px; height: 20px; font-size: 9px; border-radius: 5px; }
+.sidebar.collapsed .sidebar-fot span:last-child { display: none; }
+
+/* Søkbar enhetsvelger (EnhetVelger). En `<select>` med 84 H-numre er ubrukelig — man kan
+   bare hoppe med førstebokstav, og den er «H» for alle. */
+.enhet-velger { position: relative; }
+.enhet-knapp {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-md); text-align: left; cursor: pointer;
+}
+.enhet-knapp:hover { border-color: var(--accent); }
+.enhet-knapp .tom { color: var(--muted); }
+.enhet-knapp .pil { color: var(--muted); flex-shrink: 0; }
+.enhet-panel {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+  min-width: 240px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(13, 27, 42, 0.18); padding: 8px;
+}
+.enhet-panel.opp { top: auto; bottom: calc(100% + 4px); }
+.enhet-sok { width: 100%; margin-bottom: 6px; }
+.enhet-liste { max-height: 280px; overflow-y: auto; }
+.enhet-opt {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border: none; border-radius: 6px; background: none; color: inherit;
+  font-family: var(--font-sans); font-size: var(--fs-sm); text-align: left; cursor: pointer;
+}
+.enhet-opt:hover { background: var(--surface2); }
+.enhet-opt.valgt { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); font-weight: 600; }
+.enhet-opt .meta { font-size: var(--fs-label); color: var(--muted); flex-shrink: 0; }
+.enhet-gruppe {
+  padding: 8px 10px 4px; font-size: var(--fs-label); font-weight: 700;
+  letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
+}
+.enhet-tomt { padding: 12px 10px; font-size: var(--fs-sm); color: var(--muted); }
