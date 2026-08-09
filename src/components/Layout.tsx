@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import OrgVelger from "./OrgVelger";
 import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
@@ -69,7 +70,15 @@ export default function Layout({
         oktKjent={!laster}
         bruker={
           bruker
-            ? { navn: bruker.name, tittel: aktivOrg ? (NIVA_ETIKETT[aktivOrg.nivaa] ?? null) : null }
+            ? {
+                navn: bruker.name,
+                tittel:
+                  aktivOrg && bruker.supportOrger?.includes(aktivOrg.id)
+                    ? "Support-modus"
+                    : aktivOrg
+                      ? (NIVA_ETIKETT[aktivOrg.nivaa] ?? null)
+                      : null,
+              }
             : null
         }
         versjon={versjon}
@@ -95,6 +104,18 @@ export default function Layout({
             {handlinger}
           </div>
         </div>
+
+        {/* Support-modus MÅ være synlig mens du er inne. Uten dette ser sidemenyen og
+            tilgangsnivået ut som om du er et vanlig styremedlem — og et innsyn som er
+            usynlig for den som utfører det, er den verste varianten. */}
+        {aktivOrg && bruker?.supportOrger?.includes(aktivOrg.id) && (
+          <div className="support-stripe">
+            <span>
+              <b>Support-modus.</b> Du ser {aktivOrg.name} sine data på et logget innsyn.
+            </span>
+            <Link href={`/plattform/kunder/${aktivOrg.id}`}>Avslutt i plattformpanelet →</Link>
+          </div>
+        )}
 
         {subnav && <div className="app-subnav">{subnav}</div>}
 

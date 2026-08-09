@@ -2,34 +2,75 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useOkt } from "@/components/OktProvider";
+import { initialer } from "@/components/felles";
+import { erPlattformadminRolle } from "@/lib/nivaer";
 
 /**
  * Skallet rundt plattformsidene.
  *
- * Mørk topplinje med tydelig «PLATTFORM»-merke: panelet skal aldri kunne forveksles med
- * kunde-appen. De deler origin (se layout.tsx), så det visuelle skillet er det eneste som
- * minner deg på hvor du står.
+ * ## Lilla, ikke blått
+ *
+ * Panelet og kunde-appen deler origin (se layout.tsx), så det VISUELLE skillet er det eneste
+ * som til enhver tid minner deg på hvor du står. Første utkast brukte appens egen blåfarge,
+ * og da forsvant hele poenget: to flater som ser like ut, men der den ene administrerer alle
+ * kunder. Lilla er valgt fordi den ikke finnes i kundepaletten i det hele tatt.
  */
+
+const MENY = [
+  { sti: "/plattform", etikett: "Dashboard" },
+  { sti: "/plattform/kunder", etikett: "Kunder" },
+  { sti: "/plattform/support", etikett: "Support-modus" },
+];
+
 export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {
   const { bruker } = useOkt();
+  const sti = usePathname();
 
   return (
     <div className="pf-side">
-      <header className="pf-topp">
+      <nav className="pf-meny">
         <Link href="/plattform" className="pf-merke">
-          <span className="logo-mark" aria-hidden>IQ</span>
+          <span className="pf-mark" aria-hidden>
+            {bruker ? initialer(bruker.name) : "PA"}
+          </span>
           <span>
-            Drift<span className="iq">IQ</span> <span className="pf-tag">PLATTFORM</span>
+            Drift<span className="iq">IQ</span>
+            <span className="pf-tag">PLATTFORM</span>
           </span>
         </Link>
-        <div className="pf-topp-hoyre">
-          {bruker && <span className="pf-dempet">{bruker.name}</span>}
-          <Link className="btn btn-ghost" href="/">
-            Til kunde-appen
+
+        <div className="pf-meny-gruppe">Plattformadmin</div>
+        {MENY.map((p) => {
+          // Eksakt treff på forsiden, prefiks ellers — uten det ville «Dashboard» stått
+          // markert på hver eneste underside.
+          const aktiv = p.sti === "/plattform" ? sti === p.sti : sti.startsWith(p.sti);
+          return (
+            <Link key={p.sti} href={p.sti} className={`pf-lenke${aktiv ? " aktiv" : ""}`}>
+              {p.etikett}
+            </Link>
+          );
+        })}
+
+        <div className="pf-meny-fot">
+          <Link className="pf-tilbake" href="/">
+            ← Til kunde-appen
           </Link>
+          {bruker && (
+            <div className="pf-bruker-blokk">
+              <span className="pf-mark liten" aria-hidden>{initialer(bruker.name)}</span>
+              <span style={{ minWidth: 0 }}>
+                <span className="pf-navn">{bruker.name}</span>
+                <span className="pf-under">
+                  {erPlattformadminRolle(bruker.role) ? "Plattformadmin" : "Ingen tilgang"}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
-      </header>
+      </nav>
+
       <main className="pf-innhold">
         <h1 className="pf-tittel">{tittel}</h1>
         {children}

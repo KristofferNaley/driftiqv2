@@ -23,9 +23,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
-import { supportAccessLog } from "../db/schema/platform";
+import { platformContracts, supportAccessLog } from "../db/schema/platform";
+import { aiUsageDaily } from "../db/schema/ai";
 import { deviations } from "../db/schema/avvik";
-import { tasks } from "../db/schema/tasks";
+import { completions, tasks } from "../db/schema/tasks";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { ikkeFunnet, ugyldig } from "./api";
 import { SUPPORT_SESJON_MAKS_TIMER, supportSesjonUtlop } from "./tilgang";
@@ -41,6 +42,84 @@ export const supportStart = z.object({
    */
   reason: z.string().trim().min(3, "Skriv en kort begrunnelse for innsynet"),
 });
+
+/**
+ * Forsiden i panelet.
+ *
+ * Tallene er PLATTFORMENS, ikke én kundes: hvor mange kunder finnes, hvor mye brukes
+ * systemet, hva koster AI-en. Ingen av dem røper innholdet i en bestemt kundes data — det
+ * krever fortsatt support-modus.
+ */
+export async function hentDashbord(db: Db) {
+  const [kunder, oppgaver, avvik, kvitteringer, salg, ai, sesjoner] = await Promise.all([
+    db
+      .select({ aktiv: organizations.active, n: count() })
+      .from(organizations)
+      .groupBy(organizations.active),
+    db.select({ n: count() }).from(tasks).where(eq(tasks.active, true)),
+    db.select({ n: count() }).from(deviations).where(sql`${deviations.status} <> 'lukket'`),
+    db.select({ n: count() }).from(completions),
+    // `sum()` på integer gir BIGINT, og node-postgres returnerer bigint som STRENG for å
+    // ikke miste presisjon. Typen under lyver derfor, og verdien må gjennom `Number()` —
+    // ellers blir `a + b` strengkonkatenering. Det skjedde: 80 620 + 5 013 ble «806205013».
+    db.select({ sum: sql<string | null>`sum(${platformContracts.annualFee})` }).from(platformContracts),
+    // Siste 30 dager. Tokens, ikke kroner: prisen per token endres, og et lagret kronebeløp
+    // ville vært feil dagen etter.
+    db
+      .select({
+        sporsmal: sql<string | null>`sum(${aiUsageDaily.questions})`,
+        inn: sql<string | null>`sum(${aiUsageDaily.inputTokens})`,
+        ut: sql<string | null>`sum(${aiUsageDaily.outputTokens})`,
+      })
+      .from(aiUsageDaily)
+      .where(sql`${aiUsageDaily.date} >= current_date - interval '30 days'`),
+    db
+      .select({ n: count() })
+      .from(supportAccessLog)
+      .where(and(isNull(supportAccessLog.endedAt), sql`${supportAccessLog.expiresAt} > now()`)),
+  ]);
+
+  return {
+    aktiveKunder: kunder.find((r) => r.aktiv)?.n ?? 0,
+    inaktiveKunder: kunder.find((r) => !r.aktiv)?.n ?? 0,
+    aktiveOppgaver: oppgaver[0]?.n ?? 0,
+    apneAvvik: avvik[0]?.n ?? 0,
+    kvitteringer: kvitteringer[0]?.n ?? 0,
+    arligSalg: Number(salg[0]?.sum ?? 0),
+    aiSporsmal: Number(ai[0]?.sporsmal ?? 0),
+    aiTokens: Number(ai[0]?.inn ?? 0) + Number(ai[0]?.ut ?? 0),
+    aktiveSesjoner: sesjoner[0]?.n ?? 0,
+  };
+}
+
+/**
+ * Alle support-sesjoner på tvers av kunder, nyeste først.
+ *
+ * Egen side fordi spørsmålet «hvem har innsyn akkurat nå?» ikke skal kreve at man åpner
+ * hver kunde for seg. Det er nettopp det spørsmålet loggen finnes for å svare på.
+ */
+export async function hentSesjoner(db: Db, kunGjeldende = false) {
+  const betingelser = kunGjeldende
+    ? [isNull(supportAccessLog.endedAt), sql`${supportAccessLog.expiresAt} > now()`]
+    : [];
+
+  return db
+    .select({
+      id: supportAccessLog.id,
+      adminNavn: supportAccessLog.adminName,
+      orgId: supportAccessLog.orgId,
+      orgNavn: organizations.name,
+      grunn: supportAccessLog.reason,
+      startet: supportAccessLog.startedAt,
+      utloper: supportAccessLog.expiresAt,
+      avsluttet: supportAccessLog.endedAt,
+    })
+    .from(supportAccessLog)
+    .innerJoin(organizations, eq(organizations.id, supportAccessLog.orgId))
+    .where(betingelser.length > 0 ? and(...betingelser) : undefined)
+    .orderBy(desc(supportAccessLog.startedAt))
+    .limit(100);
+}
 
 /** Kundeoversikten. Tallene er kundeforhold, ikke innhold. */
 export async function hentKunder(db: Db) {

@@ -49,3 +49,22 @@ export const NIVA_FARGE: Record<string, string> = {
   redigering: "var(--accent)",
   visning: "var(--muted)",
 };
+
+/**
+ * Plattformrollen — DriftIQ-ansatt, ikke kundens administrator.
+ *
+ * ## Navnet
+ *
+ * v1 brukte «superadmin» og «plattformadmin» om hverandre, og det er forvirrende: den ene
+ * høres ut som «admin, men mer», den andre sier hva det faktisk er. Vi holder oss til
+ * **plattformadmin** overalt — i UI, i kode og i samtale.
+ *
+ * Selve VERDIEN i databasen heter fortsatt `superadmin`. Den står, fordi den er
+ * migreringskontrakten mot v1: `roleenum` deles av begge systemene så lenge de lever side om
+ * side. Konstanten under er det ene stedet det navnet skal stå i klientkode.
+ */
+export const PLATTFORMADMIN = "superadmin";
+
+export function erPlattformadminRolle(rolle: string | null | undefined): boolean {
+  return rolle === PLATTFORMADMIN;
+}

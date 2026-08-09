@@ -416,6 +416,8 @@ export const brreg = {
 };
 
 export type MegSvar = {
+  /** Org-er du har aktivt support-innsyn i. Tom for vanlige brukere. */
+  supportOrger: string[];
   id: string;
   name: string;
   email: string;

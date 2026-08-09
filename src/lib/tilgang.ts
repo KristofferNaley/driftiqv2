@@ -21,6 +21,7 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
 import { platformContracts, supportAccessLog } from "../db/schema/platform";
+import { erPlattformadminRolle } from "./nivaer";
 import { userOrgMemberships, type User, type UserOrgMembership } from "../db/schema/users";
 
 /** Maks levetid for en support-sesjon. Etter dette må plattformadmin starte en ny med ny
@@ -56,7 +57,7 @@ export function supportSesjonUtlop(): Date {
 /** Er brukeren plattformadmin? Rolleverdien heter fortsatt `superadmin` i basen — det er kun
  *  ordet vi viser brukeren som er «plattformadmin». */
 export function erPlattformadmin(bruker: Pick<User, "role">): boolean {
-  return bruker.role === "superadmin";
+  return erPlattformadminRolle(bruker.role);
 }
 
 export function krevPlattformadmin(bruker: Pick<User, "role">): void {

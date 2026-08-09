@@ -6,10 +6,12 @@
  * så ikke den åpne fanen det før neste sidelast, og symptomet var lesevisning uten
  * forklaring. Her hentes det ved oppstart og etter hvert orgbytte.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { withoutRls } from "@/db/client";
 import { organizations } from "@/db/schema/organizations";
 import { userOrgMemberships } from "@/db/schema/users";
+import { supportAccessLog } from "@/db/schema/platform";
+import { erPlattformadminRolle } from "@/lib/nivaer";
 import { lesKropp, plattformRute } from "@/lib/api";
 import { z } from "zod";
 import { users } from "@/db/schema/users";
@@ -26,7 +28,32 @@ export const GET = plattformRute({
     );
     void db;
 
+    /**
+     * Org-ene plattformadminen har aktivt support-innsyn i.
+     *
+     * Kunde-appen trenger dette for å kunne SI at du er inne på en support-sesjon. Uten det
+     * ser sidemeny og tilgangsnivå ut som om du er et vanlig styremedlem — og da er innsynet
+     * usynlig for den som utfører det, som er den verste varianten.
+     */
+    const supportOrger = erPlattformadminRolle(bruker.role)
+      ? (
+          await withoutRls("plattformpanel", (d) =>
+            d
+              .select({ orgId: supportAccessLog.orgId })
+              .from(supportAccessLog)
+              .where(
+                and(
+                  eq(supportAccessLog.superadminId, bruker.id),
+                  isNull(supportAccessLog.endedAt),
+                  sql`${supportAccessLog.expiresAt} > now()`,
+                ),
+              ),
+          )
+        ).map((r) => r.orgId)
+      : [];
+
     return {
+      supportOrger,
       id: bruker.id,
       name: bruker.name,
       email: bruker.email,
