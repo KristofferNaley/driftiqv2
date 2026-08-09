@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Hurtigskjema, Kort, Nokkeltall, Rad, Tom, dato, kr, useOrgData } from "@/components/felles";
 import { vedlikehold } from "@/lib/klient";
@@ -8,6 +9,7 @@ import { vedlikehold } from "@/lib/klient";
 const GARANTIMERKE: Record<string, string> = { aktiv: "ok", utløpt: "muted", ukjent: "muted" };
 
 function Bygningsdeler() {
+  const router = useRouter();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => vedlikehold.elementer(o));
   const liste = data ?? [];
 
@@ -54,6 +56,7 @@ function Bygningsdeler() {
           liste.map((e) => (
             <Rad
               key={e.id}
+              onClick={() => router.push(`/vedlikehold/${e.id}`)}
               tittel={`${e.icon} ${e.name}`}
               meta={[
                 e.category,

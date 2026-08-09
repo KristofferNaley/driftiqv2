@@ -16,7 +16,9 @@ const OMRADE: Record<string, string> = {
 
 /** § 5-punktene og om de er dekket i år. Grunnlaget for oversikten. */
 function Oversikt() {
+  const router = useRouter();
   const { data, feil, laster } = useOrgData((o) => internkontroll.status(o));
+  const maal = useOrgData((o) => internkontroll.maal(o));
 
   const punkter: Array<[string, boolean]> = data
     ? [
@@ -49,6 +51,27 @@ function Oversikt() {
                     <X size={13} strokeWidth={2.5} aria-hidden /> Mangler
                   </span>
                 )
+              }
+            />
+          ))
+        )}
+      </Kort>
+
+      <Kort tittel="HMS-mål">
+        {maal.laster ? (
+          <Tom tekst="Henter …" />
+        ) : (maal.data ?? []).length === 0 ? (
+          <Tom tekst="Ingen HMS-mål satt. Ett mål per år." />
+        ) : (
+          (maal.data ?? []).map((m) => (
+            <Rad
+              key={m.id}
+              onClick={() => router.push(`/internkontroll/maal/${m.id}`)}
+              tittel={`${m.year} — ${m.goalText}`}
+              hoyre={
+                <span className={`badge ${m.approved ? "ok" : "muted"}`}>
+                  {m.approved ? "Godkjent" : "Ikke godkjent"}
+                </span>
               }
             />
           ))

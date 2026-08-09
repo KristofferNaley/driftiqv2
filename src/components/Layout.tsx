@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import OrgVelger from "./OrgVelger";
 import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
 
@@ -75,6 +76,8 @@ export default function Layout({
               ☰
             </button>
             <div className="page-title">{tittel}</div>
+            {/* Kontekst for HELE skjermbildet — derfor til venstre, ved tittelen. */}
+            <OrgVelger />
           </div>
           <div className="topbar-right">
             {handlinger}

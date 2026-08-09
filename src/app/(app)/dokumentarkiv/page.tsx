@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { dokumenter } from "@/lib/klient";
@@ -19,6 +20,7 @@ const FASTE: Array<[string, string]> = [
 const kb = (n: number | null) => (n ? `${Math.round(n / 1024)} kB` : "");
 
 export default function Dokumentarkiv() {
+  const router = useRouter();
   const [mappe, setMappe] = useState<string | null>(null);
   const { data, feil, setFeil, laster, last, orgId } = useOrgData(
     (o) => dokumenter.liste(o, mappe ?? undefined),
@@ -87,6 +89,7 @@ export default function Dokumentarkiv() {
             liste.map((d) => (
               <Rad
                 key={d.id}
+                onClick={() => router.push(`/dokumentarkiv/${d.id}`)}
                 tittel={d.title}
                 meta={[dato(d.documentDate), d.originalName, kb(d.fileSize)].filter(Boolean).join(" · ")}
                 hoyre={d.aiReadable ? <span className="badge info">Delt med AI</span> : null}
