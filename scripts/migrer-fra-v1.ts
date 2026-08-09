@@ -334,14 +334,93 @@ const TABELLER: Tabell[] = [
     oppdater: [],
   },
   {
+    navn: "hms_goals",
+    kilde: `SELECT id, org_id, year, goal_text, period_start, period_end, responsible_user_id,
+                   COALESCE(approved, false) AS approved, approved_date, approved_meeting,
+                   COALESCE(created_at, now()) AS created_at
+            FROM hms_goals`,
+    kolonner: ["id", "org_id", "year", "goal_text", "period_start", "period_end", "responsible_user_id", "approved", "approved_date", "approved_meeting", "created_at"],
+    oppdater: ["goal_text", "period_start", "period_end", "responsible_user_id", "approved", "approved_date", "approved_meeting"],
+  },
+  {
+    navn: "hms_sub_goals",
+    kilde: `SELECT id, goal_id, category, text, owner, COALESCE(created_at, now()) AS created_at
+            FROM hms_sub_goals`,
+    kolonner: ["id", "goal_id", "category", "text", "owner", "created_at"],
+    oppdater: ["category", "text", "owner"],
+  },
+  {
+    navn: "hms_goal_approvals",
+    kilde: `SELECT id, goal_id, user_id, COALESCE(signed_at, now()) AS signed_at
+            FROM hms_goal_approvals`,
+    kolonner: ["id", "goal_id", "user_id", "signed_at"],
+    // En signatur er en signatur. Den skal aldri skrives om av en migrering.
+    oppdater: [],
+  },
+  {
+    navn: "hazards",
+    kilde: `SELECT id, org_id, title, category, description, probability, consequence, owner,
+                   COALESCE(status, 'open') AS status, COALESCE(created_at, now()) AS created_at
+            FROM hazards`,
+    kolonner: ["id", "org_id", "title", "category", "description", "probability", "consequence", "owner", "status", "created_at"],
+    oppdater: ["title", "category", "description", "probability", "consequence", "owner", "status"],
+  },
+  {
+    navn: "hazard_actions",
+    kilde: `SELECT id, org_id, hazard_id, title, COALESCE(status, 'not_started') AS status,
+                   due_date, owner, COALESCE(created_at, now()) AS created_at
+            FROM hazard_actions`,
+    kolonner: ["id", "org_id", "hazard_id", "title", "status", "due_date", "owner", "created_at"],
+    oppdater: ["title", "status", "due_date", "owner"],
+  },
+  {
+    navn: "safety_rounds",
+    kilde: `SELECT id, org_id, title, round_date, COALESCE(status, 'planned') AS status, notes,
+                   COALESCE(created_at, now()) AS created_at
+            FROM safety_rounds`,
+    kolonner: ["id", "org_id", "title", "round_date", "status", "notes", "created_at"],
+    oppdater: ["title", "round_date", "status", "notes"],
+  },
+  {
+    navn: "safety_round_items",
+    kilde: `SELECT id, round_id, text, section, COALESCE(checked, false) AS checked, notes,
+                   COALESCE(created_at, now()) AS created_at
+            FROM safety_round_items`,
+    kolonner: ["id", "round_id", "text", "section", "checked", "notes", "created_at"],
+    oppdater: ["text", "section", "checked", "notes"],
+  },
+  {
+    navn: "safety_round_participants",
+    kilde: `SELECT id, round_id, name, role, COALESCE(created_at, now()) AS created_at
+            FROM safety_round_participants`,
+    kolonner: ["id", "round_id", "name", "role", "created_at"],
+    oppdater: ["name", "role"],
+  },
+  {
+    navn: "hms_responsibilities",
+    kilde: `SELECT id, org_id, area, person_name, note, COALESCE(updated_at, now()) AS updated_at
+            FROM hms_responsibilities`,
+    kolonner: ["id", "org_id", "area", "person_name", "note", "updated_at"],
+    oppdater: ["person_name", "note", "updated_at"],
+  },
+  {
+    navn: "hms_evaluations",
+    kilde: `SELECT id, org_id, year, evaluated_date, participants, meeting, conclusion,
+                   COALESCE(created_at, now()) AS created_at
+            FROM hms_evaluations`,
+    kolonner: ["id", "org_id", "year", "evaluated_date", "participants", "meeting", "conclusion", "created_at"],
+    oppdater: ["evaluated_date", "participants", "meeting", "conclusion"],
+  },
+  {
     navn: "deviations",
-    kilde: `SELECT id, org_id, number, task_id, completion_id, vendor_id, unit_id, title,
+    kilde: `SELECT id, org_id, number, task_id, completion_id, vendor_id, unit_id,
+                   round_id, round_item_id, title,
                    description, category, severity, COALESCE(status, 'ny') AS status,
                    reported_by, COALESCE(reported_at, now()) AS reported_at,
                    responsible_user_id, assigned_to, due_date, resolved_at, resolved_by,
                    resolution_notes
             FROM deviations`,
-    kolonner: ["id", "org_id", "number", "task_id", "completion_id", "vendor_id", "unit_id", "title", "description", "category", "severity", "status", "reported_by", "reported_at", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
+    kolonner: ["id", "org_id", "number", "task_id", "completion_id", "vendor_id", "unit_id", "round_id", "round_item_id", "title", "description", "category", "severity", "status", "reported_by", "reported_at", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
     oppdater: ["title", "description", "category", "severity", "status", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
   },
   {

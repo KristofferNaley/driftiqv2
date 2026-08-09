@@ -10,7 +10,6 @@
  * ## Ikke portert ennå
  *
  * - Vedlegg (`deviation_attachments`) — venter på fillagring.
- * - `roundId`/`roundItemId` — peker på Internkontroll, som ikke er portert.
  */
 
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
@@ -37,6 +36,8 @@ export const avvikInn = z.object({
   taskId: z.string().nullish(),
   vendorId: z.string().nullish(),
   unitId: z.string().nullish(),
+  roundId: z.string().nullish(),
+  roundItemId: z.string().nullish(),
   responsibleUserId: z.string().nullish(),
   dueDate: z.string().date().nullish(),
 });

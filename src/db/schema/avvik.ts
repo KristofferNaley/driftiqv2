@@ -1,16 +1,14 @@
 import { date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
+import { safetyRoundItems, safetyRounds } from "./internkontroll";
 import { completions, tasks } from "./tasks";
 import { units } from "./units";
 import { users } from "./users";
 import { vendors } from "./vendors";
 
 /**
- * Et selvstendig avvik. Kan opprettes manuelt eller automatisk fra en utkvittering.
- *
- * `roundId`/`roundItemId` fra v1 er IKKE med: de peker på `safety_rounds`, som hører til
- * Internkontroll og ikke er portert. De legges til når den modulen kommer — en nullbar
- * kolonne som mangler er lettere å oppdage enn en som finnes og aldri fylles.
+ * Et selvstendig avvik. Kan opprettes manuelt, automatisk fra en utkvittering, eller fra et
+ * sjekkpunkt på en vernerunde.
  */
 export const deviations = pgTable("deviations", {
   id: varchar("id").primaryKey(),
@@ -22,6 +20,9 @@ export const deviations = pgTable("deviations", {
   taskId: varchar("task_id").references(() => tasks.id),
   completionId: varchar("completion_id").references(() => completions.id),
   vendorId: varchar("vendor_id").references(() => vendors.id),
+  /** Avvik meldt under en vernerunde. Rapporten for runden lister dem. */
+  roundId: varchar("round_id").references(() => safetyRounds.id),
+  roundItemId: varchar("round_item_id").references(() => safetyRoundItems.id),
   /** Valgfritt med vilje: avvik i fellesarealer hører ikke til noen enhet, og et tomt felt
    *  skal ikke føles som en mangel. */
   unitId: varchar("unit_id").references(() => units.id),
