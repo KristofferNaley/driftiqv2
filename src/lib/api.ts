@@ -103,7 +103,11 @@ async function krevModul(db: Db, orgId: string, modul: ModulNokkel): Promise<voi
   }
 }
 
-function tilSvar(e: unknown): Response {
+/**
+ * Feil → HTTP-svar. Eksportert fordi de anonyme QR-rutene ikke går gjennom `orgRute` eller
+ * `plattformRute` — de har ingen sesjon å gate på — men skal svare i samme form som resten.
+ */
+export function tilSvar(e: unknown): Response {
   if (e instanceof ApiFeil) {
     return Response.json({ detail: e.message }, { status: e.status });
   }

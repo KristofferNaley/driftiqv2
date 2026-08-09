@@ -51,6 +51,11 @@ export const TILLATTE_TYPER: Readonly<Record<string, string>> = {
   "image/png": ".png",
   "image/gif": ".gif",
   "image/webp": ".webp",
+  // HEIC/HEIF: iPhone lagrer bilder slik som standard, og «velg fra bibliotek» sender
+  // formatet videre uten å konvertere. Uten disse ville en leverandør som dokumenterer
+  // jobben fra telefonen fått «filtypen støttes ikke» — nettopp i den flyten som må virke.
+  "image/heic": ".heic",
+  "image/heif": ".heif",
   "application/pdf": ".pdf",
   "application/msword": ".doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -68,8 +73,8 @@ export const FILTABELLER: readonly string[] = [
   "documents",
   "element_documents",
   "unit_work_documents",
-  // Fylles etter hvert som modulene portes: `documents`, `deviation_attachments`,
-  // `completion_photos`, `element_documents` og `unit_work_documents`.
+  "completion_photos",
+  // Gjenstår: `deviation_attachments`, når vedlegg på avvik portes.
 ];
 
 // ---------------------------------------------------------------------------------------

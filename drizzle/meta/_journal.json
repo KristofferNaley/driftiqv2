@@ -169,6 +169,13 @@
       "when": 1786275568604,
       "tag": "0023_true_lilandra",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786278303909,
+      "tag": "0024_silent_layla_miller",
+      "breakpoints": true
     }
   ]
 }

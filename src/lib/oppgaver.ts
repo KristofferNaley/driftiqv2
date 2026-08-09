@@ -21,6 +21,7 @@ import {
   taskChecklistItems,
   tasks,
 } from "../db/schema/tasks";
+import { deviations } from "../db/schema/avvik";
 import { units } from "../db/schema/units";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
@@ -51,6 +52,9 @@ export const utkvitteringInn = z.object({
   notes: z.string().nullish(),
   hasDeviation: z.boolean().default(false),
   deviationDescription: z.string().nullish(),
+  severity: z.enum(["lav", "middels", "akutt"]).nullish(),
+  /** Sjekkpunktene som ble huket av. Resten føres som ikke utført, ikke som utelatt. */
+  checkedItemIds: z.array(z.string()).default([]),
 });
 
 export const sjekklisteInn = z.object({
@@ -208,20 +212,108 @@ export async function registrerUtkvittering(
   const dato = data.completedAt ?? iDag();
   if (dato > iDag()) throw ugyldig("Utført-datoen kan ikke være fram i tid");
 
+  return opprettUtkvittering(db, taskId, utfortAv, data, {
+    manuell: true,
+    tidspunkt: new Date(`${dato}T12:00:00Z`),
+  });
+}
+
+/**
+ * Selve registreringen. Delt av appen og det anonyme QR-skjemaet — som `create_completion`
+ * i v1, og av samme grunn: to nesten like kopier ville drevet fra hverandre, og den ene
+ * ville mistet enten sjekklistekopien eller avviksnummeret.
+ *
+ * Tre ting skjer her, og alle tre er lette å glemme:
+ *
+ * 1. **Sjekklisten KOPIERES inn** i resultatradene. Malpunktet kan endres eller slettes
+ *    senere uten at gammel logg endrer seg — det er hele grunnen til at raden bærer teksten.
+ * 2. **Punkter som ikke er huket av føres som `checked: false`**, ikke utelates. «Ikke
+ *    utført» og «ikke spurt om» er ulike ting i en internkontrollperm.
+ * 3. **Avviket får løpenummer.** I v1 ble avvik meldt via QR opprettet UTEN nummer — de sto
+ *    uten i lista og var umulige å finne igjen med nummersøk.
+ */
+export async function opprettUtkvittering(
+  db: Db,
+  taskId: string,
+  utfortAv: string,
+  data: z.infer<typeof utkvitteringInn>,
+  opts: { manuell: boolean; tidspunkt?: Date; orgId?: string; avvikstittel?: string },
+) {
   const [ny] = await db
     .insert(completions)
     .values({
       id: randomUUID(),
       taskId,
       completedBy: utfortAv,
-      completedAt: new Date(`${dato}T12:00:00Z`),
-      manual: true,
+      ...(opts.tidspunkt ? { completedAt: opts.tidspunkt } : {}),
+      manual: opts.manuell,
       notes: data.notes,
       hasDeviation: data.hasDeviation,
       deviationDescription: data.deviationDescription,
     })
     .returning();
-  return ny!;
+  const utkvittering = ny!;
+
+  const mal = await db
+    .select()
+    .from(taskChecklistItems)
+    .where(eq(taskChecklistItems.taskId, taskId))
+    .orderBy(asc(taskChecklistItems.order));
+
+  if (mal.length > 0) {
+    const avhuket = new Set(data.checkedItemIds);
+    await db.insert(completionChecklistResults).values(
+      mal.map((punkt) => ({
+        id: randomUUID(),
+        completionId: utkvittering.id,
+        itemId: punkt.id,
+        text: punkt.text,
+        checked: avhuket.has(punkt.id),
+        order: punkt.order,
+      })),
+    );
+  }
+
+  if (data.hasDeviation) {
+    const orgId = opts.orgId ?? (await orgForOppgave(db, taskId));
+    const [oppgave] = await db
+      .select({ vendorId: tasks.vendorId })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+
+    const nummer = await db
+      .select({ maks: sql<number | null>`max(${deviations.number})` })
+      .from(deviations)
+      .where(eq(deviations.orgId, orgId));
+
+    await db.insert(deviations).values({
+      id: randomUUID(),
+      orgId,
+      number: (nummer[0]?.maks ?? 0) + 1,
+      taskId,
+      completionId: utkvittering.id,
+      vendorId: oppgave?.vendorId ?? null,
+      title: data.deviationDescription?.trim() || opts.avvikstittel || "Avvik registrert ved utkvittering",
+      description: data.deviationDescription ?? null,
+      severity: data.severity ?? null,
+      reportedBy: utfortAv,
+    });
+  }
+
+  return utkvittering;
+}
+
+/** Org-en en oppgave hører til. Brukes der konteksten kommer fra tokenet, ikke fra URL-en. */
+async function orgForOppgave(db: Db, taskId: string): Promise<string> {
+  const rader = await db
+    .select({ orgId: tasks.orgId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  const org = rader[0]?.orgId;
+  if (!org) throw ikkeFunnet("Oppgave");
+  return org;
 }
 
 /**

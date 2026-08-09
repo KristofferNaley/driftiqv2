@@ -155,7 +155,7 @@ describe("utkvittering", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const kvitt = await i(orgId, (db) =>
-      registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false }),
+      registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false, checkedItemIds: [] }),
     );
     expect(kvitt.manual).toBe(true);
     expect(kvitt.completedBy).toBe("Kari");
@@ -171,6 +171,7 @@ describe("utkvittering", () => {
         registrerUtkvittering(db, orgId, oppgave.id, "Kari", {
           completedAt: iMorgen,
           hasDeviation: false,
+          checkedItemIds: [],
         }),
       ),
     );
@@ -185,7 +186,7 @@ describe("utkvittering", () => {
     );
     expect((await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id))).forsinket).toBe(true);
 
-    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false }));
+    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false, checkedItemIds: [] }));
 
     const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
     expect(etter.forsinket).toBe(false);
@@ -215,13 +216,14 @@ describe("sjekkliste", () => {
       erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Opprinnelig punkt" }] }),
     );
 
+    // Utkvitteringen KOPIERER malen inn i resultatradene selv — derfor huker vi av det
+    // opprinnelige punktet her og lar funksjonen gjøre jobben, i stedet for å sette inn
+    // en rad for hånd. Det er nettopp kopieringen testen skal verne om.
     const kvitt = await i(orgId, (db) =>
-      registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false }),
-    );
-    await eier.query(
-      `INSERT INTO completion_checklist_results (id, completion_id, item_id, text, checked, "order")
-       VALUES ($1,$2,$3,'Opprinnelig punkt',true,0)`,
-      [randomUUID(), kvitt.id, mal[0]!.id],
+      registrerUtkvittering(db, orgId, oppgave.id, "Kari", {
+        hasDeviation: false,
+        checkedItemIds: [mal[0]!.id],
+      }),
     );
 
     // Malen byttes helt ut — det gamle punktet slettes.

@@ -1,4 +1,4 @@
-import { boolean, date, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 import { units } from "./units";
@@ -109,7 +109,30 @@ export const completionChecklistResults = pgTable("completion_checklist_results"
   order: integer("order").notNull().default(0),
 });
 
+/**
+ * Bilde som dokumentasjon på utført arbeid, lastet opp fra QR-skjemaet.
+ *
+ * `orgId` står HER og ikke bare på oppgaven: tabellen er en filtabell, og lagringskvoten
+ * summeres per org. Uten kolonnen måtte hver kvoteberegning gå via to joins for å finne
+ * eieren — og en filtabell uten `org_id` faller utenfor RLS-dekningstesten.
+ */
+export const completionPhotos = pgTable("completion_photos", {
+  id: varchar("id").primaryKey(),
+  completionId: varchar("completion_id")
+    .notNull()
+    .references(() => completions.id, { onDelete: "cascade" }),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  filename: varchar("filename").notNull(),
+  originalName: varchar("original_name").notNull(),
+  contentType: varchar("content_type"),
+  fileSize: bigint("file_size", { mode: "number" }),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Task = typeof tasks.$inferSelect;
+export type CompletionPhoto = typeof completionPhotos.$inferSelect;
 export type TaskChecklistItem = typeof taskChecklistItems.$inferSelect;
 export type Completion = typeof completions.$inferSelect;
 export type CompletionChecklistResult = typeof completionChecklistResults.$inferSelect;
