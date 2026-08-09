@@ -9,8 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
@@ -20,7 +19,6 @@ import {
   FILTABELLER,
   MAKS_FILSTORRELSE,
   STANDARD_KVOTE,
-  bruktLagring,
   filSti,
   lagreFil,
   lagringsstatus,

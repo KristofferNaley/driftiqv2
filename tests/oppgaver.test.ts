@@ -13,7 +13,6 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import {
   deaktiverOppgave,
-  endreOppgave,
   erstattSjekkliste,
   hentOppgave,
   hentOppgaver,

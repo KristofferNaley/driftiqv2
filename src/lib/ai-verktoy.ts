@@ -18,7 +18,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { and, asc, count, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { deviations } from "../db/schema/avvik";
 import { documents } from "../db/schema/dokumenter";
@@ -35,8 +35,6 @@ import { erForsinket } from "./oppgaveregler";
  * tilbake, så den kan si fra til brukeren i stedet for å svare på et ufullstendig grunnlag.
  */
 export const MAKS_RADER = 50;
-
-const iDag = () => new Date().toISOString().slice(0, 10);
 
 function omDager(n: number): string {
   const d = new Date();

@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 2 — fjorten moduler portert.** Alle kundemodulene og AI-rådgiveren er inne. Det som finnes er
+**Status: fase 3 — frontend påbegynt.** Backenden er komplett for kundemodulene (fjorten moduler); frontend har fundamentet og én modulside. Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
@@ -131,6 +131,30 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 | AI-rådgiver | komplett |
 
 Alle fire er dekket av migreringsskriptet.
+
+## Frontend
+
+Designsystemet ligger i `src/app/globals.css`, portert fra v1s `index.css`. Tre regler,
+alle tre lært av feil i v1:
+
+1. **Bruk tokenene, aldri px.** Seks trinn (`--fs-label` … `--fs-hero`); 12 er standard.
+2. **Alt som må reagere på skjermbredde MÅ være en CSS-klasse.** Inline `style` kan ikke
+   media queries — det var grunnen til at Internkontroll var ubrukelig på mobil. Bruk
+   `.auto-grid` framfor et fast `repeat(N, 1fr)`.
+3. **Skriv aldri et skriftnavn i en komponent.** `var(--font-sans)`. Skjemaelementer arver
+   ikke font.
+
+`src/lib/klient.ts` er eneste sted for API-kall — ingen `fetch` i sider eller komponenter.
+Menypunktene ligger på modulen selv i `lib/moduler.ts`, så en modul ikke kan bli usynlig i
+menyen slik den kunne i v1 (der `NAV` i Sidebar.jsx var en tredje liste).
+
+```bash
+docker compose exec app npm run lint
+```
+
+**Kjør denne — et grønt bygg er ikke bevis på at koden kan kjøre.** `no-undef` og
+`rules-of-hooks` står som `error`; det er de to som faktisk ryker i produksjon. `next lint`
+finnes ikke i Next 16, så oppsettet ligger i `eslint.config.mjs`.
 
 ## Fillagring
 

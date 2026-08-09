@@ -21,7 +21,6 @@ import {
   hentArbeid,
   hentArbeider,
   hentElement,
-  hentElementer,
   kostnaderPerType,
   lastOppFdv,
   leggTilService,

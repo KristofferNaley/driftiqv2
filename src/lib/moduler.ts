@@ -5,6 +5,11 @@
  * kommentar øverst i begge om at de MÅ endres samtidig. Gjorde man det ikke, så kunden en
  * modul i menyen som API-et nektet, eller omvendt. I v2 er det én fil, og både menyen og
  * gaten leser den. Det er en av de konkrete gevinstene ved å ha ett språk.
+ *
+ * v1 hadde i tillegg en TREDJE liste: `NAV` i `Sidebar.jsx`, som bygget selve menyen.
+ * Glemte du den, fikk modulen gate, rute og katalogkort — men ble usynlig i menyen når den
+ * var aktivert. Her ligger menypunktet på modulen selv (`sti`, `etikett`, `gruppe`), så
+ * feilen ikke kan oppstå: en modul uten sti vises ikke, og en sti uten modul finnes ikke.
  */
 
 /** Alle modulnøkler, i visningsrekkefølge. */
@@ -58,6 +63,54 @@ export const GAMLE_ALIASER: Readonly<Partial<Record<ModulNokkel, readonly string
 
 /** Dashboard kan ikke slås av, og gates derfor ikke. */
 export const ALLTID_PA: ReadonlySet<ModulNokkel> = new Set(["dashboard"]);
+
+/**
+ * Menypunktet for hver modul. Gruppene følger bruksmønster, ikke alfabet — «Daglig drift»
+ * er det man er innom hver uke, «Dokumentasjon» det man er innom ved tilsyn.
+ *
+ * `ikon` er navnet på et lucide-ikon; komponenten slår det opp. En streng her framfor en
+ * importert komponent holder denne fila fri for React, slik at rutelaget på serversiden kan
+ * importere den uten å dra inn et komponentbibliotek.
+ */
+export type Menypunkt = { sti: string; etikett: string; gruppe: string; ikon: string };
+
+export const MENY: Readonly<Partial<Record<ModulNokkel, Menypunkt>>> = {
+  dashboard: { sti: "/", etikett: "Dashbord", gruppe: "Oversikt", ikon: "LayoutDashboard" },
+  tasks: { sti: "/oppgaver", etikett: "Oppgaver", gruppe: "Daglig drift", ikon: "ClipboardCheck" },
+  avvik: { sti: "/avvik", etikett: "Avvik", gruppe: "Daglig drift", ikon: "TriangleAlert" },
+  driftslogg: { sti: "/driftslogg", etikett: "Driftslogg", gruppe: "Daglig drift", ikon: "NotebookPen" },
+  parkering: { sti: "/parkering", etikett: "Parkering", gruppe: "Daglig drift", ikon: "SquareParking" },
+  internkontroll: { sti: "/internkontroll", etikett: "Internkontroll", gruppe: "Dokumentasjon", ikon: "ShieldCheck" },
+  rutiner: { sti: "/rutiner", etikett: "Rutiner", gruppe: "Dokumentasjon", ikon: "ListChecks" },
+  dokumentarkiv: { sti: "/dokumentarkiv", etikett: "Dokumentarkiv", gruppe: "Dokumentasjon", ikon: "FolderOpen" },
+  arshjul: { sti: "/arshjul", etikett: "Årshjul", gruppe: "Planlegging", ikon: "CalendarDays" },
+  vedlikehold: { sti: "/vedlikehold", etikett: "Vedlikehold", gruppe: "Planlegging", ikon: "Wrench" },
+  kontrakter: { sti: "/kontrakter", etikett: "Kontrakter", gruppe: "Leverandører", ikon: "FileText" },
+  leverandorer: { sti: "/leverandorer", etikett: "Leverandører", gruppe: "Leverandører", ikon: "Truck" },
+  ai_radgiver: { sti: "/ai-radgiver", etikett: "AI-rådgiver", gruppe: "Verktøy", ikon: "Sparkles" },
+  brukere: { sti: "/brukere", etikett: "Brukere", gruppe: "Konto", ikon: "Users" },
+};
+
+/** Rekkefølgen gruppene vises i menyen. */
+export const GRUPPER = [
+  "Oversikt",
+  "Daglig drift",
+  "Dokumentasjon",
+  "Planlegging",
+  "Leverandører",
+  "Verktøy",
+  "Konto",
+] as const;
+
+/** Menypunktene kunden faktisk skal se, gruppert. Låste moduler faller ut. */
+export function menyFor(lagret: string | null | undefined) {
+  return GRUPPER.map((gruppe) => ({
+    gruppe,
+    punkter: ALLE_MODULER.filter(
+      (n) => MENY[n]?.gruppe === gruppe && modulErAktivert(lagret, n),
+    ).map((n) => ({ nokkel: n, ...MENY[n]! })),
+  })).filter((g) => g.punkter.length > 0);
+}
 
 /**
  * Tom eller ugyldig `enabledModules` betyr «ingen egen liste» ⇒ bruk standardsettet.
