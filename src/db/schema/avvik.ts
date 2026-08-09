@@ -1,4 +1,4 @@
-import { date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { safetyRoundItems, safetyRounds } from "./internkontroll";
 import { completions, tasks } from "./tasks";
@@ -67,6 +67,35 @@ export const deviationTreatments = pgTable("deviation_treatments", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Vedlegg på et avvik — bilder og dokumentasjon.
+ *
+ * `treatmentId` settes når filen ble lastet opp sammen med et behandlingsinnlegg. Da hører
+ * den til DET innlegget og vises på det, i tillegg til i vedleggslista. Uten koblingen ville
+ * en rapport lastet opp med en behandling mistet sammenhengen den ble skrevet i.
+ *
+ * `orgId` står her og ikke bare på avviket: tabellen er en filtabell, og kvoten summeres per
+ * org. Uten kolonnen måtte hver kvoteberegning gå via to joins for å finne eieren.
+ */
+export const deviationAttachments = pgTable("deviation_attachments", {
+  id: varchar("id").primaryKey(),
+  deviationId: varchar("deviation_id")
+    .notNull()
+    .references(() => deviations.id, { onDelete: "cascade" }),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  treatmentId: varchar("treatment_id").references(() => deviationTreatments.id, {
+    onDelete: "set null",
+  }),
+  filename: varchar("filename").notNull(),
+  originalName: varchar("original_name").notNull(),
+  contentType: varchar("content_type"),
+  fileSize: bigint("file_size", { mode: "number" }),
+  uploadedBy: varchar("uploaded_by").notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Endringslogg. Skrives av systemet, aldri av brukeren direkte. */
 export const deviationLogs = pgTable("deviation_logs", {
   id: varchar("id").primaryKey(),
@@ -79,5 +108,6 @@ export const deviationLogs = pgTable("deviation_logs", {
 });
 
 export type Deviation = typeof deviations.$inferSelect;
+export type DeviationAttachment = typeof deviationAttachments.$inferSelect;
 export type DeviationTreatment = typeof deviationTreatments.$inferSelect;
 export type DeviationLog = typeof deviationLogs.$inferSelect;

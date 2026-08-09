@@ -164,6 +164,16 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
           )}
         </Kort>
 
+        {/* ── VEDLEGG ── */}
+        <Vedlegg
+          orgId={orgId!}
+          devId={id}
+          liste={data.vedlegg}
+          lukket={lukket}
+          onEndret={last}
+          onFeil={setFeil}
+        />
+
         {/* ── HISTORIKK ── */}
         <Kort tittel="Historikk">
           {data.logg.length === 0 ? (
@@ -434,6 +444,107 @@ function RedigerAvvik({
         <Knapperad onAvbryt={onLukk} sender={sender} deaktivert={!tittel.trim()} />
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Vedlegg — bilder og dokumentasjon på avviket.
+ *
+ * Et LUKKET avvik tar ikke imot nye. Dokumentasjonskjeden er avsluttet, og å kunne legge til
+ * bevis i ettertid ville undergravd at den er troverdig. Eksisterende vedlegg blir stående.
+ */
+function Vedlegg({
+  orgId,
+  devId,
+  liste,
+  lukket,
+  onEndret,
+  onFeil,
+}: {
+  orgId: string;
+  devId: string;
+  liste: AvvikDetalj["vedlegg"];
+  lukket: boolean;
+  onEndret: () => Promise<void>;
+  onFeil: (m: string) => void;
+}) {
+  const [laster, setLaster] = useState(false);
+
+  async function lastOpp(filer: FileList | null) {
+    if (!filer || filer.length === 0) return;
+    setLaster(true);
+    try {
+      // Én om gangen: feiler den tredje, skal de to første likevel være lagret.
+      for (const fil of Array.from(filer)) {
+        const skjema = new FormData();
+        skjema.append("fil", fil);
+        await avvik.lastOppVedlegg(orgId, devId, skjema);
+      }
+      await onEndret();
+    } catch (e) {
+      onFeil(e instanceof Error ? e.message : "Kunne ikke laste opp");
+    } finally {
+      setLaster(false);
+    }
+  }
+
+  return (
+    <Kort
+      tittel={`Vedlegg (${liste.length})`}
+      handling={
+        !lukket && (
+          <label className="btn btn-ghost" style={{ cursor: "pointer" }}>
+            {laster ? "Laster opp …" : "＋ Last opp"}
+            <input
+              type="file"
+              multiple
+              hidden
+              disabled={laster}
+              onChange={(e) => {
+                void lastOpp(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )
+      }
+    >
+      {liste.length === 0 ? (
+        <Tom tekst="Ingen vedlegg." />
+      ) : (
+        liste.map((v) => (
+          <div key={v.id} className="list-item">
+            <div style={{ minWidth: 0 }}>
+              <a
+                className="list-tittel vedlegg-lenke"
+                href={`/api/organizations/${orgId}/deviations/${devId}/vedlegg/${v.id}/fil`}
+              >
+                {v.originalName}
+              </a>
+              <div className="list-meta">
+                {v.uploadedBy} · {dato(v.uploadedAt)}
+                {v.fileSize ? ` · ${Math.round(v.fileSize / 1024)} kB` : ""}
+              </div>
+            </div>
+            {!lukket && (
+              <button
+                className="btn btn-ghost"
+                onClick={async () => {
+                  try {
+                    await avvik.slettVedlegg(orgId, devId, v.id);
+                    await onEndret();
+                  } catch (e) {
+                    onFeil(e instanceof Error ? e.message : "Kunne ikke slette");
+                  }
+                }}
+              >
+                Fjern
+              </button>
+            )}
+          </div>
+        ))
+      )}
+    </Kort>
   );
 }
 

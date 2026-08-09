@@ -33,6 +33,20 @@
  * strenginterpolert, altså SQL-injeksjon rett inn i selve sikkerhetsmekanismen.
  */
 
+/*
+ * Denne modulen skal ALDRI havne i et nettleserbundle. Skjer det, feiler bygget med
+ * «Module not found: Can't resolve 'dns'» — en melding som peker på pg og ikke på importen
+ * som er feil.
+ *
+ * Vakten `server-only` ble prøvd og TATT UT IGJEN: den fanget feilen fint i `next build`,
+ * men velter alt som importerer denne fila utenfor Next — oppstartsskriptet, migreringen og
+ * hele testsuiten. Å holde den i live krevde et alias i vitest og et til i tsx, altså to
+ * skjør omveier i produksjonsstien for å beskytte mot noe et grønt bygg uansett fanger.
+ *
+ * Det som faktisk løser problemet er å la alt en klientkomponent trenger ligge i en fil
+ * UTEN importer: `nivaer.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
+ * `oppgaveregler.ts`, `orgnr.ts`, `brreg.ts`.
+ */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Pool, type PoolClient } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";

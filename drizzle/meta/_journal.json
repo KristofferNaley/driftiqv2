@@ -190,6 +190,13 @@
       "when": 1786286014196,
       "tag": "0026_broad_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786291374561,
+      "tag": "0027_majestic_starbolt",
+      "breakpoints": true
     }
   ]
 }

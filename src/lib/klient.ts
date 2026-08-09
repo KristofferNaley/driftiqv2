@@ -138,6 +138,10 @@ export type AvvikDetalj = Avvik & {
   resolvedAt: string | null;
   resolutionNotes: string | null;
   behandlinger: Array<{ id: string; text: string; createdBy: string; createdAt: string }>;
+  vedlegg: Array<{
+    id: string; originalName: string; contentType: string | null; fileSize: number | null;
+    uploadedBy: string; uploadedAt: string; treatmentId: string | null;
+  }>;
   logg: Array<{ id: string; event: string; changedBy: string; changedAt: string }>;
 };
 
@@ -178,6 +182,10 @@ export const avvik = {
   endre: (o: string, id: string, d: unknown) => api.endre<Avvik>(org(o, `/deviations/${id}`), d),
   lukk: (o: string, id: string, d: unknown) => api.send(org(o, `/deviations/${id}/close`), d),
   behandle: (o: string, id: string, d: unknown) => api.send(org(o, `/deviations/${id}/treatments`), d),
+  lastOppVedlegg: (o: string, id: string, f: FormData) =>
+    api.lastOpp(org(o, `/deviations/${id}/vedlegg`), f),
+  slettVedlegg: (o: string, id: string, vId: string) =>
+    api.slett(org(o, `/deviations/${id}/vedlegg/${vId}`)),
 };
 
 export type Kontrakt = {

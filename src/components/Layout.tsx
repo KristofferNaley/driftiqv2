@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
 import { NIVA_ETIKETT } from "@/lib/nivaer";
 import ProfilModal from "./ProfilModal";
+import { MeldFeil } from "./MeldFeil";
 
 const erMobil = () =>
   typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
@@ -112,6 +113,9 @@ export default function Layout({
           </div>
           <div className="topbar-right">
             {handlinger}
+            {/* Alltid tilgjengelig, på hver eneste side. En feil meldes der den oppdages —
+                må man lete etter knappen, blir den ikke meldt. */}
+            <MeldFeil versjon={versjon} />
           </div>
         </div>
 

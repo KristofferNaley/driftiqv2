@@ -31,3 +31,4 @@ export * from "./ai";
 export * from "./vendors";
 export * from "./tasks";
 export * from "./leads";
+export * from "./feedback";

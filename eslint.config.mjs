@@ -58,6 +58,7 @@ export default ts.config(
         HTMLFormElement: "readonly",
         HTMLTextAreaElement: "readonly",
         HTMLSelectElement: "readonly",
+        FileList: "readonly",
         HTMLElement: "readonly",
         KeyboardEvent: "readonly",
         MouseEvent: "readonly",

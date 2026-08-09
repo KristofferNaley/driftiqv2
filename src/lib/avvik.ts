@@ -16,12 +16,13 @@ import { and, asc, count, desc, eq, ilike, isNotNull, or, sql } from "drizzle-or
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { deviationLogs, deviationTreatments, deviations } from "../db/schema/avvik";
+import { deviationAttachments, deviationLogs, deviationTreatments, deviations } from "../db/schema/avvik";
 import { tasks } from "../db/schema/tasks";
 import { units } from "../db/schema/units";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
+import { lagreFil } from "./lagring";
 import { organizations } from "../db/schema/organizations";
 
 export const STATUSER = ["ny", "under_behandling", "lukket"] as const;
@@ -300,13 +301,16 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
   const rad = rader[0];
   if (!rad) throw ikkeFunnet("Avvik");
 
-  const [behandlinger, logg] = await Promise.all([
+  const [behandlinger, logg, vedlegg] = await Promise.all([
     db.select().from(deviationTreatments)
       .where(eq(deviationTreatments.deviationId, devId))
       .orderBy(asc(deviationTreatments.createdAt)),
     db.select().from(deviationLogs)
       .where(eq(deviationLogs.deviationId, devId))
       .orderBy(asc(deviationLogs.changedAt)),
+    db.select().from(deviationAttachments)
+      .where(eq(deviationAttachments.deviationId, devId))
+      .orderBy(asc(deviationAttachments.uploadedAt)),
   ]);
 
   return {
@@ -316,7 +320,84 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
     taskTittel: rad.taskTittel,
     behandlinger,
     logg,
+    vedlegg,
   };
+}
+
+/* ── Vedlegg ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Laster opp et vedlegg til et avvik.
+ *
+ * `treatmentId` knytter filen til ET behandlingsinnlegg — da vises den på innlegget, ikke
+ * bare i lista. En rapport lastet opp sammen med en behandling mister ellers sammenhengen
+ * den ble skrevet i.
+ *
+ * Et LUKKET avvik tar ikke imot nye vedlegg. Dokumentasjonskjeden er avsluttet, og å kunne
+ * legge til bevis i ettertid ville undergravd at den er troverdig.
+ */
+export async function lastOppVedlegg(
+  db: Db,
+  orgId: string,
+  devId: string,
+  lastetAv: string,
+  fil: File,
+  treatmentId?: string | null,
+) {
+  const avvik = await db
+    .select({ status: deviations.status })
+    .from(deviations)
+    .where(and(eq(deviations.id, devId), eq(deviations.orgId, orgId)))
+    .limit(1);
+  if (!avvik[0]) throw ikkeFunnet("Avvik");
+  if (avvik[0].status === "lukket") {
+    throw ugyldig("Avviket er lukket. Vedlegg kan ikke legges til i ettertid.");
+  }
+
+  const lagret = await lagreFil(db, orgId, "deviations", fil);
+  const [rad] = await db
+    .insert(deviationAttachments)
+    .values({
+      id: randomUUID(),
+      deviationId: devId,
+      orgId,
+      treatmentId: treatmentId ?? null,
+      filename: lagret.filnavn,
+      originalName: lagret.originalnavn,
+      contentType: lagret.contentType,
+      fileSize: lagret.storrelse,
+      uploadedBy: lastetAv,
+    })
+    .returning();
+
+  await skrivLogg(db, devId, lastetAv, `La ved «${lagret.originalnavn}»`);
+  return rad!;
+}
+
+/**
+ * Sletter et vedlegg.
+ *
+ * Fila blir liggende på disk. Det er med vilje: sletting fra basen er reversibelt, sletting
+ * fra disk er det ikke, og en feilklikket sletting av dokumentasjon på et avvik er dyr.
+ * Opprydding av foreldreløse filer hører til en egen jobb, ikke til et klikk i UI-et.
+ */
+export async function slettVedlegg(db: Db, orgId: string, devId: string, vedleggId: string, av: string) {
+  const rader = await db
+    .select({ navn: deviationAttachments.originalName })
+    .from(deviationAttachments)
+    .where(
+      and(
+        eq(deviationAttachments.id, vedleggId),
+        eq(deviationAttachments.deviationId, devId),
+        eq(deviationAttachments.orgId, orgId),
+      ),
+    )
+    .limit(1);
+  const vedlegg = rader[0];
+  if (!vedlegg) throw ikkeFunnet("Vedlegg");
+
+  await db.delete(deviationAttachments).where(eq(deviationAttachments.id, vedleggId));
+  await skrivLogg(db, devId, av, `Fjernet vedlegget «${vedlegg.navn}»`);
 }
 
 /** Neste løpenummer i org-en. Tildeles ved opprettelse og endres aldri. */

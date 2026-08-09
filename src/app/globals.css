@@ -1600,3 +1600,6 @@ textarea.qr-input { resize: vertical; }
   font-size: var(--fs-label); line-height: 1.6;
 }
 .pf-lead-brreg .pf-under { margin-bottom: 3px; }
+
+.vedlegg-lenke { color: var(--accent); text-decoration: none; }
+.vedlegg-lenke:hover { text-decoration: underline; }

@@ -74,7 +74,7 @@ export const FILTABELLER: readonly string[] = [
   "element_documents",
   "unit_work_documents",
   "completion_photos",
-  // Gjenstår: `deviation_attachments`, når vedlegg på avvik portes.
+  "deviation_attachments",
 ];
 
 // ---------------------------------------------------------------------------------------

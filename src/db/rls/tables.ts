@@ -107,6 +107,10 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // En lead har ingen org_id — den er nettopp noen som ENNÅ ikke er kunde. RLS har
   // ingenting å filtrere på, og tabellen er kun for plattformadmin.
   leads: "plattformtabell, ingen org_id å filtrere på",
+  // Saken hører til DriftIQs kø, ikke kundens — løpenummeret går på tvers av kunder.
+  // Kunden ser bare sine egne via API-gaten, ikke via RLS.
+  feedback_reports: "plattformtabell (DriftIQs sakskø)",
+  feedback_messages: "barnetabell av feedback_reports, samme begrunnelse",
   // Globalt register over boligbyggelag. Har ingen org-eier — flere kunder kan være
   // tilknyttet samme lag, og registeret føres uavhengig av om noen kunde bruker laget.
   bbl: "globalt register over boligbyggelag, ingen org-eier",

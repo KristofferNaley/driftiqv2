@@ -173,11 +173,48 @@ export function orgRute<P extends Record<string, string> = Record<string, string
 
       const status = opts.status ?? 200;
       if (status === 204) return new Response(null, { status: 204 });
-      return Response.json(resultat, { status });
+      return somSvar(resultat, status);
     } catch (e) {
       return tilSvar(e);
     }
   };
+}
+
+/** En handler som leverer en fil i stedet for JSON. */
+export type Filsvar = { innhold: Uint8Array; navn: string; contentType: string | null };
+
+function erFilsvar(v: unknown): v is Filsvar {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "innhold" in v &&
+    "navn" in v &&
+    (v as { innhold: unknown }).innhold instanceof Uint8Array
+  );
+}
+
+/**
+ * JSON — med mindre handleren leverer en FIL.
+ *
+ * Uten dette ble en `Buffer` JSON-kodet til `{"type":"Buffer","data":[…]}`. Nedlasting av
+ * dokumenter og kontrakter var derfor ødelagt: UI-et lenker direkte til ruta som en vanlig
+ * `<a href>`, og brukeren fikk en tekstfil full av tall i stedet for PDF-en sin.
+ *
+ * `Content-Disposition: attachment` med filnavnet er ikke pynt — uten den arver nedlastingen
+ * URL-ens siste ledd, altså «file», uten filendelse.
+ */
+function somSvar(resultat: unknown, status: number): Response {
+  if (!erFilsvar(resultat)) return Response.json(resultat, { status });
+
+  return new Response(new Uint8Array(resultat.innhold), {
+    status,
+    headers: {
+      "Content-Type": resultat.contentType ?? "application/octet-stream",
+      // Filnavnet kan inneholde æøå og komma. `filename*` med UTF-8 er den formen som
+      // faktisk overlever; `filename=` beholdes for eldre klienter.
+      "Content-Disposition": `attachment; filename="${resultat.navn.replace(/["\\]/g, "")}"; filename*=UTF-8''${encodeURIComponent(resultat.navn)}`,
+    },
+  });
 }
 
 /**

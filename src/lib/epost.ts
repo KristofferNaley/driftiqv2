@@ -340,3 +340,74 @@ export async function sendNyLead(lead: {
     ),
   );
 }
+
+/** Varsel til DriftIQ om en ny innmelding. Samme innboks som leads. */
+export async function sendNyFeilmelding(sak: {
+  number: number | null;
+  kind: string;
+  module: string | null;
+  description: string;
+  reportedByName: string;
+  reportedByEmail: string | null;
+  appVersion: string | null;
+}): Promise<void> {
+  const til = process.env.LEADS_NOTIFY_EMAIL;
+  if (!til) {
+    console.warn(
+      `[feilmelding] LEADS_NOTIFY_EMAIL er ikke satt — ingen varslet om FM-${String(sak.number ?? 0).padStart(4, "0")}. ` +
+        "Saken ligger i plattformpanelet.",
+    );
+    return;
+  }
+
+  const nr = `FM-${String(sak.number ?? 0).padStart(4, "0")}`;
+  const etikett = { bug: "Feil", idea: "Forslag", question: "Spørsmål" }[sak.kind] ?? sak.kind;
+  const felt = (e: string, v: string) =>
+    `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${e}</td>` +
+    `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(v)}</td></tr>`;
+
+  await send(
+    til,
+    `${nr}: ${etikett} fra ${sak.reportedByName}`,
+    ramme(
+      h(`${etikett} meldt inn`) +
+        '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
+        felt("Sak", nr) +
+        felt("Modul", sak.module ?? "Ikke oppgitt") +
+        felt("Meldt av", `${sak.reportedByName} (${sak.reportedByEmail ?? "ingen e-post"})`) +
+        felt("Versjon", sak.appVersion ?? "—") +
+        felt("Beskrivelse", sak.description) +
+        "</table>" +
+        knapp("Åpne i plattformpanelet", `${APP_URL}/plattform/saker`),
+    ),
+  );
+}
+
+/**
+ * Svar til den som meldte fra.
+ *
+ * Beskrivelsen gjentas under svaret — de husker sjelden ordlyden i en sak de meldte for to
+ * uker siden.
+ */
+export async function sendFeilmeldingSvar(
+  sak: { number: number | null; description: string; reportedByEmail: string | null },
+  svar: string,
+): Promise<void> {
+  if (!sak.reportedByEmail) return;
+  const nr = `FM-${String(sak.number ?? 0).padStart(4, "0")}`;
+
+  await send(
+    sak.reportedByEmail,
+    `Svar på din henvendelse (${nr})`,
+    ramme(
+      h("Svar på din henvendelse") +
+        p(trygg(svar).replace(/\n/g, "<br>")) +
+        '<table style="margin:20px 0 0;border-collapse:collapse;width:100%;">' +
+        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Din sak</td>` +
+        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${nr}</td></tr>` +
+        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
+        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
+        "</table>",
+    ),
+  );
+}
