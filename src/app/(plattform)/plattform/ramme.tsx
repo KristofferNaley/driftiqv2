@@ -7,6 +7,21 @@ import { useOkt } from "@/components/OktProvider";
 import { initialer } from "@/components/felles";
 import { erPlattformadminRolle } from "@/lib/nivaer";
 import { useAppLenke } from "../verter";
+import Temaknapp from "@/components/Temaknapp";
+import {
+  Activity,
+  BarChart3,
+  Bug,
+  Building2,
+  Coins,
+  Inbox,
+  Landmark,
+  LayoutGrid,
+  LayoutTemplate,
+  Search,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 /**
  * Skallet rundt plattformsidene.
@@ -19,18 +34,29 @@ import { useAppLenke } from "../verter";
  * kunder. Lilla er valgt fordi den ikke finnes i kundepaletten i det hele tatt.
  */
 
-const MENY = [
-  { sti: "/plattform", etikett: "Dashboard" },
-  { sti: "/plattform/kunder", etikett: "Kunder" },
-  { sti: "/plattform/saker", etikett: "Innmeldinger" },
-  { sti: "/plattform/leads", etikett: "Henvendelser" },
-  { sti: "/plattform/brukere", etikett: "Plattformbrukere" },
-  { sti: "/plattform/support", etikett: "Support-modus" },
-  { sti: "/plattform/statistikk", etikett: "Statistikk" },
-  { sti: "/plattform/boligbyggelag", etikett: "Boligbyggelag" },
-  { sti: "/plattform/prismodell", etikett: "Prismodell" },
-  { sti: "/plattform/maler", etikett: "HMS-maler" },
-  { sti: "/plattform/system", etikett: "System" },
+/**
+ * Menypunktene, i samme rekkefølge og med samme navn og ikoner som v1.
+ *
+ * Navnene ble «forbedret» i første utkast — «Innmeldinger», «Henvendelser»,
+ * «Plattformbrukere», «HMS-maler». Det var å finne opp nye ord for ting som allerede har
+ * et navn du bruker daglig. Tilbake til v1s.
+ *
+ * Stiene er urørt: `/plattform/saker` heter fortsatt det, selv om punktet heter
+ * «Feilmeldinger». En URL som byttes brekker bokmerker uten å gi noe tilbake.
+ */
+const MENY: ReadonlyArray<{ sti: string; etikett: string; ikon: LucideIcon }> = [
+  { sti: "/plattform", etikett: "Dashboard", ikon: LayoutGrid },
+  { sti: "/plattform/statistikk", etikett: "Statistikk", ikon: BarChart3 },
+  { sti: "/plattform/leads", etikett: "Leads", ikon: Inbox },
+  { sti: "/plattform/saker", etikett: "Feilmeldinger", ikon: Bug },
+  { sti: "/plattform/kunder", etikett: "Kunder", ikon: Building2 },
+  { sti: "/plattform/boligbyggelag", etikett: "Boligbyggelag", ikon: Landmark },
+  { sti: "/plattform/prismodell", etikett: "Prismodell", ikon: Coins },
+  { sti: "/plattform/brukere", etikett: "Brukere", ikon: Users },
+  { sti: "/plattform/support", etikett: "Support-modus", ikon: Search },
+  { sti: "/plattform/maler", etikett: "Maler", ikon: LayoutTemplate },
+  // Ikke i v1s meny, men bygget i v2 — systemhelse hører hjemme her og ikke gjemt bort.
+  { sti: "/plattform/system", etikett: "System", ikon: Activity },
 ];
 
 export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {
@@ -57,17 +83,24 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
           // Eksakt treff på forsiden, prefiks ellers — uten det ville «Dashboard» stått
           // markert på hver eneste underside.
           const aktiv = p.sti === "/plattform" ? sti === p.sti : sti.startsWith(p.sti);
+          const Ikon = p.ikon;
           return (
             <Link key={p.sti} href={p.sti} className={`pf-lenke${aktiv ? " aktiv" : ""}`}>
-              {p.etikett}
+              <Ikon size={17} strokeWidth={1.9} aria-hidden />
+              <span>{p.etikett}</span>
             </Link>
           );
         })}
 
         <div className="pf-meny-fot">
-          <a className="pf-tilbake" href={appLenke}>
-            ← Til kunde-appen
-          </a>
+          <div className="pf-fot-rad">
+            <a className="pf-tilbake" href={appLenke}>
+              ← Tilbake til kunde-appen
+            </a>
+            {/* Temaveksleren står også her, som i v1 — panelet er en egen flate og man
+                skal ikke måtte innom kunde-appen for å bytte. */}
+            <Temaknapp kompakt />
+          </div>
           {bruker && (
             <div className="pf-bruker-blokk">
               <span className="pf-mark liten" aria-hidden>{initialer(bruker.name)}</span>

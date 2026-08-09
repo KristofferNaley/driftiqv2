@@ -2041,3 +2041,12 @@ textarea.qr-input { resize: vertical; }
 .dash-tilgjengelig:hover { border-color: var(--accent); border-style: solid; }
 .dash-tilgjengelig-navn { font-size: var(--fs-sm); font-weight: 600; }
 .dash-tilgjengelig-under { font-size: var(--fs-label); color: var(--muted); }
+
+/* Plattformmenyen: ikon + tekst, som i kunde-appen. */
+.pf-lenke { display: flex; align-items: center; gap: 11px; }
+.pf-fot-rad { display: flex; align-items: center; gap: 8px; }
+.pf-fot-rad .pf-tilbake { flex: 1; }
+.tema-knapp.kompakt {
+  width: auto; margin: 0; padding: 9px 11px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 9px;
+}

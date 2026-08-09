@@ -383,7 +383,6 @@ export async function hentDetalj(db: Db, orgId: string) {
       gulvpris: modell.gulvpris,
       trinn: modell.trinn,
       modulpriser: modell.modulpriser,
-      skjulteModuler: modell.skjulteModuler,
     },
     /** Beregnet på nytt her, så skjemaet viser dagens sats og ikke kontraktens snapshot. */
     grunnpakkeNaa: grunnpakke(org.unitCount, modell.gulvpris, modell.trinn),

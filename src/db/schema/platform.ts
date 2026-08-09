@@ -86,13 +86,10 @@ export const pricingConfig = pgTable("pricing_config", {
   /** JSON {"internkontroll":12000, …} — standard årspris per tilleggsmodul. */
   moduleDefaults: text("module_defaults").notNull(),
   /**
-   * JSON-liste med modulnøkler som er midlertidig skjult fra kundens sidemeny og fra
-   * Prismodell/Fakturering mens de er under utvikling.
-   *
-   * IKKE det samme som `defaultOff` i modulregisteret: `defaultOff` er en permanent
-   * kodenivå-kategorisering («av som standard for nye kunder, men synlig og selgbar»).
-   * `hiddenModules` er en midlertidig, databasestyrt bryter («ikke klar for kunder ennå»)
-   * som slås av igjen når funksjonen er klar til å selges.
+   * UBRUKT. Var tenkt som en bryter for moduler under utvikling, men behovet finnes ikke:
+   * en kunde ser uansett bare modulene de har, og resten oppdages gjennom «Utforsk
+   * moduler» i kunde-appen. Kolonnen står igjen fordi en migrasjon for å droppe en tom,
+   * defaultet kolonne ikke er verdt risikoen. Ikke bygg noe nytt på den.
    */
   hiddenModules: text("hidden_modules").notNull().default("[]"),
   /**

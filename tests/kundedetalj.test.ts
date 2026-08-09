@@ -23,7 +23,7 @@ import {
   settTilknytning,
   slettAbonnement,
 } from "../src/lib/kundedetalj";
-import { hentPrismodell, hentSkjulteModuler, settPrismodell } from "../src/lib/prismodell";
+import { hentPrismodell, settPrismodell } from "../src/lib/prismodell";
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -353,12 +353,11 @@ describe("prismodell", () => {
           gulvpris: 9500,
           trinn: [{ fra: 1, til: 100, sats: 200 }],
           modulpriser: { parkering: 7000 },
-          skjulteModuler: ["ai_radgiver"],
         }),
       );
       expect(ny.gulvpris).toBe(9500);
       expect(ny.trinn).toEqual([{ fra: 1, til: 100, sats: 200 }]);
-      expect(await i((db) => hentSkjulteModuler(db))).toEqual(["ai_radgiver"]);
+      expect(ny.modulpriser).toEqual({ parkering: 7000 });
     } finally {
       // Raden er en singleton og deles med resten av testbasen — sett den tilbake.
       await i((db) =>
@@ -366,7 +365,6 @@ describe("prismodell", () => {
           gulvpris: forrige.gulvpris,
           trinn: forrige.trinn,
           modulpriser: forrige.modulpriser,
-          skjulteModuler: forrige.skjulteModuler,
         }),
       );
     }

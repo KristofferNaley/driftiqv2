@@ -36,14 +36,12 @@ export const prismodellInn = z.object({
     // Zod fanger det her, så det aldri når `grunnpakke()`.
     .refine((t) => t.every((r) => r.til >= r.fra), "Et trinn kan ikke slutte før det begynner"),
   modulpriser: z.record(z.string(), z.number().int().min(0)),
-  skjulteModuler: z.array(z.string()),
 });
 
 export type Prismodell = {
   gulvpris: number;
   trinn: ReturnType<typeof lesTrinn>;
   modulpriser: Record<string, number>;
-  skjulteModuler: string[];
   varselmottakere: string[];
   oppdatert: Date | null;
 };
@@ -76,7 +74,6 @@ export async function hentPrismodell(db: Db): Promise<Prismodell> {
     gulvpris: rad.floorPrice,
     trinn: lesTrinn(rad.tiers),
     modulpriser: lesModulpriser(rad.moduleDefaults),
-    skjulteModuler: lesStrengliste(rad.hiddenModules),
     varselmottakere: lesStrengliste(rad.leadsNotifyEmails),
     oppdatert: rad.updatedAt,
   };
@@ -90,28 +87,10 @@ export async function settPrismodell(db: Db, data: z.infer<typeof prismodellInn>
       floorPrice: data.gulvpris,
       tiers: JSON.stringify(data.trinn),
       moduleDefaults: JSON.stringify(data.modulpriser),
-      hiddenModules: JSON.stringify(data.skjulteModuler),
       updatedAt: new Date(),
     })
     .where(eq(pricingConfig.id, RAD_ID));
   return hentPrismodell(db);
-}
-
-/**
- * Modulnøklene som er midlertidig skjult.
- *
- * Egen funksjon fordi dette er det ENESTE fra prismodellen en vanlig innlogget bruker får
- * se — satser og trappetrinn er forretningsdata en kunde aldri skal ha. Samme skille som
- * v1s `routers/platform_settings.py`, som ble skilt ut fra superadmin-ruteren nettopp her.
- */
-export async function hentSkjulteModuler(db: Db): Promise<string[]> {
-  const rader = await db
-    .select({ skjulte: pricingConfig.hiddenModules })
-    .from(pricingConfig)
-    .where(eq(pricingConfig.id, RAD_ID))
-    .limit(1);
-  // Ingen rad ⇒ ingenting er skjult. Oppretter den ikke her: en leserute skal ikke skrive.
-  return lesStrengliste(rader[0]?.skjulte);
 }
 
 export const varselmottakereInn = z.object({

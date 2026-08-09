@@ -95,7 +95,6 @@ type Detalj = {
     gulvpris: number;
     trinn: Trinn[];
     modulpriser: Record<string, number>;
-    skjulteModuler: string[];
   };
   grunnpakkeNaa: number;
 };
@@ -485,7 +484,6 @@ function ModulFane({
 
       {ALLE_MODULER.filter((n) => MENY[n]).map((n) => {
         const alltidPa = ALLTID_PA.has(n);
-        const skjult = detalj.prismodell.skjulteModuler.includes(n);
         const betalt = TILLEGGSMODULER.includes(n);
         return (
           <label key={n} className="pf-modul-valg">
@@ -493,7 +491,7 @@ function ModulFane({
               type="checkbox"
               checked={alltidPa || valgte.includes(n)}
               // Dashboard kan ikke slås av — det er ikke en modul man selger, det er forsiden.
-              disabled={alltidPa || skjult}
+              disabled={alltidPa}
               onChange={(e) =>
                 setValgte(e.target.checked ? [...valgte, n] : valgte.filter((v) => v !== n))
               }
@@ -503,8 +501,7 @@ function ModulFane({
               <span className="pf-under">{MENY[n]!.gruppe}</span>
             </span>
             <span>
-              {skjult && <span className="pf-merkelapp">Under utvikling</span>}
-              {!skjult && betalt && (
+              {betalt && (
                 <span className="pf-merkelapp">
                   {kroner(detalj.prismodell.modulpriser[n] ?? 0)}/år
                 </span>
@@ -725,7 +722,7 @@ function AbonnementModal({
         <p className="field-label" style={{ marginTop: "14px" }}>
           Tilleggsmoduler
         </p>
-        {TILLEGGSMODULER.filter((n) => !prismodell.skjulteModuler.includes(n)).map((n) => (
+        {TILLEGGSMODULER.map((n) => (
           <div key={n} className="pf-modul-valg">
             <input
               type="checkbox"

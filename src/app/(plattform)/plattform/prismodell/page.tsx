@@ -22,7 +22,6 @@ type Prismodell = {
   gulvpris: number;
   trinn: Trinn[];
   modulpriser: Record<string, number>;
-  skjulteModuler: string[];
   varselmottakere: string[];
 };
 
@@ -89,9 +88,6 @@ function Skjema({
         gulvpris,
         trinn,
         modulpriser,
-        // Uendret herfra — hvilke moduler som er skjult styres på Moduler-fanen i
-        // kundedetaljen, ikke i prismodellen.
-        skjulteModuler: modell.skjulteModuler,
       });
       onLagret(oppdatert);
     } catch (e) {
@@ -237,31 +233,23 @@ function Skjema({
           Utgangspunktet når en kunde får modulen lagt til. Prisen kan overstyres per kunde
           på Fakturering-fanen.
         </p>
-        {TILLEGGSMODULER.map((n) => {
-          const skjult = modell.skjulteModuler.includes(n);
-          return (
-            <div key={n} className="pf-rad">
-              <span>
-                {MENY[n]?.etikett ?? n}
-                {/* En skjult modul kan ikke selges — da er prisen bare støy. */}
-                {skjult && <span className="pf-merkelapp"> Skjult</span>}
-              </span>
-              <span />
-              <input
-                className="input"
-                type="number"
-                min={0}
-                aria-label={`Årspris for ${MENY[n]?.etikett ?? n}`}
-                style={{ maxWidth: "140px" }}
-                disabled={skjult}
-                value={modulpriser[n] ?? 0}
-                onChange={(e) =>
-                  setModulpriser({ ...modulpriser, [n]: parseInt(e.target.value, 10) || 0 })
-                }
-              />
-            </div>
-          );
-        })}
+        {TILLEGGSMODULER.map((n) => (
+          <div key={n} className="pf-rad">
+            <span>{MENY[n]?.etikett ?? n}</span>
+            <span />
+            <input
+              className="input"
+              type="number"
+              min={0}
+              aria-label={`Årspris for ${MENY[n]?.etikett ?? n}`}
+              style={{ maxWidth: "140px" }}
+              value={modulpriser[n] ?? 0}
+              onChange={(e) =>
+                setModulpriser({ ...modulpriser, [n]: parseInt(e.target.value, 10) || 0 })
+              }
+            />
+          </div>
+        ))}
       </div>
     </>
   );
