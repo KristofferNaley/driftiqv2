@@ -11,7 +11,7 @@
  * `role`, `active` og medlemskapene måtte speiles ved hver skriving.
  */
 
-import { boolean, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp, varchar, unique } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const session = pgTable("session", {
@@ -48,7 +48,20 @@ export const account = pgTable("account", {
   scope: text("scope"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  /**
+   * Én legitimasjon per leverandør per bruker.
+   *
+   * Uten dette fikk `claude@driftiq.test` TO `credential`-rader med hvert sitt passord:
+   * migreringsskriptet bruker en deterministisk id (`cred-<brukerid>`) og var idempotent
+   * mot seg selv, men Better Auth lager sine egne uuid-er. De to kolliderte aldri, så en
+   * ny migreringskjøring la bare på en rad til — og hvilket passord som gjaldt, ble
+   * avhengig av radrekkefølge.
+   *
+   * Samme feilklasse som den manglende `uq_user_org`: en sjekk i koden er ikke en garanti.
+   */
+  unique("uq_account_bruker_leverandor").on(t.userId, t.providerId),
+]);
 
 /** Engangstokens: e-postverifisering, glemt passord, magiske lenker. */
 export const verification = pgTable("verification", {

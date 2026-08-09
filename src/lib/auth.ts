@@ -28,9 +28,10 @@ import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { authDb } from "../db/client";
+import { APP_URL, sendKontooppsett, sendPassordreset } from "./epost";
+import { authDb, withoutRls } from "../db/client";
 import { account, jwks, session, twoFactor as twoFactorTabell, verification } from "../db/schema/auth";
 import { users } from "../db/schema/users";
 import { Tilgangsfeil, sjekkInnloggingssperrer } from "./tilgang";
@@ -85,6 +86,34 @@ export const auth = betterAuth({
       hash: async (passord) => bcrypt.hash(passord, 12),
       verify: async ({ hash, password }) => bcrypt.compare(password, hash),
     },
+    /**
+     * Lenken peker på VÅR side, ikke på biblioteket: `/nytt-passord` er der brukeren faktisk
+     * skriver det nye passordet, og tokenet sendes med som parameter.
+     *
+     * ## Hvorfor to ulike e-poster fra samme krok
+     *
+     * En invitert bruker og en som har glemt passordet sitt utfører teknisk sett SAMME
+     * handling — begge setter et passord via en engangslenke. Men situasjonen er ulik, og
+     * «Tilbakestill passordet ditt» til en som aldri har hatt et, er forvirrende.
+     *
+     * Forskjellen utledes av TILSTAND, ikke av et flagg kallstedet må huske å sette: har
+     * brukeren ingen `credential`-rad, har de aldri hatt et passord. Et flagg ville kunne
+     * bli stående feil; dette kan ikke.
+     */
+    sendResetPassword: async ({ user, token }) => {
+      const url = `${APP_URL}/nytt-passord?token=${token}`;
+      const harPassord = await withoutRls("innlogging", (db) =>
+        db
+          .select({ id: account.id })
+          .from(account)
+          .where(and(eq(account.userId, user.id), eq(account.providerId, "credential")))
+          .limit(1),
+      );
+      if (harPassord.length === 0) await sendKontooppsett(user.name, user.email, url);
+      else await sendPassordreset(user.name, user.email, url);
+    },
+    /** 1 time, som i v1. Lang nok til at en e-post rekker fram, kort nok til å bety noe. */
+    resetPasswordTokenExpiresIn: 3600,
   },
 
   session: {

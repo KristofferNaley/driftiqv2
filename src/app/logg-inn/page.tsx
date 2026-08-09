@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-klient";
 
@@ -98,6 +99,12 @@ export default function LoggInn() {
         <button className="btn btn-primary" style={{ justifyContent: "center" }} disabled={laster}>
           {laster ? "Logger inn …" : trengerKode ? "Bekreft" : "Logg inn"}
         </button>
+
+        {!trengerKode && (
+          <Link className="glemt-lenke" href="/glemt-passord">
+            Glemt passord?
+          </Link>
+        )}
       </form>
     </main>
   );

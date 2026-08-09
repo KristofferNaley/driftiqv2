@@ -303,6 +303,7 @@ function BrukerModal({
   const [tittelValg, setTittelValg] = useState(egenTittel ? "__egen__" : (bruker?.title ?? ""));
   const [egenTittelTekst, setEgenTittelTekst] = useState(egenTittel ? bruker!.title! : "");
   const [bekrefterFjern, setBekrefterFjern] = useState(false);
+  const [sendtOppsett, setSendtOppsett] = useState(false);
 
   // Varslene ligger på medlemskapet og lagres for seg (eget endepunkt) — de finnes ikke før
   // brukeren gjør det, så seksjonen vises kun ved redigering.
@@ -492,19 +493,32 @@ function BrukerModal({
             <span className="field-label">Kontohandlinger</span>
             <button
               type="button"
-              className="btn btn-ghost fjern-knapp"
+              className="btn btn-ghost profil-handling"
+              disabled={sendtOppsett}
+              onClick={() => {
+                // Svaret er alltid «sendt». Om adressen tar imot den, vet vi først når
+                // brukeren logger inn — å love mer enn det ville vært å lyve.
+                void brukere.sendOppsett(orgId, bruker!.id).catch(() => {});
+                setSendtOppsett(true);
+              }}
+            >
+              {sendtOppsett ? "E-post sendt" : bruker!.harSattPassord ? "Send lenke for nytt passord" : "Send oppsett-e-post på nytt"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost profil-handling fjern-knapp"
               onClick={() => setBekrefterFjern(true)}
             >
               Fjern tilgang
             </button>
-            {/* v1 har også «Send oppsett-e-post» og «Sett passord manuelt». Begge krever
-                utsending av e-post, som ikke er portert til v2 ennå — en knapp som ikke
-                gjør noe er verre enn ingen knapp. */}
+            {/* «Sett passord manuelt» fra v1 er bevisst IKKE portert: det lar en admin velge
+                passordet til en annen person, og da kjenner to personer det. Engangslenken
+                over gjør samme jobb uten den bieffekten. */}
           </div>
         ) : (
           <div className="field-note">
-            Brukeren får ingen passord fra deg. De må sette det selv via «glemt passord», slik at
-            ingen andre enn dem kjenner det.
+            Brukeren får en e-post med en engangslenke der de setter sitt eget passord. Du
+            velger det ikke for dem — da ville to personer kjent det.
           </div>
         )}
 

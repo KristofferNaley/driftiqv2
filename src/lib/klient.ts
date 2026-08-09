@@ -382,6 +382,8 @@ export const brukere = {
   varsler: (o: string, id: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, `/users/${id}/varsler`)),
   settVarsler: (o: string, id: string, prefs: Record<string, boolean>) =>
     api.endre(org(o, `/users/${id}/varsler`), { prefs }),
+  /** Sender oppsett-/tilbakestillingslenken på nytt. */
+  sendOppsett: (o: string, id: string) => api.send(org(o, `/users/${id}/oppsett-epost`), {}),
   egneVarsler: (o: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, "/users/meg/varsler")),
   settEgneVarsler: (o: string, prefs: Record<string, boolean>) =>
     api.endre(org(o, "/users/meg/varsler"), { prefs }),

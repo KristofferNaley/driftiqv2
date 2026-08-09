@@ -44,6 +44,13 @@ export type Kontekst<P = Record<string, string>> = {
   bruker: User;
   params: P;
   req: Request;
+  /**
+   * Kjør noe ETTER at transaksjonen er committet — e-post, webhooks, alt utadrettet.
+   *
+   * Inne i handleren er skrivingene dine usynlige for enhver annen tilkobling. Kaller du en
+   * tjeneste som slår opp raden selv (Better Auth gjør nettopp det), finner den ingenting.
+   */
+  etterCommit: (fn: () => Promise<void>) => void;
 };
 
 /** Feil med en HTTP-status handleren selv vil styre. */
@@ -128,11 +135,37 @@ export function orgRute<P extends Record<string, string> = Record<string, string
 
       const bruker = await hentBruker(req);
 
+      /**
+       * Sidevirkninger som IKKE må kjøre før transaksjonen er committet.
+       *
+       * E-post er det typiske tilfellet: `inviterBruker` skriver brukeren inne i
+       * transaksjonen, mens Better Auth slår opp adressen på en HELT ANNEN tilkobling.
+       * Sender man derfra, finnes ikke raden ennå for den som leser — Better Auth svarte
+       * «User not found», brukeren ble opprettet, og velkomst-e-posten kom aldri.
+       *
+       * Samme regel gjelder alt utadrettet: webhooks, meldinger, tredjeparts-API-er. Ruller
+       * transaksjonen tilbake etterpå, har man ellers allerede fortalt omverdenen om noe som
+       * ikke skjedde.
+       */
+      const etterpaa: Array<() => Promise<void>> = [];
+
       const resultat = await withOrg(orgId, async (db) => {
         await krevNivaa(db, orgId, bruker, opts.nivaa);
         if (opts.modul) await krevModul(db, orgId, opts.modul);
-        return opts.handler({ db, orgId, bruker, params, req });
+        return opts.handler({
+          db,
+          orgId,
+          bruker,
+          params,
+          req,
+          etterCommit: (fn) => etterpaa.push(fn),
+        });
       });
+
+      // Feiler en sidevirkning, skal ikke svaret bli et annet: skrivingen ER fullført.
+      for (const fn of etterpaa) {
+        await fn().catch((e) => console.error("[api] Sidevirkning feilet:", e));
+      }
 
       const status = opts.status ?? 200;
       if (status === 204) return new Response(null, { status: 204 });

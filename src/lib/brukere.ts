@@ -80,12 +80,33 @@ async function antallAdmins(db: Db, orgId: string, utenom?: string): Promise<num
 }
 
 /**
+ * Ber Better Auth mynte en engangslenke og sende den.
+ *
+ * Malen velges av `sendResetPassword` i auth.ts ut fra om kontoen har et passord fra før —
+ * en ny bruker får velkomst, en eksisterende får tilbakestilling.
+ *
+ * Feil svelges: e-post er en SIDEVIRKNING av invitasjonen, ikke selve invitasjonen. Blir
+ * brukeren opprettet uten at e-posten går ut, kan admin sende den på nytt — men rulles
+ * opprettelsen tilbake fordi Resend var nede, har vi mistet arbeidet i stedet.
+ */
+export async function sendOppsettEpost(epost: string): Promise<void> {
+  try {
+    const { auth } = await import("./auth");
+    await auth.api.requestPasswordReset({ body: { email: epost } });
+  } catch (e) {
+    console.error(`[brukere] Kunne ikke sende oppsett-e-post til ${epost}:`, e);
+  }
+}
+
+/**
  * Inviterer en bruker.
  *
  * Finnes e-posten fra før, får den eksisterende kontoen bare et nytt medlemskap — en person
- * som sitter i to styrer skal ha ÉN konto, ikke to. Nye brukere opprettes uten passord;
- * de må gjennom «glemt passord» for å komme inn, slik at ingen andre enn dem selv velger
- * det. Samme modell som v1, der invitasjonen var en engangslenke på e-post.
+ * som sitter i to styrer skal ha ÉN konto, ikke to.
+ *
+ * Nye brukere opprettes UTEN passord og får en engangslenke på e-post der de setter det
+ * selv. Ingen andre enn dem kjenner det da — heller ikke den som inviterte, og heller ikke
+ * DriftIQ. Samme modell som v1.
  */
 export async function inviterBruker(db: Db, orgId: string, data: z.infer<typeof inviterInn>) {
   const finnes = await db
@@ -124,6 +145,9 @@ export async function inviterBruker(db: Db, orgId: string, data: z.infer<typeof 
     title: data.title ?? null,
   });
 
+  // E-posten sendes IKKE herfra. Vi står inne i en transaksjon, og Better Auth slår opp
+  // adressen på en annen tilkobling — raden finnes ikke for den ennå. Kallstedet sender via
+  // `etterCommit`. Se kommentaren i api.ts.
   return { id: brukerId, nyKonto: !finnes[0] };
 }
 

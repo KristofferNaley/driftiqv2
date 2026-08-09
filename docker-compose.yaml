@@ -24,6 +24,12 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3008}
       BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-}
       UPLOAD_DIR: /app/uploads
+      # Utgående e-post. Tom nøkkel = ingen sending, og appen kjører videre.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FROM_EMAIL: ${FROM_EMAIL:-DriftIQ <noreply@driftiq.no>}
+      BASE_URL: ${BASE_URL:-http://localhost:3008}
+      # Domenevakt — se .env.example. MÅ settes i test.
+      EPOST_TILLATTE_DOMENER: ${EPOST_TILLATTE_DOMENER:-}
     ports:
       - "3008:3008"
     volumes:

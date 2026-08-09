@@ -565,7 +565,14 @@ async function kopierPassord(): Promise<{ kopiert: number; utenPassord: number }
         // type (varchar og text), og Postgres klarer ikke å utlede én type for begge.
         `INSERT INTO account (id, user_id, account_id, provider_id, password, created_at, updated_at)
          VALUES ($1, $2, $3, 'credential', $4, now(), now())
-         ON CONFLICT (id) DO UPDATE SET password = EXCLUDED.password, updated_at = now()`,
+         -- DO NOTHING, ikke DO UPDATE: har brukeren allerede satt et passord i v2, er DET
+         -- sannheten for dem. En ny migreringskjøring skal ikke stille dem tilbake til
+         -- v1-passordet og låse dem ute av det de nettopp valgte.
+         --
+         -- Konflikten går på (user_id, provider_id), ikke på id: skriptets deterministiske
+         -- «cred-<id>» kolliderer aldri med Better Auths uuid-er, så en id-basert konflikt
+         -- ville bare lagt på enda en rad.
+         ON CONFLICT (user_id, provider_id) DO NOTHING`,
         [`cred-${r.id}`, r.id, r.id, r.password_hash],
       );
     }

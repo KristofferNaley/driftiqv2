@@ -1,0 +1,176 @@
+/**
+ * All utgående e-post. Port av v1s `email.py`, inkludert malen og domenevakten.
+ *
+ * Sending skjer gjennom Resend. Uten `RESEND_API_KEY` sendes ingenting, og appen kjører
+ * videre — et manglende varsel skal aldri velte en handling brukeren utførte.
+ */
+
+import { Resend } from "resend";
+
+const API_KEY = process.env.RESEND_API_KEY ?? "";
+const FRA = process.env.FROM_EMAIL ?? "DriftIQ <noreply@driftiq.no>";
+export const APP_URL = process.env.BASE_URL ?? "http://localhost:3008";
+
+/**
+ * ## Domenevakt for test- og utviklingsmiljø
+ *
+ * Testdatabasen er en kopi av produksjon og inneholder ekte, leverbare adresser. Uten en
+ * vakt her sender testmiljøet ekte e-post til ekte mennesker — og de personlige varslene
+ * (mitt avvik, mine forsinkede oppgaver) er PÅ som standard for alle.
+ *
+ * `EPOST_TILLATTE_DOMENER` er kommaseparert. Oppføringer med @ er nøyaktige adresser, uten
+ * @ er hele domener:
+ *
+ *     EPOST_TILLATTE_DOMENER=driftiq.test,example.com,meg@gmail.com
+ *
+ * Vakten er AV når variabelen ikke er satt. Det er med vilje: produksjon skal ikke være
+ * avhengig av at noen husker å konfigurere den, og en glemt variabel skal aldri kunne gjøre
+ * kundene stille. Den skrus PÅ i testmiljøet, ikke av i prod.
+ */
+const FILTER = (process.env.EPOST_TILLATTE_DOMENER ?? "")
+  .split(",")
+  .map((o) => o.trim().toLowerCase())
+  .filter(Boolean);
+
+export function mottakerTillatt(til: string): boolean {
+  if (FILTER.length === 0) return true;
+  const adresse = (til ?? "").trim().toLowerCase();
+  const domene = adresse.split("@").pop() ?? "";
+  return FILTER.some((o) => (o.includes("@") ? o === adresse : o.replace(/^@/, "") === domene));
+}
+
+async function send(til: string, emne: string, html: string): Promise<void> {
+  if (!API_KEY) return;
+  if (!mottakerTillatt(til)) {
+    // Logges høyt: en e-post som forsvinner stille under testing ser ut som en feil i
+    // koden, og da leter man på feil sted.
+    console.warn(`[epost] BLOKKERT av domenevakt — ${til} ville fått «${emne}»`);
+    return;
+  }
+  try {
+    await new Resend(API_KEY).emails.send({ from: FRA, to: [til], subject: emne, html });
+  } catch (e) {
+    // Sendingen skal aldri velte kallet som utløste den. Brukeren har gjort noe som
+    // lyktes; at varselet ikke kom fram er en driftssak, ikke en feil i handlingen.
+    console.error(`[epost] Feil ved sending til ${til}:`, e);
+  }
+}
+
+/* ── Mal ──────────────────────────────────────────────────────────────────────────────
+ *
+ * Fargene er den grafiske profilen. Skrift er en systemstack: e-postklienter laster ikke
+ * webfonter (Gmail stripper @font-face), så Plus Jakarta Sans kan ikke brukes her.
+ *
+ * Mørk modus i e-post er IKKE som på web: Apple Mail/iOS respekterer media queryen, Gmail
+ * web viser alltid lysvarianten (derfor er den dempet — papir, ikke knallhvitt), og Outlook
+ * inverterer på egen hånd. Mønsteret er inline lys stil + klasse, og mørke overstyringer med
+ * !important i <head> — inline-stiler vinner ellers alltid.
+ *
+ * Layout er tabeller, ikke flex/grid — Outlook rendrer med Word-motoren.
+ */
+
+const FONT = "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+function ramme(innhold: string): string {
+  return `<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<style>
+  @media (prefers-color-scheme: dark) {
+    .em-bg   { background:#0b1220 !important; }
+    .em-card { background:#121b2c !important; border-color:#243146 !important; }
+    .em-h    { color:#f0f4ff !important; }
+    .em-p    { color:#c3d0e2 !important; }
+    .em-foot { background:#0e1626 !important; border-color:#243146 !important; }
+    .em-link { color:#00c2ff !important; }
+  }
+</style>
+</head>
+<body class="em-bg" style="margin:0;padding:24px 16px;background:#fafbff;font-family:${FONT};">
+  <div class="em-card" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+    <div style="background:#0d1b2a;padding:18px 28px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="width:28px;height:28px;border-radius:8px;background:#1459e0;background-image:linear-gradient(135deg,#1459e0,#00c2ff);text-align:center;vertical-align:middle;">
+          <span style="color:#ffffff;font-size:12px;font-weight:800;letter-spacing:-0.5px;font-family:${FONT};">IQ</span>
+        </td>
+        <td style="padding-left:10px;">
+          <span style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:-0.5px;font-family:${FONT};">Drift<span style="color:#00c2ff;">IQ</span></span>
+        </td>
+      </tr></table>
+    </div>
+    <div style="padding:28px;">${innhold}</div>
+    <div class="em-foot" style="padding:16px 28px;background:#f0f4ff;border-top:1px solid #e2e8f0;font-size:11px;color:#8892a4;text-align:center;">
+      DriftIQ &mdash; Forvaltning av borettslag og sameier &nbsp;|&nbsp;
+      <a href="${APP_URL}" class="em-link" style="color:#1459e0;text-decoration:none;">${APP_URL}</a>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/** Blå på både lys og mørk flate — trenger ingen mørk overstyring. */
+const knapp = (tekst: string, url: string) =>
+  `<a href="${url}" style="display:inline-block;margin-top:16px;padding:11px 22px;background:#1459e0;color:#ffffff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;font-family:${FONT};">${tekst}</a>`;
+
+const h = (tekst: string) =>
+  `<h2 class="em-h" style="margin:0 0 16px;font-size:17px;font-weight:700;color:#0d1b2a;">${tekst}</h2>`;
+
+const p = (tekst: string) =>
+  `<p class="em-p" style="margin:0 0 12px;font-size:13px;color:#3d4a5c;line-height:1.6;">${tekst}</p>`;
+
+/** Alt som kommer fra basen må escapes — et navn med «<» ville ellers brutt malen. */
+function trygg(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const fornavn = (navn: string) => trygg(navn.trim().split(/\s+/)[0] ?? navn);
+
+/* ── E-postene ─────────────────────────────────────────────────────────────────────── */
+
+export async function sendPassordreset(navn: string, til: string, url: string): Promise<void> {
+  await send(
+    til,
+    "Tilbakestill passord — DriftIQ",
+    ramme(
+      h("Tilbakestill passord") +
+        p(`Hei ${fornavn(navn)},`) +
+        p(
+          "Vi mottok en forespørsel om å tilbakestille passordet ditt. Klikk på knappen " +
+            "nedenfor for å velge et nytt. Lenken er gyldig i <strong>1 time</strong>.",
+        ) +
+        knapp("Tilbakestill passord", url) +
+        p(
+          "Ba du ikke om dette, kan du se bort fra e-posten. Passordet ditt forblir uendret.",
+        ),
+    ),
+  );
+}
+
+/**
+ * Velkomst til en ny bruker. Samme lenke som passordreset — kontoen har ikke noe passord
+ * ennå, så «sett ditt» og «tilbakestill» er teknisk sett samme handling. Ordlyden er en
+ * annen fordi situasjonen er det: du har aldri hatt et passord her.
+ */
+export async function sendKontooppsett(navn: string, til: string, url: string): Promise<void> {
+  await send(
+    til,
+    "Velkommen til DriftIQ — sett opp kontoen din",
+    ramme(
+      h(`Velkommen til DriftIQ, ${fornavn(navn)}!`) +
+        p(
+          `Du har fått tilgang til DriftIQ med e-postadressen <strong>${trygg(til)}</strong>. ` +
+            "Klikk på knappen nedenfor for å sette ditt eget passord.",
+        ) +
+        knapp("Sett passord", url) +
+        p("Lenken er gyldig i 1 time. Utløper den, kan en administrator sende en ny."),
+    ),
+  );
+}
