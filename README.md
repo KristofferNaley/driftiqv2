@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 1 ferdig — auth med 2FA.** Ingen forretningsmoduler er portert. Det som finnes er
+**Status: fase 2 i gang — Parkering portert.** Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
@@ -109,6 +109,36 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 
 1. Passkeys — en plugin til, nå som Better Auth står.
 2. Fase 2 — første modul ende til ende. Parkering eller Årshjul, ikke Internkontroll.
-3. Datamigrering. Kun én testkunde finnes, og data + filer kan eksporteres som JSON når som
-   helst. Det eneste som ikke kan gjenskapes gratis er **de fysiske QR-kodene som henger i
-   bygget**: `tasks.qr_token` må bevares uendret, ellers må alle oppslag printes på nytt.
+3. Flere moduler, i samme mønster som Parkering. Se «Å porte en modul» under.
+
+## Å porte en modul
+
+Fem steg, i denne rekkefølgen:
+
+1. **Skjema** i `src/db/schema/<modul>.ts`, eksportert fra `index.ts`. Tabellen står som
+   regel allerede i `DIREKTE_TABELLER` eller `BARNETABELLER` i `rls/tables.ts` — hele
+   v1-lista kom inn i fase 0 — så policyen legges på av seg selv ved neste oppstart.
+2. **Forretningsregler + Zod** i `src/lib/<modul>.ts`. Funksjonene tar `db` og `orgId`.
+   Behold `.where(eq(x.orgId, orgId))` selv om RLS også ville stoppet det: to uavhengige
+   lag som må svikte samtidig er hele poenget.
+3. **Ruter** under `src/app/api/organizations/[orgId]/<modul>/`, bygget med `orgRute()`.
+   Oppgi `nivaa` og `modul` — gatene kan ikke glemmes, de ligger i wrapperen.
+4. **Nøkkelen** i `ALLE_MODULER` i `src/lib/moduler.ts` hvis modulen er ny.
+5. **Tester** i `tests/<modul>.test.ts`. RLS-dekningen testes automatisk av `rls.test.ts`.
+
+## Datamigrering fra v1
+
+`scripts/migrer-fra-v1.ts` kopierer direkte fra v1s database. Idempotent, så den kan kjøres
+om igjen rett før overgangen for å hente det som er kommet til.
+
+```bash
+DATABASE_URL_V1=postgresql://... npx tsx scripts/migrer-fra-v1.ts --torrkjor
+```
+
+Skriptet verifiserer til slutt at **hver eneste `tasks.qr_token` er uendret**. Det er den ene
+sjekken som ikke kan hoppes over: QR-kodene er trykt på fysiske oppslag i bygget, og en
+migrering som stille genererte nye tokens ville sett vellykket ut helt til noen skannet et.
+
+Passordene flyttes fra `users.password_hash` til `account.password`. Formatet er identisk
+(bcrypt/12), så brukerne logger inn med passordet de har. Brukere uten passord i v1 får ingen
+account-rad og må gjennom «glemt passord» — som i v1.
