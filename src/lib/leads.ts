@@ -24,12 +24,24 @@ export const leadInn = z.object({
   phone: z.string().trim().max(40).nullish(),
   company: z.string().trim().max(200).nullish(),
   message: z.string().trim().max(4000).nullish(),
-  /** Honningkrukka. Skal ALLTID være tom fra et menneske. */
-  nettsted: z.string().max(200).optional(),
+  /** Honningkrukka. Skal ALLTID være tom fra et menneske. Se kommentaren øverst. */
+  felle: z.string().max(200).optional(),
+
+  /* Fra Enhetsregisteret, når besøkende har valgt laget sitt i søket. */
+  orgNr: z.string().trim().max(20).nullish(),
+  orgForm: z.string().trim().max(120).nullish(),
+  kommune: z.string().trim().max(120).nullish(),
+  adresse: z.string().trim().max(300).nullish(),
+  postnummer: z.string().trim().max(20).nullish(),
+  poststed: z.string().trim().max(120).nullish(),
+  brregEpost: z.string().trim().max(200).nullish(),
+  brregTelefon: z.string().trim().max(60).nullish(),
+  brregNettsted: z.string().trim().max(300).nullish(),
+  brregRaa: z.string().max(20000).nullish(),
 });
 
 export async function registrerLead(db: Db, data: z.infer<typeof leadInn>) {
-  if (data.nettsted && data.nettsted.trim() !== "") {
+  if (data.felle && data.felle.trim() !== "") {
     // Later som det gikk bra. Se kommentaren øverst.
     return { lagret: false as const };
   }
@@ -43,6 +55,16 @@ export async function registrerLead(db: Db, data: z.infer<typeof leadInn>) {
       phone: data.phone ?? null,
       company: data.company ?? null,
       message: data.message ?? null,
+      orgNr: data.orgNr ?? null,
+      orgForm: data.orgForm ?? null,
+      kommune: data.kommune ?? null,
+      adresse: data.adresse ?? null,
+      postnummer: data.postnummer ?? null,
+      poststed: data.poststed ?? null,
+      brregEpost: data.brregEpost ?? null,
+      brregTelefon: data.brregTelefon ?? null,
+      nettsted: data.brregNettsted ?? null,
+      brregRaa: data.brregRaa ?? null,
     })
     .returning();
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { sokEnheter, type Enhet } from "@/lib/brreg";
 
 /**
  * Kontaktskjemaet — den eneste klientøya på landingssiden.
@@ -17,11 +18,43 @@ export function Kontaktskjema() {
   const [epost, setEpost] = useState("");
   const [telefon, setTelefon] = useState("");
   const [lag, setLag] = useState("");
+  const [treff, setTreff] = useState<Enhet[]>([]);
+  const [valgt, setValgt] = useState<Enhet | null>(null);
+  const [leter, setLeter] = useState(false);
   const [melding, setMelding] = useState("");
-  const [nettsted, setNettsted] = useState("");
+  const [felle, setFelle] = useState("");
   const [sender, setSender] = useState(false);
   const [sendt, setSendt] = useState(false);
   const [feil, setFeil] = useState<string | null>(null);
+
+  /**
+   * Søker i Enhetsregisteret mens de skriver navnet på laget.
+   *
+   * Navn og ikke organisasjonsnummer: et styremedlem kan ikke nummeret sitt utenat, men vet
+   * hva laget heter. Nummeret er noe de må lete etter — navnet har de i hodet.
+   *
+   * 350 ms forsinkelse. Uten den ville hvert tastetrykk blitt et kall til registeret, og de
+   * fleste av dem ville vært utdaterte før svaret kom.
+   */
+  useEffect(() => {
+    if (valgt || lag.trim().length < 3) {
+      setTreff([]);
+      return;
+    }
+    let avbrutt = false;
+    setLeter(true);
+    const t = setTimeout(() => {
+      void sokEnheter(lag).then((res) => {
+        if (avbrutt) return;
+        setTreff(res);
+        setLeter(false);
+      });
+    }, 350);
+    return () => {
+      avbrutt = true;
+      clearTimeout(t);
+    };
+  }, [lag, valgt]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +70,19 @@ export function Kontaktskjema() {
           phone: telefon.trim() || null,
           company: lag.trim() || null,
           message: melding.trim() || null,
-          nettsted,
+          // Hele registeroppføringen følger med. Den er verdt å ha selv om besøkende lot
+          // resten av skjemaet stå tomt.
+          orgNr: valgt?.orgNr ?? null,
+          orgForm: valgt?.orgForm ?? null,
+          kommune: valgt?.kommune ?? null,
+          adresse: valgt?.adresse ?? null,
+          postnummer: valgt?.postnummer ?? null,
+          poststed: valgt?.poststed ?? null,
+          brregEpost: valgt?.epost ?? null,
+          brregTelefon: valgt?.telefon ?? null,
+          brregNettsted: valgt?.nettsted ?? null,
+          brregRaa: valgt?.raa ?? null,
+          felle,
         }),
       });
       if (!svar.ok) {
@@ -82,11 +127,61 @@ export function Kontaktskjema() {
           <span>Telefon</span>
           <input value={telefon} onChange={(e) => setTelefon(e.target.value)} autoComplete="tel" />
         </label>
-        <label className="mk-felt">
+        <label className="mk-felt mk-sok">
           <span>Borettslag / sameie</span>
-          <input value={lag} onChange={(e) => setLag(e.target.value)} autoComplete="organization" />
+          <input
+            value={lag}
+            autoComplete="off"
+            placeholder="Skriv navnet — vi finner det i Enhetsregisteret"
+            onChange={(e) => {
+              setLag(e.target.value);
+              // Endrer de navnet etter et valg, gjelder ikke valget lenger.
+              setValgt(null);
+            }}
+          />
+
+          {valgt ? (
+            <span className="mk-valgt">
+              <b>{valgt.navn}</b>
+              <em>
+                {[valgt.orgForm, valgt.kommune, `Org.nr. ${valgt.orgNr}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </em>
+              <button type="button" onClick={() => setValgt(null)} aria-label="Fjern valget">
+                ×
+              </button>
+            </span>
+          ) : treff.length > 0 ? (
+            <ul className="mk-treff">
+              {treff.map((e) => (
+                <li key={e.orgNr}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValgt(e);
+                      setLag(e.navn);
+                      setTreff([]);
+                    }}
+                  >
+                    <b>{e.navn}</b>
+                    <em>
+                      {[e.orgForm, e.kommune, e.poststed].filter(Boolean).join(" · ")}
+                    </em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className="mk-hint">
+              {leter && lag.trim().length >= 3
+                ? "Søker i Enhetsregisteret …"
+                : "Valgfritt. Finner vi laget, henter vi adresse og kontaktinfo automatisk."}
+            </span>
+          )}
         </label>
       </div>
+
       <label className="mk-felt">
         <span>Melding</span>
         <textarea rows={4} value={melding} onChange={(e) => setMelding(e.target.value)} />
@@ -100,8 +195,8 @@ export function Kontaktskjema() {
           <input
             tabIndex={-1}
             autoComplete="off"
-            value={nettsted}
-            onChange={(e) => setNettsted(e.target.value)}
+            value={felle}
+            onChange={(e) => setFelle(e.target.value)}
           />
         </label>
       </div>

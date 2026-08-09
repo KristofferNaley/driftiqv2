@@ -20,6 +20,131 @@
  * personvernansvar uten funksjonell gevinst.
  */
 
+/**
+ * Selve enheten — navn, form og kommune.
+ *
+ * ## Denne kalles fra NETTLESEREN, i motsetning til styreoppslaget
+ *
+ * Styreoppslaget ligger på serveren fordi org.nr. hentes fra basen: endepunktet tar ingen
+ * parameter og kan derfor ikke brukes som en åpen proxy mot Enhetsregisteret.
+ *
+ * Her kommer nummeret fra den BESØKENDE. Et serverendepunkt ville da vært nettopp en slik
+ * proxy — uautentisert, på en offentlig side, som tar et vilkårlig nummer og gjør et
+ * utgående kall. Da er det bedre at nettleseren spør registeret selv: ingen last på oss,
+ * ingen proxy å misbruke.
+ *
+ * Kostnaden er at den besøkendes IP går til Brønnøysund. Det er et åpent norsk register, på
+ * en side der de uansett er i ferd med å sende oss navn og e-post.
+ */
+export type Enhet = {
+  orgNr: string;
+  navn: string;
+  orgForm: string | null;
+  kommune: string | null;
+  adresse: string | null;
+  postnummer: string | null;
+  poststed: string | null;
+  epost: string | null;
+  telefon: string | null;
+  nettsted: string | null;
+  /** Hele registersvaret, ordrett. Se kommentaren på `tolkEnhet`. */
+  raa: string;
+};
+
+type EnhetSvar = {
+  organisasjonsnummer?: string;
+  navn?: string;
+  organisasjonsform?: { beskrivelse?: string };
+  forretningsadresse?: Adr;
+  postadresse?: Adr;
+  epostadresse?: string;
+  telefon?: string;
+  mobil?: string;
+  hjemmeside?: string;
+};
+
+type Adr = {
+  adresse?: string[];
+  postnummer?: string;
+  poststed?: string;
+  kommune?: string;
+};
+
+/**
+ * Plukker ut det vi bruker — og tar vare på RESTEN.
+ *
+ * `raa` er hele svaret ordrett. Registeret returnerer mer enn vi har felter for i dag
+ * (næringskode, stiftelsesdato, sektorkode, historiske navn), og hvilke av dem som viser seg
+ * nyttige i en salgssamtale vet vi ikke ennå. Å kaste dem her betyr at de er borte for godt
+ * — enheten kan ha endret seg innen noen spør.
+ */
+export function tolkEnhet(d: EnhetSvar): Enhet | null {
+  if (!d.navn || !d.organisasjonsnummer) return null;
+
+  // Forretningsadressen vinner over postadressen: et borettslag kan ha postboks hos
+  // forretningsføreren i en annen kommune enn bygget står i, og det er bygget vi vil vite om.
+  const adr = d.forretningsadresse ?? d.postadresse;
+
+  return {
+    orgNr: d.organisasjonsnummer,
+    navn: d.navn,
+    orgForm: d.organisasjonsform?.beskrivelse ?? null,
+    kommune: adr?.kommune ?? null,
+    adresse: adr?.adresse?.filter(Boolean).join(", ") || null,
+    postnummer: adr?.postnummer ?? null,
+    poststed: adr?.poststed ?? null,
+    epost: d.epostadresse ?? null,
+    telefon: d.telefon ?? d.mobil ?? null,
+    nettsted: d.hjemmeside ?? null,
+    raa: JSON.stringify(d),
+  };
+}
+
+/**
+ * Søk på NAVN.
+ *
+ * Oppslag på organisasjonsnummer var feil inngang: et styremedlem kan ikke nummeret sitt
+ * utenat, men vet hva laget heter. Nummeret er noe de må lete etter — navnet er noe de
+ * allerede har i hodet.
+ */
+export async function sokEnheter(sok: string): Promise<Enhet[]> {
+  const rent = sok.trim();
+  // Under tre tegn treffer søket alt og ingenting.
+  if (rent.length < 3) return [];
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://data.brreg.no/enhetsregisteret/api/enheter?navn=${encodeURIComponent(rent)}&size=8`,
+      { signal: AbortSignal.timeout(8000), headers: { accept: "application/json" } },
+    );
+  } catch {
+    return [];
+  }
+  if (!res.ok) return [];
+
+  const d = (await res.json()) as { _embedded?: { enheter?: EnhetSvar[] } };
+  return (d._embedded?.enheter ?? []).map(tolkEnhet).filter((e): e is Enhet => e !== null);
+}
+
+/** Ett bestemt organisasjonsnummer. Brukes der nummeret allerede er kjent. */
+export async function hentEnhet(orgNr: string): Promise<Enhet | null> {
+  const rent = orgNr.replace(/\D/g, "");
+  if (rent.length !== 9) return null;
+
+  let res: Response;
+  try {
+    res = await fetch(`https://data.brreg.no/enhetsregisteret/api/enheter/${rent}`, {
+      signal: AbortSignal.timeout(8000),
+      headers: { accept: "application/json" },
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  return tolkEnhet((await res.json()) as EnhetSvar);
+}
+
 /** Registerets rollekoder → tittelen vi lagrer. Andre koder (revisor, regnskapsfører) ignoreres. */
 const STYREROLLER: Record<string, string> = {
   LEDE: "Styreleder",

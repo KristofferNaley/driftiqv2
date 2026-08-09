@@ -17,6 +17,29 @@ export const leads = pgTable("leads", {
   /** Borettslaget eller sameiet de sitter i. */
   company: varchar("company"),
   message: text("message"),
+
+  /* ── Fra Enhetsregisteret ──
+   * Fylles inn når besøkende velger laget sitt i søket. Lagres på leaden og ikke bare vist
+   * i skjemaet: velger de laget og lar et felt stå tomt, er opplysningen fortsatt verdt å
+   * ha når vi følger opp. */
+  orgNr: varchar("org_nr"),
+  orgForm: varchar("org_form"),
+  kommune: varchar("kommune"),
+  adresse: varchar("adresse"),
+  postnummer: varchar("postnummer"),
+  poststed: varchar("poststed"),
+  /** Registerets kontaktopplysninger — ikke besøkendes egne. Holdes atskilt med vilje. */
+  brregEpost: varchar("brreg_epost"),
+  brregTelefon: varchar("brreg_telefon"),
+  nettsted: varchar("nettsted"),
+  /**
+   * Hele registersvaret, ordrett.
+   *
+   * Registeret returnerer mer enn vi har felter for (næringskode, stiftelsesdato,
+   * sektorkode, historiske navn). Hvilke som viser seg nyttige vet vi ikke ennå, og enheten
+   * kan ha endret seg innen noen spør. Kaster vi dem her, er de borte for godt.
+   */
+  brregRaa: text("brreg_raa"),
   /** ny | i_dialog | tilbud_sendt | konvertert | tapt */
   status: varchar("status").notNull().default("ny"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

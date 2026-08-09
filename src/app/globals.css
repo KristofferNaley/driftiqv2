@@ -1560,3 +1560,43 @@ textarea.qr-input { resize: vertical; }
   .mk-app-meny { display: none; }
   .mk-app-tall { grid-template-columns: repeat(2, 1fr); }
 }
+
+.mk-hint { font-size: var(--fs-label); color: var(--mk-dempet); }
+.mk-hint.advarsel { color: var(--warn); }
+
+/* Søk mot Enhetsregisteret i kontaktskjemaet. */
+.mk-sok { position: relative; }
+.mk-treff {
+  list-style: none; margin: 6px 0 0; padding: 4px;
+  border: 1px solid var(--mk-kant); border-radius: 11px; background: var(--surface);
+  /* Absolutt posisjonert: treffene skal legge seg OVER feltene under, ikke dytte skjemaet
+     nedover mens man skriver. */
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 5;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22); max-height: 260px; overflow-y: auto;
+}
+.mk-treff button {
+  display: block; width: 100%; text-align: left; border: none; background: none;
+  padding: 9px 11px; border-radius: 8px; cursor: pointer; font-family: var(--font-sans);
+  color: var(--mk-blekk);
+}
+.mk-treff button:hover { background: var(--bg); }
+.mk-treff b { display: block; font-size: var(--fs-sm); font-weight: 600; }
+.mk-treff em { display: block; font-size: var(--fs-label); color: var(--mk-dempet); font-style: normal; }
+.mk-valgt {
+  display: flex; align-items: center; gap: 10px; margin-top: 6px;
+  padding: 9px 11px; border-radius: 10px;
+  background: rgba(15, 186, 129, 0.1); border: 1px solid rgba(15, 186, 129, 0.3);
+}
+.mk-valgt b { font-size: var(--fs-sm); }
+.mk-valgt em { flex: 1; font-size: var(--fs-label); color: var(--mk-dempet); font-style: normal; }
+.mk-valgt button {
+  border: none; background: none; font-size: 18px; line-height: 1; cursor: pointer;
+  color: var(--mk-dempet); padding: 0 4px;
+}
+
+.pf-lead-brreg {
+  margin-top: 9px; padding: 9px 11px; border-radius: 9px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: var(--fs-label); line-height: 1.6;
+}
+.pf-lead-brreg .pf-under { margin-bottom: 3px; }

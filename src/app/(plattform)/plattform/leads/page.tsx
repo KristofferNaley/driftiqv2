@@ -14,6 +14,15 @@ type Lead = {
   message: string | null;
   status: string;
   createdAt: string;
+  orgNr: string | null;
+  orgForm: string | null;
+  kommune: string | null;
+  adresse: string | null;
+  postnummer: string | null;
+  poststed: string | null;
+  brregEpost: string | null;
+  brregTelefon: string | null;
+  nettsted: string | null;
 };
 
 /** Henvendelser fra landingssiden. Uten denne siden ville skjemaet vært en svart boks. */
@@ -47,6 +56,31 @@ export default function Leads() {
                   {l.company && ` · ${l.company}`}
                 </span>
                 {l.message && <p className="pf-lead-melding">{l.message}</p>}
+
+                {/* Fra Enhetsregisteret. Holdes atskilt fra besøkendes egne opplysninger —
+                    registerets e-post er lagets offisielle, ikke personens. */}
+                {l.orgNr && (
+                  <div className="pf-lead-brreg">
+                    <span className="pf-under">Fra Enhetsregisteret</span>
+                    <div>
+                      {[
+                        `Org.nr. ${l.orgNr}`,
+                        l.orgForm,
+                        [l.adresse, [l.postnummer, l.poststed].filter(Boolean).join(" ")]
+                          .filter(Boolean)
+                          .join(", "),
+                        l.kommune,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                    {(l.brregEpost || l.brregTelefon || l.nettsted) && (
+                      <div>
+                        {[l.brregEpost, l.brregTelefon, l.nettsted].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <span className="pf-celle">{datoTid(l.createdAt)}</span>
             </div>
