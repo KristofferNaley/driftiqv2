@@ -3,7 +3,7 @@
 Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
 utover den sentrale Postgres-serveren.
 
-**Status: fase 2 — tretten moduler portert.** Alle kundemodulene er inne. Det som finnes er
+**Status: fase 2 — fjorten moduler portert.** Alle kundemodulene og AI-rådgiveren er inne. Det som finnes er
 databaselaget, RLS-håndhevingen, autorisasjonsgatene, Better Auth med tofaktor, og
 sikkerhetstestene (44 grønne). Det er med vilje: sikkerhetslaget skal stå og være grønt før
 den første modulen flyttes, ikke etterpå.
@@ -128,6 +128,7 @@ Fra v1-suiten er `test_rls.py` portert. Disse gjenstår og hører til sine respe
 | Rutiner | komplett |
 | HMS-maler | komplett (plattformdata — `plattformRute`, ikke `orgRute`) |
 | Internkontroll | mangler PDF-rapport fra vernerunde |
+| AI-rådgiver | komplett |
 
 Alle fire er dekket av migreringsskriptet.
 

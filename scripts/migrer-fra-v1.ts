@@ -439,6 +439,35 @@ const TABELLER: Tabell[] = [
     oppdater: [],
   },
   {
+    navn: "ai_conversations",
+    kilde: `SELECT id, org_id, user_id, title, COALESCE(created_at, now()) AS created_at,
+                   COALESCE(updated_at, now()) AS updated_at
+            FROM ai_conversations`,
+    kolonner: ["id", "org_id", "user_id", "title", "created_at", "updated_at"],
+    oppdater: ["title", "updated_at"],
+  },
+  {
+    navn: "ai_messages",
+    kilde: `SELECT id, conversation_id, role, content, sources, model,
+                   COALESCE(created_at, now()) AS created_at
+            FROM ai_messages`,
+    kolonner: ["id", "conversation_id", "role", "content", "sources", "model", "created_at"],
+    // En logget samtale er et øyeblikksbilde. Migreringen skriver den aldri om.
+    oppdater: [],
+  },
+  {
+    navn: "ai_usage_daily",
+    kilde: `SELECT id, org_id, date, COALESCE(questions,0) AS questions,
+                   COALESCE(api_calls,0) AS api_calls, COALESCE(input_tokens,0) AS input_tokens,
+                   COALESCE(output_tokens,0) AS output_tokens,
+                   COALESCE(cache_read_tokens,0) AS cache_read_tokens,
+                   COALESCE(cache_write_tokens,0) AS cache_write_tokens,
+                   COALESCE(updated_at, now()) AS updated_at
+            FROM ai_usage_daily`,
+    kolonner: ["id", "org_id", "date", "questions", "api_calls", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "updated_at"],
+    oppdater: ["questions", "api_calls", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "updated_at"],
+  },
+  {
     navn: "parking_spots",
     kilde: `SELECT id, org_id, number, area_label, ownership_type, spot_type, status,
                    holder_name, unit_label, notes, COALESCE(created_at, now()) AS created_at

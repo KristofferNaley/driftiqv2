@@ -27,5 +27,6 @@ export * from "./vedlikehold";
 export * from "./rutiner";
 export * from "./maler";
 export * from "./internkontroll";
+export * from "./ai";
 export * from "./vendors";
 export * from "./tasks";
