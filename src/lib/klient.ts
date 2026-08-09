@@ -412,6 +412,13 @@ export type Dashbord = {
 
 export const dashbord = {
   hent: (o: string) => api.hent<Dashbord>(org(o, "/dashboard")),
+  /** Widget-oppsettet til den innloggede, i denne org-en. `null` = ikke tilpasset. */
+  oppsett: (o: string) =>
+    api.hent<Array<{ nokkel: string; storrelse: "s" | "m" | "l" }> | null>(
+      org(o, "/dashboard/oppsett"),
+    ),
+  settOppsett: (o: string, widgets: Array<{ nokkel: string; storrelse: "s" | "m" | "l" }> | null) =>
+    api.endre(org(o, "/dashboard/oppsett"), { widgets }),
 };
 
 export type OrgInfo = {

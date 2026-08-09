@@ -82,6 +82,16 @@ export const userOrgMemberships = pgTable(
      * aldri direkte: nøkler som mangler skal falle tilbake til standardene.
      */
     notificationPrefs: text("notification_prefs"),
+    /**
+     * Dashbordets widget-oppsett: JSON-liste `[{"key": …, "size": …}]`.
+     *
+     * Ligger på MEDLEMSKAPET, ikke på brukeren: samme person kan sitte i flere lag og vil
+     * ha ulikt oppsett i hvert — et lag med parkering og et uten har ikke samme forside.
+     *
+     * NULL = ikke tilpasset ⇒ standardoppsettet, som utledes av hvilke moduler laget har.
+     * Nøklene valideres mot en hviteliste ved skriving; se lib/dashbordoppsett.ts.
+     */
+    dashboardLayout: text("dashboard_layout"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [unique("uq_user_org").on(t.userId, t.orgId)],

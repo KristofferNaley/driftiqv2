@@ -211,6 +211,13 @@
       "when": 1786295631679,
       "tag": "0029_dark_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786301330385,
+      "tag": "0030_demonic_plazm",
+      "breakpoints": true
     }
   ]
 }

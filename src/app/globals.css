@@ -1990,3 +1990,54 @@ textarea.qr-input { resize: vertical; }
   padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
 }
 .ah-oppgavevalg:last-of-type { border-bottom: none; }
+
+/* --- Dashbord: flyttbare widgets --------------------------------------------------- */
+/* Fast firekolonners rutenett i stedet for `auto-fit`: størrelsene s/m/l er kolonnespenn,
+   og med auto-fit varierer kolonnetallet med bredden, så «halv bredde» ville betydd noe
+   nytt for hver skjerm. */
+.dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dp-s { grid-column: span 1; }
+.dp-m { grid-column: span 2; }
+.dp-l { grid-column: span 4; }
+.dash-plass { position: relative; min-width: 0; display: flex; flex-direction: column; }
+.dash-plass > * { flex: 1; min-width: 0; }
+
+@media (max-width: 1100px) {
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dp-l, .dp-m { grid-column: span 2; }
+}
+@media (max-width: 640px) {
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .dp-s, .dp-m, .dp-l { grid-column: span 1; }
+}
+
+.dash-plass.redigerer { cursor: grab; }
+.dash-plass.redigerer > *:not(.dash-verktoy) { outline: 1px dashed var(--border); border-radius: 12px; }
+.dash-plass.drar { opacity: 0.45; }
+
+.dash-verktoy {
+  position: absolute; top: -9px; right: -6px; z-index: 5;
+  display: flex; gap: 4px; flex: 0 0 auto;
+}
+.dash-str, .dash-fjern {
+  display: flex; align-items: center; justify-content: center;
+  height: 22px; min-width: 22px; padding: 0 6px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  font-family: var(--font-sans); font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.dash-str:hover { border-color: var(--accent); color: var(--accent); }
+.dash-fjern:hover { border-color: var(--danger); color: var(--danger); }
+
+.dash-bibliotek {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px; padding: 14px;
+}
+.dash-tilgjengelig {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 11px 13px; border: 1px dashed var(--border); border-radius: 10px;
+  background: none; color: inherit; cursor: pointer;
+  font-family: var(--font-sans); text-align: left;
+}
+.dash-tilgjengelig:hover { border-color: var(--accent); border-style: solid; }
+.dash-tilgjengelig-navn { font-size: var(--fs-sm); font-weight: 600; }
+.dash-tilgjengelig-under { font-size: var(--fs-label); color: var(--muted); }

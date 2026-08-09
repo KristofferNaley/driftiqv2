@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -18,6 +19,14 @@ import {
 } from "lucide-react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
+import { modulErAktivert } from "@/lib/moduler";
+import {
+  STANDARDOPPSETT,
+  STORRELSER,
+  WIDGETDEFS,
+  WIDGETS,
+  type Widgetvalg,
+} from "@/lib/dashbordwidgets";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { dashbord, type Dashbord } from "@/lib/klient";
 
@@ -48,33 +57,245 @@ const TG_FARGE: Record<string, string> = {
 export default function Dashbord() {
   const { aktivOrg } = useOkt();
   const { data, feil, laster } = useOrgData((o) => dashbord.hent(o));
+  const orgId = aktivOrg?.id;
+
+  const [oppsett, setOppsett] = useState<Widgetvalg[] | null>(null);
+  const [redigerer, setRedigerer] = useState(false);
+  const [drar, setDrar] = useState<string | null>(null);
+  const [lagringsfeil, setLagringsfeil] = useState<string | null>(null);
+
+  /**
+   * Speiler `oppsett`.
+   *
+   * To raske endringer — fjern og så størrelse — havner ellers i samme render og lukker
+   * begge over den samme gamle lista, så den siste overskriver den første. Samme felle som
+   * i v1, og løsningen der var også en ref.
+   */
+  const oppsettRef = useRef<Widgetvalg[] | null>(null);
+
+  const erPa = useCallback(
+    (modul?: string) => !modul || modulErAktivert(aktivOrg?.enabledModules ?? null, modul as never),
+    [aktivOrg],
+  );
+
+  const standard = useMemo(
+    () => STANDARDOPPSETT.filter((w) => erPa(WIDGETS[w.nokkel]?.modul)),
+    [erPa],
+  );
+
+  useEffect(() => {
+    if (!orgId) return;
+    let avbrutt = false;
+    dashbord
+      .oppsett(orgId)
+      .then((lagret) => {
+        if (avbrutt) return;
+        const start = lagret ?? standard;
+        oppsettRef.current = start;
+        setOppsett(start);
+      })
+      .catch(() => {
+        if (avbrutt) return;
+        oppsettRef.current = standard;
+        setOppsett(standard);
+      });
+    return () => {
+      avbrutt = true;
+    };
+  }, [orgId, standard]);
+
+  /** Lagrer optimistisk: flyttingen skal føles umiddelbar, ikke vente på nettverket. */
+  const lagre = useCallback(
+    (endre: (forrige: Widgetvalg[]) => Widgetvalg[]) => {
+      const neste = endre(oppsettRef.current ?? standard);
+      oppsettRef.current = neste;
+      setOppsett(neste);
+      setLagringsfeil(null);
+      if (orgId) {
+        dashbord
+          .settOppsett(orgId, neste)
+          .catch(() =>
+            setLagringsfeil("Oppsettet ble ikke lagret. Endringen gjelder til du laster siden på nytt."),
+          );
+      }
+    },
+    [orgId, standard],
+  );
+
+  /**
+   * NULLSTILLER lagringen, i stedet for å lagre standarden som et eget oppsett.
+   *
+   * Forskjellen er ikke synlig i dag, men blir det: legges en widget til standarden senere,
+   * ville en som hadde «tilbakestilt» sittet fast med gårsdagens forside for alltid.
+   */
+  async function tilbakestill() {
+    oppsettRef.current = [...standard];
+    setOppsett([...standard]);
+    setLagringsfeil(null);
+    if (orgId) {
+      await dashbord
+        .settOppsett(orgId, null)
+        .catch(() => setLagringsfeil("Oppsettet ble ikke tilbakestilt."));
+    }
+  }
+
+  function slipp(mal: string) {
+    if (!drar || drar === mal) return;
+    lagre((forrige) => {
+      const flyttet = forrige.find((w) => w.nokkel === drar);
+      if (!flyttet) return forrige;
+      const uten = forrige.filter((w) => w.nokkel !== drar);
+      const i = uten.findIndex((w) => w.nokkel === mal);
+      return [...uten.slice(0, i), flyttet, ...uten.slice(i)];
+    });
+    setDrar(null);
+  }
+
+  const bibliotek = WIDGETDEFS.filter(
+    (d) => erPa(d.modul) && !(oppsett ?? []).some((w) => w.nokkel === d.nokkel),
+  );
+
+  // Widgets for moduler som er slått av siden oppsettet ble lagret, skal ikke tegnes.
+  const synlige = (oppsett ?? []).filter((w) => WIDGETS[w.nokkel] && erPa(WIDGETS[w.nokkel]!.modul));
 
   return (
-    <Layout tittel="Dashboard">
+    <Layout
+      tittel="Dashboard"
+      handlinger={
+        <button className="btn btn-ghost" onClick={() => setRedigerer((v) => !v)}>
+          {redigerer ? "Ferdig" : "Tilpass"}
+        </button>
+      }
+    >
       <div className="page-content">
-        <Feil melding={feil} />
+        <Feil melding={feil ?? lagringsfeil} />
 
-        {laster || !data ? (
+        {laster || !data || !oppsett ? (
           <Tom tekst="Henter …" />
         ) : (
           <>
-            <Kpier d={data} />
+            {redigerer && (
+              <div className="tips-stripe">
+                <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+                  ✥ Dra kortene for å endre rekkefølge. Klikk på størrelsen for å bytte bredde,
+                  eller ✕ for å fjerne. Oppsettet gjelder bare deg, i dette laget.
+                </span>
+                <button className="btn btn-ghost" onClick={() => void tilbakestill()}>
+                  Tilbakestill
+                </button>
+              </div>
+            )}
+
             <div className="dash-grid">
-              <Oppfolging d={data} />
-              <Frister d={data} />
-              {data.oppgaveliste && <Oppgaver rader={data.oppgaveliste} />}
-              {data.avviksliste && <Avvik rader={data.avviksliste} />}
-              {data.utlopende && <Kontrakter rader={data.utlopende} />}
-              {data.tilstand && <Tilstand rader={data.tilstand} />}
-              {data.rutinerTilRevisjon && <Rutiner rader={data.rutinerTilRevisjon} />}
-              {data.aktivitet && <Aktivitet rader={data.aktivitet} />}
-              <Smatall d={data} orgNavn={aktivOrg?.name ?? ""} />
+              {synlige.map((w) => (
+                <div
+                  key={w.nokkel}
+                  className={`dash-plass dp-${w.storrelse}${drar === w.nokkel ? " drar" : ""}${redigerer ? " redigerer" : ""}`}
+                  draggable={redigerer}
+                  onDragStart={() => setDrar(w.nokkel)}
+                  onDragOver={(e) => redigerer && e.preventDefault()}
+                  onDrop={() => slipp(w.nokkel)}
+                  onDragEnd={() => setDrar(null)}
+                >
+                  {redigerer && (
+                    <div className="dash-verktoy">
+                      <button
+                        className="dash-str"
+                        title="Bytt bredde"
+                        onClick={() =>
+                          lagre((forrige) =>
+                            forrige.map((x) =>
+                              x.nokkel === w.nokkel
+                                ? {
+                                    ...x,
+                                    storrelse:
+                                      STORRELSER[
+                                        (STORRELSER.indexOf(x.storrelse) + 1) % STORRELSER.length
+                                      ]!,
+                                  }
+                                : x,
+                            ),
+                          )
+                        }
+                      >
+                        {w.storrelse.toUpperCase()}
+                      </button>
+                      <button
+                        className="dash-fjern"
+                        title={`Fjern ${WIDGETS[w.nokkel]!.navn}`}
+                        onClick={() =>
+                          lagre((forrige) => forrige.filter((x) => x.nokkel !== w.nokkel))
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  <Widgetinnhold nokkel={w.nokkel} d={data} orgNavn={aktivOrg?.name ?? ""} />
+                </div>
+              ))}
             </div>
+
+            {redigerer && bibliotek.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Legg til</div>
+                </div>
+                <div className="dash-bibliotek">
+                  {bibliotek.map((d) => (
+                    <button
+                      key={d.nokkel}
+                      className="dash-tilgjengelig"
+                      onClick={() =>
+                        lagre((forrige) => [...forrige, { nokkel: d.nokkel, storrelse: d.storrelse }])
+                      }
+                    >
+                      <span className="dash-tilgjengelig-navn">＋ {d.navn}</span>
+                      <span className="dash-tilgjengelig-under">{d.beskrivelse}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
     </Layout>
   );
+}
+
+/** Kobler en widgetnøkkel til komponenten som tegner den. */
+function Widgetinnhold({ nokkel, d, orgNavn }: { nokkel: string; d: Dashbord; orgNavn: string }) {
+  switch (nokkel) {
+    case "kpi_oppgaver":
+      return <Kpi etikett="Aktive oppgaver" verdi={d.kpi.oppgaver} farge="var(--accent)" sti="/oppgaver" />;
+    case "kpi_ajour":
+      return <Kpi etikett="À jour" verdi={d.kpi.aJour} farge="var(--accent2)" sti="/oppgaver" />;
+    case "kpi_forsinket":
+      return <Kpi etikett="Forsinket" verdi={d.kpi.forsinket} farge="var(--warn)" sti="/oppgaver" />;
+    case "kpi_avvik":
+      return <Kpi etikett="Åpne avvik" verdi={d.kpi.apneAvvik} farge="var(--danger)" sti="/avvik" />;
+    case "oppfolging":
+      return <Oppfolging d={d} />;
+    case "frister":
+      return <Frister d={d} />;
+    case "oppgaver":
+      return d.oppgaveliste ? <Oppgaver rader={d.oppgaveliste} /> : null;
+    case "avvik":
+      return d.avviksliste ? <Avvik rader={d.avviksliste} /> : null;
+    case "kontrakter":
+      return d.utlopende ? <Kontrakter rader={d.utlopende} /> : null;
+    case "tilstand":
+      return d.tilstand ? <Tilstand rader={d.tilstand} /> : null;
+    case "rutiner":
+      return d.rutinerTilRevisjon ? <Rutiner rader={d.rutinerTilRevisjon} /> : null;
+    case "aktivitet":
+      return d.aktivitet ? <Aktivitet rader={d.aktivitet} /> : null;
+    case "smatall":
+      return <Smatall d={d} orgNavn={orgNavn} />;
+    default:
+      return null;
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -99,17 +320,6 @@ function Kpi({
         <div className="card-title">{etikett}</div>
         <div className="kpi-tall">{verdi}</div>
       </button>
-    </div>
-  );
-}
-
-function Kpier({ d }: { d: Dashbord }) {
-  return (
-    <div className="dash-kpi">
-      <Kpi etikett="Aktive oppgaver" verdi={d.kpi.oppgaver} farge="var(--accent)" sti="/oppgaver" />
-      <Kpi etikett="À jour" verdi={d.kpi.aJour} farge="var(--accent2)" sti="/oppgaver" />
-      <Kpi etikett="Forsinket" verdi={d.kpi.forsinket} farge="var(--warn)" sti="/oppgaver" />
-      <Kpi etikett="Åpne avvik" verdi={d.kpi.apneAvvik} farge="var(--danger)" sti="/avvik" />
     </div>
   );
 }
