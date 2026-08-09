@@ -115,6 +115,32 @@ const TABELLER: Tabell[] = [
     oppdater: ["text", "order"],
   },
   {
+    navn: "units",
+    kilde: `SELECT id, org_id, COALESCE(type, 'bolig') AS type, navn, beskrivelse, andelsnr,
+                   leilighetsnr, oppgang, etasje, areal_m2, archived_at,
+                   COALESCE(created_at, now()) AS created_at
+            FROM units`,
+    kolonner: ["id", "org_id", "type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at", "created_at"],
+    oppdater: ["type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at"],
+  },
+  {
+    navn: "annual_events",
+    kilde: `SELECT id, org_id, title, description, COALESCE(category, 'annet') AS category,
+                   start_date, event_date, COALESCE(is_recurring, false) AS is_recurring,
+                   COALESCE(created_at, now()) AS created_at
+            FROM annual_events`,
+    kolonner: ["id", "org_id", "title", "description", "category", "start_date", "event_date", "is_recurring", "created_at"],
+    oppdater: ["title", "description", "category", "start_date", "event_date", "is_recurring"],
+  },
+  {
+    navn: "log_entries",
+    kilde: `SELECT id, org_id, vendor_id, title, description, entry_date, created_by,
+                   COALESCE(created_at, now()) AS created_at
+            FROM log_entries`,
+    kolonner: ["id", "org_id", "vendor_id", "title", "description", "entry_date", "created_by", "created_at"],
+    oppdater: ["vendor_id", "title", "description", "entry_date"],
+  },
+  {
     navn: "parking_spots",
     kilde: `SELECT id, org_id, number, area_label, ownership_type, spot_type, status,
                    holder_name, unit_label, notes, COALESCE(created_at, now()) AS created_at
