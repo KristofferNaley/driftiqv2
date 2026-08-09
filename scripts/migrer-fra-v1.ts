@@ -91,10 +91,40 @@ const TABELLER: Tabell[] = [
   {
     navn: "vendors",
     kilde: `SELECT id, org_id, name, COALESCE(active, true) AS active,
+                   COALESCE(relationship_type, 'avtale') AS relationship_type,
+                   category, customer_number, COALESCE(ehf, false) AS ehf, last_used_at,
+                   notes, org_number, invoice_reference,
                    COALESCE(created_at, now()) AS created_at
             FROM vendors`,
-    kolonner: ["id", "org_id", "name", "active", "created_at"],
-    oppdater: ["name", "active"],
+    kolonner: ["id", "org_id", "name", "active", "relationship_type", "category", "customer_number", "ehf", "last_used_at", "notes", "org_number", "invoice_reference", "created_at"],
+    oppdater: ["name", "active", "relationship_type", "category", "customer_number", "ehf", "last_used_at", "notes", "org_number", "invoice_reference"],
+  },
+  {
+    navn: "vendor_contacts",
+    kilde: `SELECT id, org_id, vendor_id, name, role, email, phone,
+                   COALESCE(is_primary, false) AS is_primary,
+                   COALESCE(created_at, now()) AS created_at
+            FROM vendor_contacts`,
+    kolonner: ["id", "org_id", "vendor_id", "name", "role", "email", "phone", "is_primary", "created_at"],
+    oppdater: ["name", "role", "email", "phone", "is_primary"],
+  },
+  {
+    navn: "vendor_access_items",
+    kilde: `SELECT id, org_id, vendor_id, title, description, areas,
+                   COALESCE(status, 'utlevert') AS status, issued_to, issued_at,
+                   COALESCE(created_at, now()) AS created_at
+            FROM vendor_access_items`,
+    kolonner: ["id", "org_id", "vendor_id", "title", "description", "areas", "status", "issued_to", "issued_at", "created_at"],
+    oppdater: ["title", "description", "areas", "status", "issued_to", "issued_at"],
+  },
+  {
+    navn: "vendor_notes",
+    kilde: `SELECT id, org_id, vendor_id, text, author_name,
+                   COALESCE(created_at, now()) AS created_at
+            FROM vendor_notes`,
+    kolonner: ["id", "org_id", "vendor_id", "text", "author_name", "created_at"],
+    // Notater er append-only, som behandlingsjournalen på avvik.
+    oppdater: [],
   },
   {
     navn: "tasks",
@@ -334,6 +364,41 @@ async function kopierPassord(): Promise<{ kopiert: number; utenPassord: number }
  * hoppes over: en migrering som genererte nye tokens ville sett vellykket ut helt til noen
  * skannet et oppslag i bygget.
  */
+/**
+ * v1s `vendors.contact_name/_email/_phone` ble erstattet av `vendor_contacts`, men
+ * kolonnene sto igjen med data for leverandører som aldri fikk en ny kontaktperson. v2 har
+ * ikke kolonnene — så de radene ville forsvunnet stille. Her løftes de inn som en
+ * primærkontakt, men BARE der leverandøren ikke allerede har en.
+ */
+async function loftGamleKontakter(): Promise<number> {
+  const { rows } = await v1.query<{ id: string; org_id: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null }>(
+    `SELECT id, org_id, contact_name, contact_email, contact_phone FROM vendors
+     WHERE (contact_name IS NOT NULL OR contact_email IS NOT NULL OR contact_phone IS NOT NULL)
+       AND id NOT IN (SELECT vendor_id FROM vendor_contacts)`,
+  );
+  if (rows.length === 0 || TORRKJOR) return rows.length;
+
+  const klient = await adminPool.connect();
+  try {
+    await klient.query("BEGIN");
+    for (const r of rows) {
+      await klient.query(
+        `INSERT INTO vendor_contacts (id, org_id, vendor_id, name, email, phone, is_primary, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true, now())
+         ON CONFLICT (id) DO NOTHING`,
+        [`legacy-${r.id}`, r.org_id, r.id, r.contact_name ?? "Kontakt", r.contact_email, r.contact_phone],
+      );
+    }
+    await klient.query("COMMIT");
+  } catch (e) {
+    await klient.query("ROLLBACK");
+    throw e;
+  } finally {
+    klient.release();
+  }
+  return rows.length;
+}
+
 async function verifiserQrTokens(): Promise<void> {
   const kilde = await v1.query<{ id: string; qr_token: string | null }>(
     "SELECT id, qr_token FROM tasks WHERE qr_token IS NOT NULL",
@@ -380,6 +445,11 @@ async function main(): Promise<void> {
   const passord = await kopierPassord();
   console.log(`  ${"account (passord)".padEnd(24)} ${passord.kopiert}` +
     (passord.utenPassord ? `  (${passord.utenPassord} uten passord — må bruke «glemt passord»)` : ""));
+
+  const loftet = await loftGamleKontakter();
+  if (loftet > 0) {
+    console.log(`  ${"vendor_contacts (arv)".padEnd(24)} ${loftet}  (fra v1s gamle enkeltkontakt)`);
+  }
 
   if (!TORRKJOR) await verifiserQrTokens();
   console.log("Ferdig.");
