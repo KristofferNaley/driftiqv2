@@ -1,32 +1,42 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Lock, MessageSquarePlus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
-import { avvik } from "@/lib/klient";
+import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
+import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
 
-const MERKE: Record<string, string> = { ny: "warn", under_behandling: "info", lukket: "ok" };
-const ETIKETT: Record<string, string> = {
-  ny: "Ny",
-  under_behandling: "Under behandling",
-  lukket: "Lukket",
-};
+const ALVORLIGHET = [
+  { verdi: "", etikett: "Ikke vurdert" },
+  { verdi: "lav", etikett: "Lav" },
+  { verdi: "middels", etikett: "Middels" },
+  { verdi: "akutt", etikett: "Akutt" },
+];
+
+const STEG = [
+  { status: "ny", etikett: "Meldt" },
+  { status: "under_behandling", etikett: "Under behandling" },
+  { status: "lukket", etikett: "Løst og lukket" },
+];
 
 /**
  * Avviksdetalj — dokumentasjonskjeden.
  *
- * Beskrivelse → behandling → løsning er det som havner i internkontrollpermen (§ 5 pkt. 7).
- * Er avviket lukket, forsvinner BÅDE «Legg til behandling» og «Lukk avvik»: journalen er
- * append-only, og et lukket avvik kan ikke endres.
+ * Beskrivelse → behandling → løsning er det som havner i internkontrollpermen (§ 5 pkt. 7),
+ * og seksjonene er nummerert fordi rekkefølgen ER dokumentasjonen. Journalen er append-only:
+ * innlegg kan verken endres eller slettes, ellers er kjeden ikke troverdig.
+ *
+ * Et lukket avvik kan ikke behandles videre, men KATEGORI og ALVORLIGHET kan fortsatt
+ * rettes. Uten det ville statistikken arvet en hastig førstekategorisering for alltid.
  */
 export default function Avviksdetalj({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, feil, laster, last, orgId } = useOrgData((o) => avvik.hent(o, id), [id]);
+  const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => avvik.hent(o, id), [id]);
   const [behandler, setBehandler] = useState(false);
   const [lukker, setLukker] = useState(false);
+  const [redigerer, setRedigerer] = useState(false);
 
   if (laster || !data) {
     return (
@@ -43,17 +53,17 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
 
   return (
     <Layout
-      tittel={`#${data.number ?? "?"} ${data.title}`}
+      tittel={`#${String(data.number ?? 0).padStart(3, "0")} ${data.title}`}
       handlinger={
         lukket ? (
-          <span className="badge ok">
-            <Lock size={13} strokeWidth={2.2} aria-hidden /> Lukket
-          </span>
+          <span className="badge ok">Løst og lukket</span>
         ) : (
           <>
+            <button className="btn btn-ghost" onClick={() => setRedigerer(true)}>
+              Rediger
+            </button>
             <button className="btn btn-ghost" onClick={() => setBehandler(true)}>
-              <MessageSquarePlus size={16} strokeWidth={2} aria-hidden />
-              Legg til behandling
+              ＋ Legg til behandling
             </button>
             <button className="btn btn-primary" onClick={() => setLukker(true)}>
               Lukk avvik
@@ -61,35 +71,69 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
           </>
         )
       }
+      aside={
+        <Detaljer
+          avvik={data}
+          orgId={orgId!}
+          lukket={lukket}
+          onEndret={last}
+          onFeil={setFeil}
+        />
+      }
     >
       <div className="page-content">
-        <Link href="/avvik" className="list-meta" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-          <ArrowLeft size={14} strokeWidth={2} aria-hidden /> Alle avvik
-        </Link>
-
         <Feil melding={feil} />
 
-        <Kort tittel="Om avviket">
-          <Rad tittel="Status" hoyre={<span className={`badge ${MERKE[data.status]}`}>{ETIKETT[data.status]}</span>} />
-          <Rad tittel="Meldt av" hoyre={data.reportedBy} />
-          <Rad tittel="Ansvarlig" hoyre={data.assignedTo ?? "Ikke tildelt"} />
-          <Rad tittel="Sted" hoyre={data.unitNavn ?? "—"} />
-          <Rad tittel="Frist" hoyre={dato(data.dueDate)} />
-          {data.description && (
-            <div style={{ padding: "14px 20px", fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--muted)" }}>
-              {data.description}
+        <Link href="/avvik" className="tilbake-lenke">
+          ← Alle avvik
+        </Link>
+
+        <Stegviser status={data.status} />
+
+        {/* ── 1 · HVA ER AVVIKET ── */}
+        <Kort
+          tittel="1 · Hva er avviket"
+          handling={
+            !lukket && <span className="field-note">Låses ikke, men endringer spores</span>
+          }
+        >
+          <div style={{ padding: "14px 20px" }}>
+            <div
+              style={{
+                fontSize: "var(--fs-sm)",
+                lineHeight: 1.65,
+                whiteSpace: "pre-wrap",
+                color: data.description ? undefined : "var(--muted)",
+              }}
+            >
+              {data.description || "Ingen beskrivelse."}
+            </div>
+          </div>
+
+          {lukket && (
+            <div className="lukket-blokk">
+              <Meta etikett="Lukket av">{data.resolvedBy ?? "—"}</Meta>
+              <Meta etikett="Lukket dato">{dato(data.resolvedAt)}</Meta>
+              {data.resolutionNotes && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Meta etikett="Løsning">{data.resolutionNotes}</Meta>
+                </div>
+              )}
             </div>
           )}
         </Kort>
 
-        <Kort tittel={`Behandling (${data.behandlinger.length})`}>
+        {/* ── 2 · BEHANDLING ── */}
+        <Kort tittel={`2 · Behandling — hva gjør vi med saken (${data.behandlinger.length})`}>
           {data.behandlinger.length === 0 ? (
             <Tom tekst="Ingen behandlingsinnlegg ennå." />
           ) : (
             data.behandlinger.map((b) => (
-              <div key={b.id} style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
-                <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{b.text}</div>
-                <div className="list-meta" style={{ marginTop: "6px" }}>
+              <div key={b.id} className="logg-rad">
+                <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {b.text}
+                </div>
+                <div className="list-meta" style={{ marginTop: "5px" }}>
                   {b.createdBy} · {dato(b.createdAt)}
                 </div>
               </div>
@@ -97,18 +141,259 @@ export default function Avviksdetalj({ params }: { params: Promise<{ id: string 
           )}
         </Kort>
 
-        <Kort tittel="Endringslogg">
-          {data.logg.map((l) => (
-            <Rad key={l.id} tittel={l.event} meta={dato(l.changedAt)} />
-          ))}
+        {/* ── HISTORIKK ── */}
+        <Kort tittel="Historikk">
+          {data.logg.length === 0 ? (
+            <Tom tekst="Ingen hendelser." />
+          ) : (
+            data.logg.map((l) => (
+              <div key={l.id} className="logg-rad">
+                <div style={{ fontSize: "var(--fs-sm)" }}>{l.event}</div>
+                <div className="list-meta">
+                  {l.changedBy} · {dato(l.changedAt)}
+                </div>
+              </div>
+            ))
+          )}
         </Kort>
       </div>
 
       {behandler && (
-        <LeggTilBehandling orgId={orgId!} devId={id} onLukk={() => setBehandler(false)} onLagret={last} />
+        <LeggTilBehandling
+          orgId={orgId!}
+          devId={id}
+          onLukk={() => setBehandler(false)}
+          onLagret={last}
+        />
       )}
-      {lukker && <LukkAvvik orgId={orgId!} devId={id} onLukk={() => setLukker(false)} onLagret={last} />}
+      {lukker && (
+        <LukkAvvik orgId={orgId!} devId={id} onLukk={() => setLukker(false)} onLagret={last} />
+      )}
+      {redigerer && (
+        <RedigerAvvik
+          orgId={orgId!}
+          avvik={data}
+          onLukk={() => setRedigerer(false)}
+          onLagret={last}
+        />
+      )}
     </Layout>
+  );
+}
+
+/**
+ * Meldt → Under behandling → Løst og lukket.
+ *
+ * Viser hvor saken står i flyten. Status settes ALDRI direkte herfra: lukking krever en
+ * løsningsbeskrivelse, og det kravet ville vært trivielt å omgå med en statusvelger.
+ */
+function Stegviser({ status }: { status: string }) {
+  const naa = STEG.findIndex((s) => s.status === status);
+  return (
+    <div className="stegviser">
+      {STEG.map((s, i) => (
+        <div key={s.status} className={`steg${i < naa ? " passert" : i === naa ? " aktiv" : ""}`}>
+          <span className="steg-prikk" aria-hidden />
+          <span className="steg-tekst">{s.etikett}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Meta({ etikett, children }: { etikett: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="field-label">{etikett}</div>
+      <div style={{ fontSize: "var(--fs-sm)", marginTop: "2px" }}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Høyremenyen. Kategori og alvorlighet lagres UMIDDELBART ved endring, også på et lukket
+ * avvik — de er merkelapper for statistikk, ikke del av den låste historikken.
+ */
+function Detaljer({
+  avvik: a,
+  orgId,
+  lukket,
+  onEndret,
+  onFeil,
+}: {
+  avvik: AvvikDetalj;
+  orgId: string;
+  lukket: boolean;
+  onEndret: () => Promise<void>;
+  onFeil: (m: string) => void;
+}) {
+  const [kategorier, setKategorier] = useState(lesKategorier(null));
+  useEffect(() => {
+    avvik
+      .liste(orgId, { side: 1 })
+      .then((r) => setKategorier(lesKategorier(r.kategorier)))
+      .catch(() => {});
+  }, [orgId]);
+
+  async function settFelt(felt: "category" | "severity", verdi: string) {
+    try {
+      await avvik.endre(orgId, a.id, { [felt]: verdi || null });
+      await onEndret();
+    } catch (e) {
+      onFeil(e instanceof Error ? e.message : "Kunne ikke lagre");
+    }
+  }
+
+  const st = STATUS_VISNING[a.status] ?? STATUS_VISNING.ny!;
+
+  return (
+    <Kort tittel="Detaljer">
+      <div className="detaljer-liste">
+        <Meta etikett="Status">
+          <span className={`badge ${st.merke}`}>{st.etikett}</span>
+        </Meta>
+
+        <div className="field">
+          <label className="field-label" htmlFor="kategori">
+            Kategori
+          </label>
+          <select
+            id="kategori"
+            className="input"
+            value={a.category ?? ""}
+            onChange={(e) => void settFelt("category", e.target.value)}
+          >
+            <option value="">Ingen kategori</option>
+            {kategorier.map((k) => (
+              <option key={k.verdi} value={k.verdi}>
+                {k.etikett}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="alvorlighet">
+            Alvorlighet
+          </label>
+          <select
+            id="alvorlighet"
+            className="input"
+            value={a.severity ?? ""}
+            onChange={(e) => void settFelt("severity", e.target.value)}
+          >
+            {ALVORLIGHET.map((v) => (
+              <option key={v.verdi} value={v.verdi}>
+                {v.etikett}
+              </option>
+            ))}
+          </select>
+          {lukket && (
+            <div className="field-note">
+              Kan endres også etter lukking — endringen føres i historikken. Ellers ville
+              statistikken arvet en hastig førstekategorisering for alltid.
+            </div>
+          )}
+        </div>
+
+        <Meta etikett="Meldt av">{a.reportedBy}</Meta>
+        <Meta etikett="Meldt dato">{dato(a.reportedAt)}</Meta>
+        <Meta etikett="Ansvarlig">{a.assignedTo ?? "Ikke tildelt"}</Meta>
+        <Meta etikett="Leverandør">{a.vendorNavn ?? "—"}</Meta>
+        <Meta etikett="Sted">{a.unitNavn ?? "—"}</Meta>
+        <Meta etikett="Frist">{a.dueDate ? dato(a.dueDate) : "—"}</Meta>
+        {a.taskTittel && <Meta etikett="Knyttet oppgave">{a.taskTittel}</Meta>}
+      </div>
+    </Kort>
+  );
+}
+
+/** Tittel, beskrivelse og koblingene. Kategori og alvorlighet ligger i høyremenyen. */
+function RedigerAvvik({
+  orgId,
+  avvik: a,
+  onLukk,
+  onLagret,
+}: {
+  orgId: string;
+  avvik: AvvikDetalj;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+}) {
+  const [tittel, setTittel] = useState(a.title);
+  const [beskrivelse, setBeskrivelse] = useState(a.description ?? "");
+  const [frist, setFrist] = useState(a.dueDate ?? "");
+  const [ansvarlig, setAnsvarlig] = useState(a.responsibleUserId ?? "");
+  const [vendorId, setVendorId] = useState(a.vendorId ?? "");
+  const [unitId, setUnitId] = useState(a.unitId ?? "");
+  const [folk, setFolk] = useState<Array<{ id: string; navn: string }>>([]);
+  const [firmaer, setFirmaer] = useState<Array<{ id: string; navn: string }>>([]);
+  const [steder, setSteder] = useState<Array<{ id: string; navn: string }>>([]);
+
+  const { sender, feil, send } = useSending(async () => {
+    await onLagret();
+    onLukk();
+  });
+
+  useEffect(() => {
+    void brukere.liste(orgId).then((b) => setFolk(b.map((u) => ({ id: u.id, navn: u.name })))).catch(() => {});
+    void leverandorer.liste(orgId).then((v) => setFirmaer(v.map((f) => ({ id: f.id, navn: f.name })))).catch(() => {});
+    void enheter.liste(orgId).then((e) => setSteder(e.map((u) => ({ id: u.id, navn: u.navn ?? u.andelsnr ?? u.id })))).catch(() => {});
+  }, [orgId]);
+
+  return (
+    <Modal tittel="Rediger avvik" onLukk={onLukk}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(() =>
+            avvik.endre(orgId, a.id, {
+              title: tittel.trim(),
+              description: beskrivelse.trim() || null,
+              dueDate: frist || null,
+              responsibleUserId: ansvarlig || null,
+              vendorId: vendorId || null,
+              unitId: unitId || null,
+            }),
+          );
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+      >
+        <Feil melding={feil} />
+        <Tekstfelt etikett="Tittel" verdi={tittel} onEndre={setTittel} />
+        <Tekstomrade etikett="Beskrivelse" verdi={beskrivelse} onEndre={setBeskrivelse} />
+        <Tekstfelt etikett="Frist for tiltak" type="date" verdi={frist} onEndre={setFrist} />
+
+        <div className="field">
+          <label className="field-label" htmlFor="ansvarlig">Ansvarlig</label>
+          <select id="ansvarlig" className="input" value={ansvarlig} onChange={(e) => setAnsvarlig(e.target.value)}>
+            <option value="">Ikke tildelt</option>
+            {folk.map((u) => <option key={u.id} value={u.id}>{u.navn}</option>)}
+          </select>
+          <div className="field-note">Den ansvarlige får varsel når saken endres.</div>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="lev">Leverandør involvert</label>
+          <select id="lev" className="input" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+            <option value="">Ingen leverandør</option>
+            {firmaer.map((f) => <option key={f.id} value={f.id}>{f.navn}</option>)}
+          </select>
+        </div>
+
+        {steder.length > 0 && (
+          <div className="field">
+            <label className="field-label" htmlFor="sted">Sted</label>
+            <select id="sted" className="input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+              <option value="">Ingen bestemt enhet</option>
+              {steder.map((u) => <option key={u.id} value={u.id}>{u.navn}</option>)}
+            </select>
+          </div>
+        )}
+
+        <Knapperad onAvbryt={onLukk} sender={sender} deaktivert={!tittel.trim()} />
+      </form>
+    </Modal>
   );
 }
 
@@ -134,16 +419,16 @@ function LeggTilBehandling({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => avvik.behandle(orgId, devId, { text: tekst }));
+          void send(() => avvik.behandle(orgId, devId, { text: tekst.trim() }));
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
         <Tekstomrade
-          etikett="Hva gjør dere med saken?"
+          etikett="Hva er gjort?"
           verdi={tekst}
           onEndre={setTekst}
-          notat="Innlegget kan ikke endres eller slettes senere — journalen er dokumentasjon, og er bare troverdig hvis den står som den ble skrevet."
+          notat="Innlegget kan ikke endres eller slettes etterpå. Journalen er dokumentasjon, og den er bare troverdig hvis den står som den ble skrevet."
         />
         <Knapperad onAvbryt={onLukk} sendEtikett="Legg til" sender={sender} deaktivert={!tekst.trim()} />
       </form>
@@ -162,7 +447,7 @@ function LukkAvvik({
   onLukk: () => void;
   onLagret: () => Promise<void>;
 }) {
-  const [navn, setNavn] = useState("");
+  const [av, setAv] = useState("");
   const [losning, setLosning] = useState("");
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
@@ -174,23 +459,29 @@ function LukkAvvik({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => avvik.lukk(orgId, devId, { resolvedBy: navn, resolutionNotes: losning }));
+          void send(() =>
+            avvik.lukk(orgId, devId, { resolvedBy: av.trim(), resolutionNotes: losning.trim() }),
+          );
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
-        <Tekstfelt etikett="Lukket av" verdi={navn} onEndre={setNavn} />
         <Tekstomrade
           etikett="Løsning"
           verdi={losning}
           onEndre={setLosning}
-          notat="Påkrevd. Et avvik lukket uten begrunnelse dokumenterer ingenting — og etter lukking kan verken avviket eller behandlingen endres."
+          notat="Påkrevd. Et avvik uten løsningsbeskrivelse dokumenterer ingenting — det er hele grunnen til at lukking er en egen handling og ikke bare en statusendring."
         />
+        <Tekstfelt etikett="Lukket av" verdi={av} onEndre={setAv} />
+        <div className="field-note">
+          Et lukket avvik kan ikke behandles videre. Kategori og alvorlighet kan fortsatt
+          rettes.
+        </div>
         <Knapperad
           onAvbryt={onLukk}
-          sendEtikett="Lukk avviket"
+          sendEtikett="Lukk avvik"
           sender={sender}
-          deaktivert={!navn.trim() || !losning.trim()}
+          deaktivert={!av.trim() || !losning.trim()}
         />
       </form>
     </Modal>

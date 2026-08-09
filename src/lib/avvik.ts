@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { deviationLogs, deviationTreatments, deviations } from "../db/schema/avvik";
+import { tasks } from "../db/schema/tasks";
 import { units } from "../db/schema/units";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
@@ -279,10 +280,21 @@ export async function hentKategorier(db: Db, orgId: string): Promise<string | nu
 }
 
 export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
+  // Navnene, ikke bare id-ene: detaljsiden skal kunne vise «Heis-Service Bergen» uten et
+  // ekstra rundtur-kall per felt. Samme joins som lista, med oppgaven i tillegg.
   const rader = await db
-    .select({ avvik: deviations, brukernavn: users.name })
+    .select({
+      avvik: deviations,
+      brukernavn: users.name,
+      unitNavn: units.navn,
+      vendorNavn: vendors.name,
+      taskTittel: tasks.title,
+    })
     .from(deviations)
     .leftJoin(users, eq(users.id, deviations.responsibleUserId))
+    .leftJoin(units, eq(units.id, deviations.unitId))
+    .leftJoin(vendors, eq(vendors.id, deviations.vendorId))
+    .leftJoin(tasks, eq(tasks.id, deviations.taskId))
     .where(and(eq(deviations.id, devId), eq(deviations.orgId, orgId)))
     .limit(1);
   const rad = rader[0];
@@ -297,7 +309,14 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
       .orderBy(asc(deviationLogs.changedAt)),
   ]);
 
-  return { ...medAnsvarlig(rad.avvik, rad.brukernavn), behandlinger, logg };
+  return {
+    ...medAnsvarlig(rad.avvik, rad.brukernavn),
+    unitNavn: rad.unitNavn,
+    vendorNavn: rad.vendorNavn,
+    taskTittel: rad.taskTittel,
+    behandlinger,
+    logg,
+  };
 }
 
 /** Neste løpenummer i org-en. Tildeles ved opprettelse og endres aldri. */

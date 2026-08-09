@@ -126,6 +126,20 @@ export type Avvik = {
   reportedBy: string; reportedAt: string; category: string | null; unitNavn: string | null;
 };
 
+export type AvvikDetalj = Avvik & {
+  responsibleUserId: string | null;
+  vendorId: string | null;
+  taskId: string | null;
+  unitId: string | null;
+  vendorNavn: string | null;
+  taskTittel: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  resolutionNotes: string | null;
+  behandlinger: Array<{ id: string; text: string; createdBy: string; createdAt: string }>;
+  logg: Array<{ id: string; event: string; changedBy: string; changedAt: string }>;
+};
+
 export type AvvikSok = {
   side?: number;
   sok?: string;
@@ -158,7 +172,7 @@ export const avvik = {
     return api.hent<AvvikSvar>(org(o, `/deviations?${p.toString()}`));
   },
   hent: (o: string, id: string) =>
-    api.hent<Avvik & { behandlinger: Array<{ id: string; text: string; createdBy: string; createdAt: string }>; logg: Array<{ id: string; event: string; changedAt: string }> }>(org(o, `/deviations/${id}`)),
+    api.hent<AvvikDetalj>(org(o, `/deviations/${id}`)),
   meld: (o: string, d: unknown) => api.send<Avvik>(org(o, "/deviations"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Avvik>(org(o, `/deviations/${id}`), d),
   lukk: (o: string, id: string, d: unknown) => api.send(org(o, `/deviations/${id}/close`), d),
