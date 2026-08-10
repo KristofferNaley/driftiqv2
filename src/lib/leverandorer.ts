@@ -306,3 +306,73 @@ export async function slettNotat(db: Db, orgId: string, vendorId: string, notatI
     .returning({ id: vendorNotes.id });
   if (slettet.length === 0) throw ikkeFunnet("Notat");
 }
+
+// ---------------------------------------------------------------------------------------
+// QR-informasjon til leverandøren
+// ---------------------------------------------------------------------------------------
+
+export const qrInfoInn = z.object({
+  emne: z.string().trim().min(1, "Emnet kan ikke være tomt").max(200),
+  tekst: z.string().trim().min(1, "Meldingen kan ikke være tom").max(20_000),
+  /**
+   * Adressen klienten VIL sende til. Valideres mot leverandørens registrerte kontakter — se
+   * `sendQrInfo`. Feltet finnes fordi en leverandør kan ha flere kontaktpersoner, og styret
+   * skal kunne velge hvem av dem som får meldingen.
+   */
+  til: z.string().trim().toLowerCase().email("Ugyldig e-postadresse"),
+});
+
+/**
+ * Sender meldingen om QR-kvittering til leverandøren, på styrets vegne.
+ *
+ * ## Mottakeren bestemmes av SERVEREN, ikke av kroppen
+ *
+ * Teksten og emnet kommer fra klienten — det er meningen, styret redigerer meldingen før den
+ * går. Men adressen gjør ikke: den må finnes blant leverandørens registrerte kontakter, eller
+ * være leverandørens egen adresse. Uten den sjekken er dette endepunktet en åpen e-postrelé for
+ * enhver innlogget bruker: send hva som helst til hvem som helst, fra vårt verifiserte domene.
+ * Det er en spam-maskin med vår avsenderreputasjon som innsats.
+ *
+ * ## Reply-To, ikke From
+ *
+ * E-posten går fra `noreply@driftiq.no`, fordi det er det domenet som er verifisert hos Resend.
+ * Å sette `From` til styremedlemmets adresse ville krevd at DE verifiserte domenet sitt hos oss,
+ * og uten det havner meldingen i søppelpost (SPF/DKIM stemmer ikke). Reply-To løser det som
+ * betyr noe: leverandøren svarer til et menneske.
+ *
+ * ## Sendingen loggføres som notat
+ *
+ * På leverandøren, i den append-only notatloggen. Ellers vet ingen om meldingen er sendt — og
+ * da blir den enten sendt tre ganger, eller aldri fordi alle tror en annen gjorde det.
+ */
+export async function sendQrInfo(
+  db: Db,
+  orgId: string,
+  vendorId: string,
+  avsender: { navn: string; epost: string | null },
+  data: z.infer<typeof qrInfoInn>,
+) {
+  const lev = await hentLeverandor(db, orgId, vendorId);
+
+  // KONTAKTPERSONENES adresser. Leverandøren selv har ingen e-postkolonne — v1s
+  // `contact_email` ble erstattet av `vendorContacts`, se kommentaren på tabellen.
+  const lovlige = new Set(
+    lev.kontakter
+      .map((k) => k.email)
+      .filter((e): e is string => Boolean(e))
+      .map((e) => e.trim().toLowerCase()),
+  );
+  if (!lovlige.has(data.til)) {
+    throw ugyldig(
+      "Adressen er ikke registrert på en kontaktperson hos leverandøren. Legg den inn først.",
+    );
+  }
+
+  // Sendes ETTER at notatet er skrevet, gjennom kallstedets `etterCommit`: e-post er en
+  // sidevirkning, og en Resend-feil skal ikke rulle tilbake loggføringen av at vi forsøkte.
+  await leggTilNotat(db, orgId, vendorId, avsender.navn, {
+    text: `Sendte info om QR-kvittering til ${data.til}.`,
+  });
+
+  return { til: data.til, emne: data.emne, tekst: data.tekst, svarTil: avsender.epost };
+}
