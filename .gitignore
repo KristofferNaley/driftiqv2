@@ -7,3 +7,6 @@ next-env.d.ts
 # macOS-støy fra Finder
 .DS_Store
 ._*
+
+# Skisser og mockups — arbeidsmateriale, ikke en del av appen.
+mockups/

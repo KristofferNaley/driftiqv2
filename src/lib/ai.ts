@@ -5,11 +5,14 @@
  * Selve verktøyene ligger i `ai-verktoy.ts`. Les sikkerhetsnotatet der før du rører noe.
  */
 
-import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { aiConversations, aiMessages, aiUsageDaily } from "../db/schema/ai";
+import { deviations } from "../db/schema/avvik";
+import { contracts } from "../db/schema/kontrakter";
+import { hmsGoals } from "../db/schema/internkontroll";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet } from "./api";
 import { verktoyskjemaer } from "./ai-verktoy";
@@ -283,6 +286,12 @@ Du hjelper styret med drift, vedlikehold og internkontroll. Svar kort og konkret
 ## Om bygget
 ${bygningsinfo}
 
+## Formatering
+Svarene vises som REN TEKST i appen — det finnes ingen markdown-rendering. Skriv derfor uten
+markdown: ingen **stjerner**, ingen | tabeller |, ingen overskrifter med #. Bruk korte avsnitt
+og enkle lister med bindestrek. Nevn aldri interne feltnavn eller verktøysvar (som
+«harDokument: false») — si hva det BETYR for styret i stedet.
+
 ## Regler
 - Bruk verktøyene til å hente FAKTISKE data før du svarer på noe om dette laget. Ikke gjett.
 - Får du «avkortet: true», si fra at listen er forkortet i stedet for å konkludere på et
@@ -297,3 +306,120 @@ ${bygningsinfo}
 
 /** Verktøydefinisjonene, videreeksportert for rutelaget. */
 export { verktoyskjemaer };
+
+// ---------------------------------------------------------------------------------------
+// «Det som skiller seg ut nå» — inngangskortene på rådgiversiden
+// ---------------------------------------------------------------------------------------
+
+export type AiKort = {
+  antall: number;
+  /** Enheten under tallet — «AVVIK», «KONTRAKTER». Versaler settes av CSS-en, ikke her. */
+  enhet: string;
+  tittel: string;
+  detalj: string;
+  /** Spørsmålet et klikk på kortet stiller rådgiveren. Ferdig formulert — kortet ER spørsmålet. */
+  sporsmal: string;
+  tone: "rod" | "gul" | "gronn";
+};
+
+/**
+ * Opptil tre kort med EKTE tall fra lagets egne data.
+ *
+ * Kortene er ikke pynt på en tom side — de er broen fra «hva skal jeg egentlig spørre om?»
+ * til den første meldingen. Et blankt chatfelt forutsetter at styret vet hva som er galt;
+ * kortene snur det: her er det som skiller seg ut, trykk for å grave i det. Derfor bærer
+ * hvert kort sitt eget ferdigformulerte spørsmål.
+ *
+ * Tersklene er strengere enn dashbordets «Krever oppfølging» med vilje: dashbordet viser alt
+ * som trenger en hånd, dette viser det som er verdt en SAMTALE. Et avvik meldt i forrige uke
+ * er en arbeidsliste; et som har ligget i 60 dager er et mønster.
+ */
+export async function hentAiOversikt(db: Db, orgId: string): Promise<AiKort[]> {
+  const seksti = new Date(Date.now() - 60 * 86_400_000);
+  const gamleAvvik = await db
+    .select({ n: sql<number>`count(*)::int`, eldste: sql<string | null>`min(${deviations.reportedAt})::date` })
+    .from(deviations)
+    .where(and(eq(deviations.orgId, orgId), ne(deviations.status, "lukket"), lt(deviations.reportedAt, seksti)));
+
+  const omNittiDager = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+  const iDag = new Date().toISOString().slice(0, 10);
+  const utloper = await db
+    .select({ title: contracts.title, endDate: contracts.endDate })
+    .from(contracts)
+    .where(
+      and(
+        eq(contracts.orgId, orgId),
+        isNull(contracts.archivedAt),
+        isNotNull(contracts.endDate),
+        lte(contracts.endDate, omNittiDager),
+        gte(contracts.endDate, iDag),
+      ),
+    )
+    .orderBy(asc(contracts.endDate));
+
+  const aar = new Date().getFullYear();
+  const maal = await db
+    .select({ approved: hmsGoals.approved })
+    .from(hmsGoals)
+    .where(and(eq(hmsGoals.orgId, orgId), eq(hmsGoals.year, aar)))
+    .limit(1);
+
+  const kort: AiKort[] = [];
+
+  const antallGamle = gamleAvvik[0]?.n ?? 0;
+  if (antallGamle > 0) {
+    kort.push({
+      antall: antallGamle,
+      enhet: "avvik",
+      tittel:
+        antallGamle === 1
+          ? "Ett avvik har ligget åpent over 60 dager"
+          : `${TALLORD[antallGamle] ?? antallGamle} avvik har ligget åpne over 60 dager`,
+      detalj: gamleAvvik[0]?.eldste
+        ? `Eldste er meldt ${datoNo(gamleAvvik[0].eldste)} og står fortsatt åpent`
+        : "Uten registrert tiltak",
+      sporsmal: "Hvilke åpne avvik har ligget lengst, og hva bør vi gjøre med dem?",
+      tone: "rod",
+    });
+  }
+
+  if (utloper.length > 0) {
+    const siste = utloper[utloper.length - 1]!.endDate!;
+    kort.push({
+      antall: utloper.length,
+      enhet: utloper.length === 1 ? "kontrakt" : "kontrakter",
+      tittel:
+        utloper.length === 1
+          ? `Én kontrakt utløper før ${datoNo(siste)}`
+          : `${TALLORD[utloper.length] ?? utloper.length} kontrakter utløper før ${datoNo(siste)}`,
+      detalj: utloper.slice(0, 2).map((k) => k.title).join(" og "),
+      sporsmal: "Hvilke kontrakter utløper de neste tre månedene, og hva bør styret gjøre med dem nå?",
+      tone: "gul",
+    });
+  }
+
+  // HMS-målet: manglende eller ugodkjent er internkontrollens vanligste hull, og det
+  // rådgiveren faktisk kan forklare — den kjenner forskriftens punkter gjennom verktøyene.
+  if (!maal[0] || !maal[0].approved) {
+    // Tallet er 1 — det er ETT mål som mangler. Året står i tittelen, ikke i enheten.
+    kort.push({
+      antall: 1,
+      enhet: "hms-mål",
+      tittel: maal[0] ? `HMS-målet for ${aar} er ikke godkjent av styret` : `HMS-mål for ${aar} er ikke satt`,
+      detalj: "Internkontrollforskriften § 5 pkt. 4 krever skriftlige mål for helse, miljø og sikkerhet",
+      sporsmal: `Hva krever internkontrollforskriften av HMS-mål, og hva mangler hos oss i ${aar}?`,
+      tone: "gronn",
+    });
+  }
+
+  return kort.slice(0, 3);
+}
+
+/** «Tre avvik», ikke «3 avvik» — kortteksten er en setning, og små tall skrives med bokstaver. */
+const TALLORD: Record<number, string> = {
+  2: "To", 3: "Tre", 4: "Fire", 5: "Fem", 6: "Seks", 7: "Sju", 8: "Åtte", 9: "Ni",
+};
+
+function datoNo(d: string): string {
+  return new Date(`${d}T12:00:00`).toLocaleDateString("nb-NO", { day: "numeric", month: "long" });
+}
