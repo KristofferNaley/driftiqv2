@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Kontaktskjema } from "./kontaktskjema";
+import { APP_URL } from "@/lib/urler";
 
 /**
  * Landingssiden.
@@ -195,7 +195,7 @@ export default function Landing() {
 
       <section className="mk-seksjon smal">
         <p className="mk-liten">
-          Allerede kunde? <Link href="/logg-inn">Logg inn her</Link>.
+          Allerede kunde? <a href={`${APP_URL}/logg-inn`}>Logg inn her</a>.
         </p>
       </section>
     </main>

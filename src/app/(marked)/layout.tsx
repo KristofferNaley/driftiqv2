@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Temaveksler } from "./temaveksler";
-import { MARKED_URL } from "@/lib/urler";
+import { APP_URL, MARKED_URL } from "@/lib/urler";
 
 /**
  * Landingssiden. Egen rutegruppe, ingen `OktProvider`.
@@ -60,7 +60,9 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
           <a href="#moduler">Hva systemet dekker</a>
           <a href="#kontakt">Bli pilotlag</a>
           <Temaveksler />
-          <Link className="mk-knapp-liten" href="/logg-inn">Logg inn</Link>
+          {/* Absolutt til kundeappen, ikke relativ: innlogging på markedsverten setter
+              cookien på feil origin og ender i 404 (se middleware.ts). */}
+          <a className="mk-knapp-liten" href={`${APP_URL}/logg-inn`}>Logg inn</a>
         </nav>
       </header>
 
@@ -74,7 +76,7 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
           </span>
           <span className="mk-fot-lenker">
             <Link href="/personvern">Personvern</Link>
-            <Link href="/logg-inn">Logg inn</Link>
+            <a href={`${APP_URL}/logg-inn`}>Logg inn</a>
           </span>
         </div>
       </footer>
