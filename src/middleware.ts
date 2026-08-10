@@ -38,10 +38,13 @@ function alltidTillatt(sti: string): boolean {
     sti === "/favicon.ico" ||
     sti === "/robots.txt" ||
     sti === "/sitemap.xml" ||
-    sti === "/logg-inn" ||
-    sti === "/glemt-passord" ||
-    sti === "/nytt-passord"
+    erInnlogging(sti)
   );
+}
+
+/** Innloggingsflyten. Må finnes på app- og panelverten, men hører ikke hjemme på marked. */
+function erInnlogging(sti: string): boolean {
+  return sti === "/logg-inn" || sti === "/glemt-passord" || sti === "/nytt-passord";
 }
 
 const erPanel = (sti: string) => sti === "/plattform" || sti.startsWith("/plattform/");
@@ -56,7 +59,16 @@ export function middleware(req: NextRequest) {
   const vert = req.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
   const sti = req.nextUrl.pathname;
 
-  if (alltidTillatt(sti)) return NextResponse.next();
+  if (alltidTillatt(sti)) {
+    // Innlogging på markedsverten er en felle, ikke en tjeneste: skjemaet virker, men
+    // Better Auth sin cookie er vertsbunden og settes på feil origin, og `/dashboard`
+    // etterpå er 404 her. Brukeren har rett ærend på feil dør — send dem til riktig vert
+    // i stedet for å la innloggingen lykkes ubrukelig.
+    if (vert === VERT_MARKED && VERT_APP && VERT_APP !== VERT_MARKED && erInnlogging(sti)) {
+      return NextResponse.redirect(`https://${VERT_APP}${sti}${req.nextUrl.search}`);
+    }
+    return NextResponse.next();
+  }
 
   // Ukjent vert (IP-adresse, localhost, en ny CNAME) behandles som enkeltvert. Å svare 404
   // på alt her ville gjort appen utilgjengelig i det noen når den på en måte vi ikke listet.
@@ -97,7 +109,8 @@ function tilSti(req: NextRequest, sti: string) {
   // Cloudflare terminerer TLS og sender `x-forwarded-proto`. Uten den antar vi http, som er
   // riktig lokalt.
   const protokoll = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
-  return NextResponse.redirect(`${protokoll}://${vert}${sti}`);
+  // Query-strengen blir med: `/?utm=x` skal bli `/dashboard?utm=x`, ikke miste sporingen.
+  return NextResponse.redirect(`${protokoll}://${vert}${sti}${req.nextUrl.search}`);
 }
 
 /**

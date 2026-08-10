@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useOkt } from "./OktProvider";
 
 /**
@@ -133,13 +133,21 @@ export function Hurtigskjema({
 }) {
   const [verdi, setVerdi] = useState("");
   const [sender, setSender] = useState(false);
+  const felt = useRef<HTMLInputElement>(null);
 
   return (
     <form
       style={{ display: "flex", gap: "8px" }}
       onSubmit={async (e) => {
         e.preventDefault();
-        if (!verdi.trim() || sender) return;
+        // Tomt felt: sett fokus der i stedet for å gjøre ingenting. Knappen er IKKE
+        // deaktivert på tom verdi — en permanent grå knapp leses som «ødelagt», ikke som
+        // «skriv i feltet først», og det var nøyaktig slik den ble meldt inn som feil.
+        if (!verdi.trim()) {
+          felt.current?.focus();
+          return;
+        }
+        if (sender) return;
         setSender(true);
         try {
           await onSend(verdi.trim());
@@ -150,6 +158,7 @@ export function Hurtigskjema({
       }}
     >
       <input
+        ref={felt}
         className="input"
         style={{ minWidth: "180px" }}
         placeholder={plassholder}
@@ -157,7 +166,7 @@ export function Hurtigskjema({
         value={verdi}
         onChange={(e) => setVerdi(e.target.value)}
       />
-      <button className="btn btn-primary" disabled={!verdi.trim() || sender}>
+      <button className="btn btn-primary" disabled={sender}>
         {knapp}
       </button>
     </form>

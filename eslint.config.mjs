@@ -32,6 +32,8 @@ export default ts.config(
         window: "readonly",
         document: "readonly",
         localStorage: "readonly",
+        /** `navigator.clipboard` — «Kopier teksten» i leverandørmeldingen. */
+        navigator: "readonly",
         fetch: "readonly",
         FormData: "readonly",
         File: "readonly",
