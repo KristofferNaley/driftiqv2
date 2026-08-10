@@ -73,13 +73,15 @@ export async function hentKontrakter(db: Db, orgId: string, opts: { arkiverte?: 
 }
 
 export async function hentKontrakt(db: Db, orgId: string, contractId: string) {
+  // Leverandørnavnet joines inn som i listen — detaljsiden viste «—» uten det.
   const rader = await db
-    .select()
+    .select({ kontrakt: contracts, vendorName: vendors.name })
     .from(contracts)
+    .leftJoin(vendors, eq(vendors.id, contracts.vendorId))
     .where(and(eq(contracts.id, contractId), eq(contracts.orgId, orgId)))
     .limit(1);
-  const kontrakt = rader[0];
-  if (!kontrakt) throw ikkeFunnet("Avtale");
+  const rad = rader[0];
+  if (!rad) throw ikkeFunnet("Avtale");
 
   const prishistorikk = await db
     .select()
@@ -87,7 +89,7 @@ export async function hentKontrakt(db: Db, orgId: string, contractId: string) {
     .where(eq(contractPriceHistory.contractId, contractId))
     .orderBy(desc(contractPriceHistory.effectiveDate));
 
-  return { ...kontrakt, prishistorikk };
+  return { ...rad.kontrakt, vendorName: rad.vendorName, prishistorikk };
 }
 
 export async function opprettKontrakt(db: Db, orgId: string, data: z.infer<typeof kontraktInn>) {

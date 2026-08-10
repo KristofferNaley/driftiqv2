@@ -24,6 +24,8 @@ import {
   leggTilPris,
   opprettKontrakt,
   slettDokument,
+  slettKontrakt,
+  slettPris,
   utlopteAvtaler,
 } from "../src/lib/kontrakter";
 import { bruktLagring, filSti } from "../src/lib/lagring";
@@ -256,5 +258,64 @@ describe("prishistorikk", () => {
     const etter = await i(orgId, (db) => hentKontrakt(db, orgId, k.id));
     expect(etter.annualSum, "Eldre pris overstyrte den nyeste").toBe(12000);
     expect(etter.prishistorikk.map((p) => p.annualSum)).toEqual([12000, 11000]);
+  });
+
+  it("regner årssummen på nytt når nyeste pris slettes", async () => {
+    // Uten omregningen ble summen stående på prisen som nettopp ble fjernet.
+    const { orgId, vendorId } = await oppsett();
+    const k = await i(orgId, (db) => opprettKontrakt(db, orgId, grunn(vendorId)));
+    await i(orgId, (db) => leggTilPris(db, orgId, k.id, { effectiveDate: "2025-01-01", annualSum: 11000 }));
+    const nyeste = await i(orgId, (db) =>
+      leggTilPris(db, orgId, k.id, { effectiveDate: "2026-01-01", annualSum: 12000 }),
+    );
+
+    await i(orgId, (db) => slettPris(db, orgId, k.id, nyeste.id));
+
+    const etter = await i(orgId, (db) => hentKontrakt(db, orgId, k.id));
+    expect(etter.annualSum).toBe(11000);
+  });
+
+  it("lar årssummen stå når siste prisoppføring slettes", async () => {
+    // Summen kan være satt direkte på avtalen, uten historikk — den skal ikke nulles.
+    const { orgId, vendorId } = await oppsett();
+    const k = await i(orgId, (db) =>
+      opprettKontrakt(db, orgId, { ...grunn(vendorId), annualSum: 10000 }),
+    );
+    const eneste = await i(orgId, (db) =>
+      leggTilPris(db, orgId, k.id, { effectiveDate: "2026-01-01", annualSum: 12000 }),
+    );
+
+    await i(orgId, (db) => slettPris(db, orgId, k.id, eneste.id));
+
+    const etter = await i(orgId, (db) => hentKontrakt(db, orgId, k.id));
+    expect(etter.annualSum).toBe(12000);
+    expect(etter.prishistorikk).toEqual([]);
+  });
+});
+
+describe("sletting", () => {
+  it("sletter avtalen med prishistorikk og fil, og frigjør kvoten", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const k = await i(orgId, (db) => opprettKontrakt(db, orgId, grunn(vendorId)));
+    await i(orgId, (db) => leggTilPris(db, orgId, k.id, { effectiveDate: "2026-01-01", annualSum: 12000 }));
+    const medFil = await i(orgId, (db) =>
+      lastOppDokument(db, orgId, k.id, fil("avtale.pdf", "application/pdf", 500)),
+    );
+
+    await i(orgId, (db) => slettKontrakt(db, orgId, k.id));
+
+    const feil = await feilFra(() => i(orgId, (db) => hentKontrakt(db, orgId, k.id)));
+    expect(feil.status).toBe(404);
+    await expect(stat(filSti(orgId, "contracts", medFil.fileName!))).rejects.toThrow();
+    expect(await i(orgId, (db) => bruktLagring(db, orgId))).toBe(0);
+  });
+
+  it("sletter ikke en avtale i en annen org", async () => {
+    const a = await oppsett();
+    const b = await oppsett();
+    const iB = await i(b.orgId, (db) => opprettKontrakt(db, b.orgId, grunn(b.vendorId)));
+
+    const feil = await feilFra(() => i(a.orgId, (db) => slettKontrakt(db, a.orgId, iB.id)));
+    expect(feil.status).toBe(404);
   });
 });
