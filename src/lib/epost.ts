@@ -42,7 +42,15 @@ export function mottakerTillatt(til: string): boolean {
   return FILTER.some((o) => (o.includes("@") ? o === adresse : o.replace(/^@/, "") === domene));
 }
 
-async function send(til: string, emne: string, html: string): Promise<void> {
+/**
+ * `svarTil` setter Reply-To.
+ *
+ * Alt vi sender kommer FRA `noreply@` — det er riktig for varsler, som ingen skal svare på.
+ * Men meldingen til en leverandør er en e-post fra STYRET, og en leverandør som trykker «svar»
+ * skal treffe styremedlemmet som sendte den. Uten Reply-To havner svaret i en postkasse ingen
+ * leser, og leverandøren tror de har svart.
+ */
+async function send(til: string, emne: string, html: string, svarTil?: string): Promise<void> {
   if (!API_KEY) return;
   if (!mottakerTillatt(til)) {
     // Logges høyt: en e-post som forsvinner stille under testing ser ut som en feil i
@@ -56,6 +64,7 @@ async function send(til: string, emne: string, html: string): Promise<void> {
       to: [til],
       subject: emne,
       html,
+      ...(svarTil ? { replyTo: svarTil } : {}),
     });
     // Resends SDK KASTER IKKE ved API-feil — den returnerer `{ data, error }`. Uten denne
     // sjekken ser en avvist sending (uverifisert avsenderdomene er det vanlige) nøyaktig ut
@@ -149,7 +158,24 @@ function trygg(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const fornavn = (navn: string) => trygg(navn.trim().split(/\s+/)[0] ?? navn);
+/**
+ * Fornavnet, til tiltaleordet i e-postene. «Hei Tore,» leses som en melding til deg; «Hei Tore
+ * Olsen,» leses som et brev fra et system.
+ *
+ * Første ord ER fornavnet i norske navn, og navnene kommer fortrinnsvis fra Enhetsregisteret,
+ * som oppgir `fornavn`/`mellomnavn`/`etternavn` hver for seg — `tolkStyre` skjøter dem i den
+ * rekkefølgen. Derfor trengs ingen egen fornavnskolonne for å få dette til.
+ *
+ * Unntaket er den som skriver seg inn ETTERNAVN FØRST: «Olsen, Tore» ga «Hei Olsen,,». Kommaet
+ * er det eneste holdepunktet vi har for at rekkefølgen er snudd, og da er ordet etter det
+ * fornavnet. Uten kommaet finnes ingen måte å vite det — og vi gjetter ikke.
+ */
+export function fornavn(navn: string): string {
+  const rent = navn.trim();
+  const komma = rent.indexOf(",");
+  const del = komma === -1 ? rent : rent.slice(komma + 1).trim() || rent.slice(0, komma);
+  return trygg(del.split(/\s+/)[0] ?? rent);
+}
 
 /* ── E-postene ─────────────────────────────────────────────────────────────────────── */
 
@@ -410,4 +436,36 @@ export async function sendFeilmeldingSvar(
         "</table>",
     ),
   );
+}
+
+/**
+ * Meldingen til en leverandør om QR-kvittering — teksten styret skrev, i vår ramme.
+ *
+ * ## Hvorfor teksten kommer FERDIG fra klienten
+ *
+ * Innholdet er generert av `lib/leverandormelding.ts` og deretter redigert av styremedlemmet.
+ * Det er hele poenget: de kjenner leverandøren, og en tekst de ikke kan endre blir en tekst de
+ * heller kopierer ut og sender fra Outlook. Serveren bestemmer derfor ikke ORDENE — men den
+ * bestemmer MOTTAKEREN, og det er den viktige halvparten. Se `sendQrInfo` i lib/leverandorer.ts.
+ *
+ * Linjeskift blir avsnitt. Teksten er ren tekst fra et tekstfelt, så hver blokk escapes før
+ * den settes inn — et navn med «<» i seg ville ellers brutt malen, og en leverandør som limer
+ * inn HTML i en merknad skal ikke kunne skrive den inn i vår e-post.
+ */
+export async function sendLeverandorinfo(inn: {
+  til: string;
+  emne: string;
+  tekst: string;
+  /** Avsenderens egen adresse. Svar fra leverandøren skal treffe et menneske. */
+  svarTil: string | null;
+}): Promise<void> {
+  const avsnitt = inn.tekst
+    .split(/\n{2,}/)
+    .map((blokk) => blokk.trim())
+    .filter(Boolean)
+    // Enkle linjeskift inne i et avsnitt beholdes — punktlistene i meldingen er slike linjer.
+    .map((blokk) => p(trygg(blokk).replace(/\n/g, "<br>")))
+    .join("");
+
+  await send(inn.til, inn.emne, ramme(avsnitt), inn.svarTil ?? undefined);
 }

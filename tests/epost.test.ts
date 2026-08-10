@@ -21,6 +21,36 @@ afterEach(() => {
   delete process.env.EPOST_TILLATTE_DOMENER;
 });
 
+describe("fornavn", () => {
+  // Tiltaleordet i tre av malene. Bommer den, ser hver e-post vi sender slurvete ut.
+  const f = async (navn: string) => (await import("../src/lib/epost")).fornavn(navn);
+
+  it("tar første ord", async () => {
+    expect(await f("Tore Olsen")).toBe("Tore");
+  });
+
+  it("hopper over mellomnavn — de står MELLOM for- og etternavn", async () => {
+    expect(await f("Anne Marie Berg Hansen")).toBe("Anne");
+  });
+
+  it("takler ett enkelt navn", async () => {
+    expect(await f("Vaktmesteren")).toBe("Vaktmesteren");
+  });
+
+  it("snur når navnet er skrevet etternavn først", async () => {
+    // Uten dette ble tiltalen «Hei Olsen,,» — kommaet ble med inn i e-posten.
+    expect(await f("Olsen, Tore")).toBe("Tore");
+  });
+
+  it("faller tilbake til etternavnet når det ikke står noe etter kommaet", async () => {
+    expect(await f("Olsen,")).toBe("Olsen");
+  });
+
+  it("escaper navnet — det går rett inn i en HTML-mal", async () => {
+    expect(await f("<script>")).toBe("&lt;script&gt;");
+  });
+});
+
 describe("mottakerTillatt", () => {
   it("slipper gjennom alt når vakten ikke er satt", async () => {
     // Med vilje: produksjon skal ikke være avhengig av at noen husker å konfigurere den,
