@@ -1,5 +1,5 @@
 import { lesKropp, orgRute } from "@/lib/api";
-import { endreKontrakt, hentKontrakt, kontraktEndring } from "@/lib/kontrakter";
+import { endreKontrakt, hentKontrakt, kontraktEndring, slettKontrakt } from "@/lib/kontrakter";
 
 type P = { contractId: string };
 
@@ -14,4 +14,11 @@ export const PUT = orgRute<P>({
   modul: "kontrakter",
   handler: async ({ db, orgId, params, req }) =>
     endreKontrakt(db, orgId, params.contractId, await lesKropp(req, kontraktEndring)),
+});
+
+export const DELETE = orgRute<P>({
+  nivaa: "redigering",
+  modul: "kontrakter",
+  status: 204,
+  handler: ({ db, orgId, params }) => slettKontrakt(db, orgId, params.contractId),
 });

@@ -145,6 +145,17 @@ export async function arkiverKontrakt(
   return arkivert!;
 }
 
+/**
+ * Sletting er for feilregistreringer — en avtale som ER avsluttet skal arkiveres, ikke
+ * slettes, fordi den har verdi som historikk. Prishistorikken ryker med raden (cascade);
+ * fila slettes ETTER raden, samme rekkefølge som `slettDokument` og av samme grunn.
+ */
+export async function slettKontrakt(db: Db, orgId: string, contractId: string) {
+  const kontrakt = await hentKontrakt(db, orgId, contractId);
+  await db.delete(contracts).where(and(eq(contracts.id, contractId), eq(contracts.orgId, orgId)));
+  if (kontrakt.fileName) await slettFil(orgId, MODUL, kontrakt.fileName);
+}
+
 export async function gjenopprettKontrakt(db: Db, orgId: string, contractId: string) {
   await hentKontrakt(db, orgId, contractId);
   const [tilbake] = await db
@@ -247,6 +258,22 @@ export async function slettPris(db: Db, orgId: string, contractId: string, entry
   if (r.length === 0) throw ikkeFunnet("Prisoppføring");
 
   await db.delete(contractPriceHistory).where(eq(contractPriceHistory.id, entryId));
+
+  // Årssummen følger nyeste gjenværende pris — samme regel som `leggTilPris`. Var det den
+  // nyeste som ble slettet, ville summen ellers blitt stående på den. Uten gjenværende
+  // oppføringer røres ikke summen: den kan være satt direkte på avtalen, uten historikk.
+  const nyeste = await db
+    .select({ annualSum: contractPriceHistory.annualSum })
+    .from(contractPriceHistory)
+    .where(eq(contractPriceHistory.contractId, contractId))
+    .orderBy(desc(contractPriceHistory.effectiveDate))
+    .limit(1);
+  if (nyeste[0]) {
+    await db
+      .update(contracts)
+      .set({ annualSum: nyeste[0].annualSum })
+      .where(and(eq(contracts.id, contractId), eq(contracts.orgId, orgId)));
+  }
 }
 
 /** Avtaler som har utløpt og ennå ikke er arkivert — «åpen til den lukkes». */
