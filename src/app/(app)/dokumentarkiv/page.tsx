@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
-import { Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
+import { Avkryssing, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { dokumenter, type Arkivoversikt, type Dokument, type Mappe } from "@/lib/klient";
 
 /**
@@ -362,6 +362,8 @@ function Mappevisning({
     }
   }
 
+  const [redigerer, setRedigerer] = useState<Dokument | null>(null);
+
   async function slett(d: Dokument) {
     onFeil(null);
     try {
@@ -429,18 +431,121 @@ function Mappevisning({
               <div className="card-title">{aar}</div>
             </div>
             {docs.map((d) => (
-              <Dokumentrad key={d.id} dok={d} orgId={orgId} onSlett={() => void slett(d)} />
+              <Dokumentrad key={d.id} dok={d} orgId={orgId} onRediger={() => setRedigerer(d)} onSlett={() => void slett(d)} />
             ))}
           </div>
         ))
       ) : (
         <div className="card">
           {liste.map((d) => (
-            <Dokumentrad key={d.id} dok={d} orgId={orgId} onSlett={() => void slett(d)} />
+            <Dokumentrad key={d.id} dok={d} orgId={orgId} onRediger={() => setRedigerer(d)} onSlett={() => void slett(d)} />
           ))}
         </div>
       )}
+      {redigerer && (
+        <RedigerDokument
+          orgId={orgId!}
+          dok={redigerer}
+          mappevalg={[
+            ...oversikt.faste.map((f) => ({ verdi: f.nokkel, etikett: mappenavn(f.nokkel, oversikt) })),
+            ...(alleMapper ?? []).map((m) => ({ verdi: m.id, etikett: `${m.icon} ${m.name}` })),
+          ]}
+          onLukk={() => setRedigerer(null)}
+          onLagret={async () => {
+            await last();
+            await onEndret();
+            setRedigerer(null);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Metadataene på et dokument — tittel, mappe, dokumentdato, beskrivelse og AI-tilgang.
+ *
+ * Fila selv røres ikke; skal innholdet byttes, laster man opp på nytt. Det er metadataene som
+ * trenger stell i ettertid: opplastingen setter tittelen fra filnavnet og datoen til i dag,
+ * og «Referat_v2_FINAL(2)» med feil år er verken søkbart eller riktig plassert i årsmappene.
+ *
+ * `Kan brukes av AI` er en OPT-IN per dokument, samme mekanisme som på kontrakter: dokumentet
+ * sendes til Anthropics API når AI-rådgiveren leser det, og protokoller med personopplysninger
+ * skal ikke dit ved et uhell. Derfor står forklaringen i klartekst under avkryssingen.
+ */
+function RedigerDokument({
+  orgId,
+  dok,
+  mappevalg,
+  onLukk,
+  onLagret,
+}: {
+  orgId: string;
+  dok: Dokument;
+  mappevalg: Array<{ verdi: string; etikett: string }>;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+}) {
+  const [tittel, setTittel] = useState(dok.title);
+  const [mappe, setMappe] = useState(dok.folder);
+  const [dokDato, setDokDato] = useState(dok.documentDate ?? "");
+  const [beskrivelse, setBeskrivelse] = useState(dok.description ?? "");
+  const [aiLov, setAiLov] = useState(dok.aiReadable);
+  const { sender, feil, send } = useSending(async () => {
+    await onLagret();
+  });
+
+  return (
+    <Modal tittel="Rediger dokument" onLukk={onLukk}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(() =>
+            dokumenter.endre(orgId, dok.id, {
+              title: tittel.trim(),
+              folder: mappe,
+              documentDate: dokDato || null,
+              description: beskrivelse.trim() || null,
+              aiReadable: aiLov,
+            }),
+          );
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+      >
+        <Feil melding={feil} />
+        {/* Filnavnet er identiteten til selve fila og kan ikke endres — det vises så man ser
+            hvilket dokument man står i, uansett hva tittelen sier. */}
+        <div className="field-note" style={{ marginTop: "-6px" }}>{dok.originalName}</div>
+
+        <Tekstfelt etikett="Tittel *" verdi={tittel} onEndre={setTittel} />
+        <Nedtrekk etikett="Mappe" verdi={mappe} onEndre={setMappe} valg={mappevalg} />
+        <Tekstfelt
+          etikett="Dokumentdato"
+          type="date"
+          verdi={dokDato}
+          onEndre={setDokDato}
+          notat="Datoen på selve dokumentet. Sett den riktig når du laster opp noe gammelt."
+        />
+        <Tekstomrade
+          etikett="Beskrivelse (valgfritt)"
+          verdi={beskrivelse}
+          onEndre={setBeskrivelse}
+          notat="F.eks. hvilken revisjon, hvor den kommer fra."
+        />
+        <Avkryssing
+          etikett="Kan brukes av AI"
+          verdi={aiLov}
+          onEndre={setAiLov}
+          notat="AI-rådgiveren kan lese selve dokumentet og svare ut fra innholdet — nyttig for vedtekter og husordensregler. Dokumentet sendes da til Anthropics API. Tenk deg om for protokoller med personopplysninger."
+        />
+        <Knapperad
+          onAvbryt={onLukk}
+          sendEtikett="Lagre endringer"
+          sender={sender}
+          deaktivert={!tittel.trim()}
+        />
+      </form>
+    </Modal>
   );
 }
 
@@ -475,11 +580,14 @@ function Dokumentrad({
   dok,
   orgId,
   mappenavn,
+  onRediger,
   onSlett,
 }: {
   dok: { id: string; title: string; originalName: string; contentType: string; fileSize: number | null; documentDate: string | null; uploadedAt: string };
   orgId: string | undefined;
   mappenavn?: string;
+  /** Åpner metadatamodalen. Utelatt i søkeresultatene — der er raden et treff, ikke et objekt man forvalter. */
+  onRediger?: () => void;
   onSlett?: () => void;
 }) {
   return (
@@ -503,10 +611,19 @@ function Dokumentrad({
       </span>
       <span className="doc-celle">{storrelse(dok.fileSize)}</span>
       <span className="doc-celle">{dato(dok.documentDate ?? dok.uploadedAt)}</span>
-      {onSlett ? (
-        <button className="btn btn-ghost" onClick={onSlett} aria-label={`Slett ${dok.title}`}>
-          Slett
-        </button>
+      {onRediger || onSlett ? (
+        <span style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+          {onRediger && (
+            <button className="btn btn-ghost" onClick={onRediger} aria-label={`Rediger ${dok.title}`}>
+              Endre
+            </button>
+          )}
+          {onSlett && (
+            <button className="btn btn-ghost" onClick={onSlett} aria-label={`Slett ${dok.title}`}>
+              Slett
+            </button>
+          )}
+        </span>
       ) : (
         <span />
       )}
