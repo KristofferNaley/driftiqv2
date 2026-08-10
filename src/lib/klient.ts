@@ -11,6 +11,7 @@
  */
 
 import type { MinAktivitet } from "./aktivitetsslag";
+import type { Driftslogg } from "./driftsloggslag";
 
 export class ApiKlientFeil extends Error {
   constructor(
@@ -230,6 +231,10 @@ export type Kontrakt = {
   startDate: string | null; endDate: string | null; vendorId: string; vendorName: string | null;
   fileName: string | null; fileOriginalName: string | null; aiReadable: boolean;
   archivedAt: string | null; archiveNote: string | null;
+  // API-et returnerer hele raden; uten disse i typen kunne ikke redigeringsskjemaet
+  // forhåndsfylle notat og kontaktperson — samme glipp som er dokumentert på `Dokument`.
+  notes: string | null; contactName: string | null; contactEmail: string | null;
+  contactPhone: string | null; predecessorId: string | null;
 };
 
 export const kontrakter = {
@@ -239,10 +244,14 @@ export const kontrakter = {
     api.hent<Kontrakt & { prishistorikk: Array<{ id: string; effectiveDate: string; annualSum: number; note: string | null }> }>(org(o, `/contracts/${id}`)),
   ny: (o: string, d: unknown) => api.send<Kontrakt>(org(o, "/contracts"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Kontrakt>(org(o, `/contracts/${id}`), d),
+  slett: (o: string, id: string) => api.slett(org(o, `/contracts/${id}`)),
   arkiver: (o: string, id: string, d: unknown) => api.send(org(o, `/contracts/${id}/archive`), d),
   gjenopprett: (o: string, id: string) => api.slett(org(o, `/contracts/${id}/archive`)),
   lastOppFil: (o: string, id: string, f: FormData) => api.lastOpp(org(o, `/contracts/${id}/file`), f),
+  slettFil: (o: string, id: string) => api.slett(org(o, `/contracts/${id}/file`)),
   nyPris: (o: string, id: string, d: unknown) => api.send(org(o, `/contracts/${id}/prices`), d),
+  slettPris: (o: string, id: string, prisId: string) =>
+    api.slett(org(o, `/contracts/${id}/prices/${prisId}`)),
 };
 
 export type Leverandor = {
@@ -332,7 +341,8 @@ export type Logglinje = {
 };
 
 export const driftslogg = {
-  liste: (o: string) => api.hent<Logglinje[]>(org(o, "/driftslogg")),
+  /** Den samlede tidslinja — fem kilder flettet på serveren. Typen bor i driftsloggslag.ts. */
+  liste: (o: string) => api.hent<Driftslogg>(org(o, "/driftslogg")),
   ny: (o: string, d: unknown) => api.send<Logglinje>(org(o, "/driftslogg"), d),
   slett: (o: string, id: string) => api.slett(org(o, `/driftslogg/${id}`)),
 };
@@ -414,6 +424,12 @@ export const internkontroll = {
 
 export type Samtale = { id: string; title: string; updatedAt: string };
 
+/** Inngangskortene på rådgiversiden. Speiler `AiKort` i lib/ai.ts — regnes av serveren. */
+export type AiKort = {
+  antall: number; enhet: string; tittel: string; detalj: string;
+  sporsmal: string; tone: "rod" | "gul" | "gronn";
+};
+
 export const aiRadgiver = {
   samtaler: (o: string) => api.hent<Samtale[]>(org(o, "/ai/conversations")),
   hent: (o: string, id: string) =>
@@ -421,6 +437,7 @@ export const aiRadgiver = {
   slett: (o: string, id: string) => api.slett(org(o, `/ai/conversations/${id}`)),
   spor: (o: string, d: unknown) =>
     api.send<{ svar: string; kilder: string[]; samtaleId: string }>(org(o, "/ai/ask"), d),
+  oversikt: (o: string) => api.hent<AiKort[]>(org(o, "/ai/oversikt")),
 };
 
 export type Enhet = {

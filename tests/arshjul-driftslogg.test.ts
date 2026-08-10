@@ -11,7 +11,7 @@ import { Pool, type PoolClient } from "pg";
 import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import { endreHendelse, hentHendelser, opprettHendelse, slettHendelse } from "../src/lib/arshjul";
-import { hentLogg, opprettLogg, slettLogg } from "../src/lib/driftslogg";
+import { hentDriftsloggSamlet, hentLogg, opprettLogg, slettLogg } from "../src/lib/driftslogg";
 import { anonymAktor } from "../src/lib/aktor";
 
 let eierPool: Pool;
@@ -33,6 +33,13 @@ afterEach(async () => {
   for (const id of ryddOrg.splice(0)) {
     await eier.query("DELETE FROM annual_events WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM log_entries WHERE org_id = $1", [id]);
+    // Kildene til den samlede loggen — settes inn av testene under.
+    await eier.query(
+      "DELETE FROM completions WHERE task_id IN (SELECT id FROM tasks WHERE org_id = $1)",
+      [id],
+    );
+    await eier.query("DELETE FROM tasks WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM deviations WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM vendors WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM organizations WHERE id = $1", [id]);
   }
@@ -167,5 +174,77 @@ describe("driftslogg", () => {
   it("gir 404 på ukjent loggføring", async () => {
     const org = await nyOrg();
     expect((await feilFra(() => i(org, (db) => slettLogg(db, org, randomUUID())))).status).toBe(404);
+  });
+});
+
+describe("samlet driftslogg", () => {
+  it("fletter kildene og teller per kilde", async () => {
+    const orgId = await nyOrg();
+    const vendorId = await nyLeverandor(orgId);
+
+    // En utkvittert oppgave, et meldt+lukket avvik og et notat — tre kilder, fire poster.
+    const taskId = randomUUID();
+    await eier.query(
+      `INSERT INTO tasks (id, org_id, vendor_id, title, frequency, active)
+       VALUES ($1,$2,$3,'Trappevask','weekly',true)`,
+      [taskId, orgId, vendorId],
+    );
+    await eier.query(
+      "INSERT INTO completions (id, task_id, completed_by) VALUES ($1,$2,'Vaskefirma AS')",
+      [randomUUID(), taskId],
+    );
+    await eier.query(
+      `INSERT INTO deviations (id, org_id, number, title, status, reported_by, resolved_at, resolved_by, resolution_notes)
+       VALUES ($1,$2,22,'Løs list i trappen','lukket','Kari Nordmann',now(),'Ola Hansen','Skrudd fast')`,
+      [randomUUID(), orgId],
+    );
+    await i(orgId, (db) =>
+      opprettLogg(db, orgId, anonymAktor("Tore"), {
+        title: "Byttet lyspære",
+        entryDate: "2026-08-01",
+      }),
+    );
+
+    const logg = await i(orgId, (db) => hentDriftsloggSamlet(db, orgId));
+
+    expect(logg.antall).toMatchObject({ oppgave: 1, avvik: 2, manuelt: 1, vedlikehold: 0 });
+    expect(logg.poster.map((p) => p.kilde).sort()).toEqual(["avvik", "avvik", "manuelt", "oppgave"]);
+
+    const fullfort = logg.poster.find((p) => p.kilde === "oppgave")!;
+    expect(fullfort.tittel).toBe("Trappevask fullført");
+    expect(fullfort.vendorName).toBe("Vaktmester");
+    expect(fullfort.aktor).toBe("Kvittert av Vaskefirma AS");
+
+    // Meldt og lukket er TO punkter på tidslinja — avstanden mellom dem er informasjonen.
+    const lukket = logg.poster.find((p) => p.tittel.startsWith("Avvik #022 lukket"))!;
+    expect(lukket.tekst).toBe("Skrudd fast");
+    expect(lukket.aktor).toBe("Lukket av Ola Hansen");
+  });
+
+  it("krysser ikke org-grensen", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    await i(b, (db) =>
+      opprettLogg(db, b, anonymAktor("Kari"), { title: "Bare i B", entryDate: "2026-08-01" }),
+    );
+
+    const ut = await i(a, (db) => hentDriftsloggSamlet(db, a));
+    expect(ut.poster).toEqual([]);
+  });
+
+  it("etterregistrerte notater får dato uten klokkeslett", async () => {
+    // Ført i dag om noe som skjedde i forrige uke: et klokkeslett ville vært diktet.
+    const orgId = await nyOrg();
+    await i(orgId, (db) =>
+      opprettLogg(db, orgId, anonymAktor("Tore"), { title: "Gammel jobb", entryDate: "2026-07-01" }),
+    );
+    const iDag = new Date().toISOString().slice(0, 10);
+    await i(orgId, (db) =>
+      opprettLogg(db, orgId, anonymAktor("Tore"), { title: "Fersk jobb", entryDate: iDag }),
+    );
+
+    const ut = await i(orgId, (db) => hentDriftsloggSamlet(db, orgId));
+    expect(ut.poster.find((p) => p.tittel === "Gammel jobb")!.visKlokke).toBe(false);
+    expect(ut.poster.find((p) => p.tittel === "Fersk jobb")!.visKlokke).toBe(true);
   });
 });

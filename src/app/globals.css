@@ -2289,3 +2289,183 @@ textarea.qr-input { resize: vertical; }
 }
 .sjekk-knapp { padding: 9px 11px; flex-shrink: 0; }
 .sjekk-knapp.farlig { color: var(--danger); }
+
+/* ── DRIFTSLOGGEN ──
+   Filterchips, dagsoverskrifter og hendelsesrader. Fargene per kilde følger konvensjonene
+   ellers i appen: oppgaver blå, avvik amber/rød-familien, vernerunde grønn, notat dempet. */
+.dl-filterrad { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.dl-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: 17px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--font-sans); font-size: var(--fs-label);
+  font-weight: 600; cursor: pointer;
+}
+.dl-chip:hover { color: var(--text); }
+.dl-chip.valgt { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dl-sorter { margin-left: auto; }
+
+.dl-dag {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 10px; font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted);
+}
+/* Linja etter overskriften — samme grep som v1, og det som gjør dagene lesbare som seksjoner. */
+.dl-dag::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.dl-rad {
+  display: flex; align-items: flex-start; gap: 13px; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 17px; margin-top: 9px; font-family: var(--font-sans); color: var(--text);
+}
+.dl-rad.lenke { cursor: pointer; }
+.dl-rad.lenke:hover { border-color: var(--accent); }
+.dl-ikon {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); color: var(--muted);
+}
+.dl-ikon.oppgave { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
+.dl-ikon.avvik { background: rgba(245, 166, 35, 0.14); color: var(--warn); }
+.dl-ikon.vedlikehold { background: rgba(var(--accent-rgb), 0.10); color: var(--accent); }
+.dl-ikon.vernerunde { background: rgba(15, 186, 129, 0.12); color: var(--accent2); }
+.dl-tittel { display: block; font-size: var(--fs-sm); font-weight: 600; }
+.dl-tekst { display: block; font-size: var(--fs-sm); color: var(--muted); margin-top: 2px; }
+.dl-meta {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  margin-top: 7px; font-size: var(--fs-label); color: var(--muted);
+}
+.dl-badge {
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 9px;
+}
+.dl-badge.oppgave { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
+.dl-badge.avvik { background: rgba(240, 64, 64, 0.12); color: var(--danger); }
+.dl-badge.vedlikehold { background: rgba(var(--accent-rgb), 0.10); color: var(--accent); }
+.dl-badge.vernerunde { background: rgba(15, 186, 129, 0.12); color: var(--accent2); }
+.dl-badge.manuelt { background: var(--surface2); color: var(--muted); }
+.dl-tid { flex-shrink: 0; font-size: var(--fs-label); color: var(--muted); padding-top: 2px; }
+
+/* Periodevelgeren i driftsloggen. Datofeltene skal ikke ta hele bredden — de er et filter,
+   ikke et skjema, og på mobil brekker raden av seg selv. */
+.dl-periode { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dl-periode-felt {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-label); font-weight: 600; color: var(--muted);
+}
+.dl-periode-felt .input { width: auto; padding: 7px 11px; font-size: var(--fs-sm); }
+
+/* ── AI-RÅDGIVEREN ──
+   Startbildet fra mockups/ai-radgiver-redesign.html: overskrift, statuskort med ekte tall,
+   forslagschips — og feltet limt til bunnen av scrollflaten. Maks-bredden holder samtalen
+   lesbar på store skjermer; 760px er mockupens mål. */
+.ai-side { max-width: 800px; margin: 0 auto; width: 100%; min-height: calc(100dvh - var(--topbar-h) - 40px); display: flex; flex-direction: column; }
+.ai-start { display: flex; flex-direction: column; gap: 12px; }
+.ai-hilsen { margin: 8px 0 0; font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.02em; }
+.ai-ingress { margin: 0 0 10px; color: var(--muted); font-size: var(--fs-sm); max-width: 56ch; line-height: 1.55; }
+
+.ai-eyebrow { display: flex; align-items: center; gap: 9px; margin-top: 8px; }
+.ai-eyebrow span {
+  font-size: var(--fs-label); letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.ai-eyebrow i { flex: 1; height: 1px; background: var(--border); }
+.ai-eyebrow time { font-size: var(--fs-label); color: var(--muted); }
+
+.ai-kort-stabel { display: flex; flex-direction: column; gap: 9px; }
+.ai-kort {
+  display: grid; grid-template-columns: 74px 1fr 20px; align-items: center; gap: 16px;
+  width: 100%; text-align: left; font-family: var(--font-sans); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  border-left-width: 2px; padding: 15px 16px; color: var(--text);
+  transition: border-color 0.14s, background 0.14s, transform 0.14s;
+}
+.ai-kort:hover { background: var(--surface2); transform: translateX(2px); }
+.ai-kort.rod { border-left-color: var(--danger); }
+.ai-kort.gul { border-left-color: var(--warn); }
+.ai-kort.gronn { border-left-color: var(--accent2); }
+.ai-tall { font-size: 27px; font-weight: 500; line-height: 1; text-align: right; letter-spacing: -0.02em; }
+.ai-kort.rod .ai-tall { color: var(--danger); }
+.ai-kort.gul .ai-tall { color: var(--warn); }
+.ai-kort.gronn .ai-tall { color: var(--accent2); }
+.ai-tall small {
+  display: block; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); margin-top: 5px; font-weight: 400;
+}
+.ai-kort b { display: block; font-size: var(--fs-sm); font-weight: 600; margin-bottom: 2px; }
+.ai-kort-detalj { display: block; font-size: var(--fs-label); color: var(--muted); }
+.ai-pil { color: var(--muted); flex-shrink: 0; }
+.ai-kort:hover .ai-pil { color: var(--accent); }
+@media (max-width: 640px) {
+  .ai-kort { grid-template-columns: 56px 1fr; }
+  .ai-pil { display: none; }
+  .ai-tall { font-size: 22px; }
+}
+
+.ai-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ai-chip {
+  font-family: var(--font-sans); font-size: var(--fs-label); color: var(--muted);
+  background: transparent; border: 1px solid var(--border); border-radius: 20px;
+  padding: 7px 13px; cursor: pointer;
+}
+.ai-chip:hover { color: var(--text); background: var(--surface); border-color: var(--accent); }
+
+.ai-samtale { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.ai-tur { max-width: 90%; }
+.ai-tur.bruker { align-self: flex-end; }
+.ai-tur.bruker .ai-boble {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 14px;
+}
+.ai-boble { font-size: var(--fs-sm); line-height: 1.65; }
+.ai-tur.bruker .ai-boble { white-space: pre-wrap; }
+/* Formatterte svar: overskrifter som versal-etiketter (samme stemme som kortoverskriftene
+   ellers i appen), punkter med hengende innrykk, tomme linjer som avsnittsluft. */
+.ai-linje { display: block; min-height: 0.6em; }
+.ai-overskrift {
+  display: block; margin: 14px 0 4px; font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted);
+}
+.ai-punkt { display: block; position: relative; }
+.ai-punkt::before { content: "–"; position: absolute; left: 0; color: var(--muted); }
+.ai-kilder { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Bunnen: sticky mot sidens scrollflate, med bakgrunn så samtalen ikke skinner gjennom.
+   Den negative bunnmargen spiser .page-content sin egen bunnpolstring (28px) — uten det lå
+   det en gjennomsiktig stripe UNDER foten der samtalen scrollet synlig forbi. */
+.ai-fot {
+  position: sticky; bottom: 0; margin-top: auto; margin-bottom: -28px;
+  padding: 14px 0 22px; background: var(--bg);
+}
+.ai-felt {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 10px 10px 16px;
+}
+.ai-felt:focus-within { border-color: var(--accent); }
+.ai-felt input {
+  flex: 1; background: none; border: 0; outline: 0; color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm);
+}
+.ai-felt input::placeholder { color: var(--muted); }
+.ai-send {
+  width: 34px; height: 34px; border-radius: 9px; border: 0; flex-shrink: 0;
+  background: var(--accent); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-send:disabled { opacity: 0.45; cursor: not-allowed; }
+.ai-notat {
+  display: flex; gap: 7px; align-items: flex-start; margin: 9px 2px 0;
+  font-size: 11.5px; color: var(--muted); line-height: 1.45;
+}
+.ai-notat svg { flex-shrink: 0; margin-top: 1px; opacity: 0.7; }
+
+.ai-samtalerad { display: flex; align-items: center; gap: 8px; }
+.ai-samtalevalg {
+  flex: 1; min-width: 0; text-align: left; cursor: pointer;
+  background: none; border: none; font-family: var(--font-sans); color: inherit;
+  padding: 9px 8px; border-radius: 9px;
+}
+.ai-samtalevalg:hover { background: var(--surface2); }
+/* Tittel over, tidspunkt under — spans i en knapp stables ikke av seg selv. */
+.ai-samtalevalg .list-tittel, .ai-samtalevalg .list-meta { display: block; }

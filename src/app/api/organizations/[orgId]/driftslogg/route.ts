@@ -1,11 +1,16 @@
 import { lesKropp, orgRute } from "@/lib/api";
-import { hentLogg, loggInn, opprettLogg } from "@/lib/driftslogg";
+import { hentDriftsloggSamlet, loggInn, opprettLogg } from "@/lib/driftslogg";
 import { aktorFor } from "@/lib/aktor";
 
+/**
+ * Den SAMLEDE loggen — oppgaver, avvik, vedlikehold, vernerunder og notater i én tidslinje.
+ * De manuelle notatene alene serveres ikke lenger her; dashbordets «Siste aktivitet» leser
+ * dem direkte via `hentLogg` på serversiden.
+ */
 export const GET = orgRute({
   nivaa: "lesing",
   modul: "driftslogg",
-  handler: ({ db, orgId }) => hentLogg(db, orgId),
+  handler: ({ db, orgId }) => hentDriftsloggSamlet(db, orgId),
 });
 
 export const POST = orgRute({
