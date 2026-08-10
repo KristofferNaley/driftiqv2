@@ -6,7 +6,12 @@ utover den sentrale Postgres-serveren.
 **Status: fase 1 og 2 ferdig.** Kundeappen er komplett — dashbord med flyttbare widgets,
 alle modulsidene, detaljvisninger, anonym QR-flyt, utskriftsark og varselsjobber.
 Plattformpanelet er også komplett: kunder, prismodell, boligbyggelag, statistikk,
-systemhelse, HMS-maler og support-sesjoner. 382 tester grønne over 28 filer.
+systemhelse, HMS-maler og support-sesjoner. 414 tester grønne over 30 filer.
+
+Siden det: profilmodalen har vertikale faner med selvbetjent tofaktor (TOTP med
+backup-koder) og «Min aktivitet» per person, driftsloggen flettes fra fem kilder ved
+lesing, oppgavedetaljen er redigerbar med sjekklisten som radeditor, dokumentmetadata kan
+endres, og AI-rådgiveren åpner med statuskort regnet fra lagets egne tall.
 
 Gjenstår (fase 3): leverandørportalen (null brukere i dag) og modulkatalogen på `/moduler`.
 
@@ -75,15 +80,22 @@ dukker likevel opp i org-velgeren, og alle kall svarer 403 til sesjonen er start
 
 ## Kommandoer
 
+**Containeren har ingen kildemount.** Kildekoden i den er et snapshot fra forrige
+image-bygg, så `docker compose exec app npm run typecheck` sjekker KODEN SOM VAR — den
+svarer grønt på endringer den aldri har sett, og feilen er stille i begge retninger
+(påvist 09.08.2026: typecheck, lint og hele testsuiten «grønne» mot en dag gammel kopi).
+Sjekk filene på verten i en engangscontainer i stedet:
+
 ```bash
-# Sikkerhetstestene. Krever ekte Postgres og kjøres derfor i containeren, som v1-suiten.
-docker compose exec app npm run test
+# Typesjekk + lint av det som faktisk ligger på disk. Next-bygget alene beviser ikke at
+# koden kan kjøre — samme lærdom som at `vite build` i v1 bygget grønt med en glemt import.
+docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npx tsc --noEmit && npx eslint ."
 ```
 
 ```bash
-# Typesjekk. Next-bygget alene beviser ikke at koden kan kjøre — samme lærdom som at
-# `vite build` i v1 bygget grønt med en glemt import.
-docker compose exec app npm run typecheck
+# Sikkerhetstestene. Krever ekte Postgres og kjøres derfor i containeren, som v1-suiten —
+# men først etter `docker compose up -d --build`, ellers tester de forrige image.
+docker compose exec app npm run test
 ```
 
 ## Verktøy
@@ -112,6 +124,19 @@ når det skjer er det nesten alltid en id som er ført videre feil.
 **Manglende approlle stopper oppstart.** v1 falt tilbake til eierrollen med `[rls] ADVARSEL` og
 `rls_aktiv: false` i plattformpanelet — en fornuftig avveining for et system som allerede sto i
 produksjon. v2 har ingen slik arv og velger det strengere: er RLS ikke i kraft, starter vi ikke.
+
+**Historikk bærer navnet OG bruker-id-en — og de svarer på ulike spørsmål.** Utkvitteringer,
+avvik, behandlinger, driftslogg og enhetsarbeid lagrer navnet kopiert inn (protokollen: raden
+skal lese likt om ti år, også etter navnebytte eller slettet konto) og en nullbar `*_user_id`
+ved siden av (søkenøkkelen: «hva har JEG gjort» og «vis nåværende navn» går på den). Skrives
+gjennom `Aktor`-typen i `lib/aktor.ts`; QR-flyten er anonym og har bare navnet, som før.
+Sjekklistepunkter følger samme tanke: uendret tekst beholder id-en, så statistikk per punkt
+(«hvor mange rens har Vask 3 hatt?») overlever redigering — et omdøpt punkt er et NYTT punkt.
+
+**Driftsloggen flettes ved lesing, aldri ved skriving.** Bare manuelle notater har egne rader;
+oppgaver, avvik, vedlikehold og vernerunder leses fra sine egne tabeller i
+`hentDriftsloggSamlet`. En loggkopi per hendelse ville gitt to sannheter som driver fra
+hverandre.
 
 **Versjonerte migrasjoner.** v1 hadde hånd-rullet idempotent SQL i `_apply_migrations()`. Det
 virket, men ga ingen historikk og ingen vei tilbake. Her genererer drizzle-kit SQL som sjekkes
@@ -146,10 +171,13 @@ en mangler dekning.
 ## Neste steg
 
 1. Fase 3 — leverandørportalen og modulkatalogen.
-2. Passkeys — en plugin til, nå som Better Auth står.
-3. Webanalyse. v1 serverer Umami førsteparts under `/stats/`; v2 har ingenting. Bevisst
+2. Påkrevd tofaktor for plattformadmin. Oppsettsflyten er bygget og profilen varsler om at
+   kravet kommer, men håndhevingen (i `sjekkInnloggingssperrer`, lib/tilgang.ts) er ikke
+   skrudd på.
+3. Passkeys — en plugin til, nå som Better Auth står.
+4. Webanalyse. v1 serverer Umami førsteparts under `/stats/`; v2 har ingenting. Bevisst
    utsatt, ikke glemt.
-4. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
+5. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
 
 ## Portert så langt
 
@@ -157,9 +185,9 @@ en mangler dekning.
 |---|---|
 | Parkering | komplett |
 | Årshjul | komplett — månedsrutenett; tidslinjevisningen er ikke portert |
-| Driftslogg | komplett |
+| Driftslogg | komplett — samlet tidslinje flettet fra fem kilder, med kildefilter og periode |
 | Leiligheter og fellesområder | mangler bulk-import og adressesøk mot Kartverket |
-| Oppgaver | komplett — inkl. QR, anonymt skjema, bilder og utskriftsark |
+| Oppgaver | komplett — inkl. QR, anonymt skjema, bilder, utskriftsark og «Info til leverandør» (generert e-post, sendbar fra appen) |
 | Avvik | komplett — inkl. vedlegg |
 | Kontrakter | komplett — første modul med filopplasting |
 | Dokumentarkiv | komplett — mapper, undermapper, speilmapper og søk |
@@ -168,7 +196,7 @@ en mangler dekning.
 | Rutiner | komplett |
 | HMS-maler | komplett (plattformdata — `plattformRute`, ikke `orgRute`) |
 | Internkontroll | komplett — PDF-rapporten er ute av omfang, se over |
-| AI-rådgiver | komplett — krever `ANTHROPIC_API_KEY`, se `.env.example` |
+| AI-rådgiver | komplett — startbilde med statuskort fra lagets egne tall; krever `ANTHROPIC_API_KEY` |
 | Plattformpanel | komplett — kunder, prismodell, boligbyggelag, statistikk, system, maler |
 
 Alt er dekket av migreringsskriptet.
@@ -190,10 +218,11 @@ Menypunktene ligger på modulen selv i `lib/moduler.ts`, så en modul ikke kan b
 menyen slik den kunne i v1 (der `NAV` i Sidebar.jsx var en tredje liste).
 
 ```bash
-docker compose exec app npm run lint
+docker run --rm -v "$PWD:/app" -w /app node:22-alpine npx eslint .
 ```
 
-**Kjør denne — et grønt bygg er ikke bevis på at koden kan kjøre.** `no-undef` og
+**Kjør denne — et grønt bygg er ikke bevis på at koden kan kjøre.** (Engangscontainer, ikke
+`exec` inn i appen: se «Kommandoer» for hvorfor.) `no-undef` og
 `rules-of-hooks` står som `error`; det er de to som faktisk ryker i produksjon. `next lint`
 finnes ikke i Next 16, så oppsettet ligger i `eslint.config.mjs`.
 
@@ -205,6 +234,11 @@ er 5 GB som standard, overstyrbar per kunde via `organizations.storage_quota`.
 
 Filer havner under `uploads/orgs/{orgId}/<modul>/` med uuid-navn; brukerens filnavn lagres
 kun som visningsnavn og treffer aldri filsystemet.
+
+Filsystem- og `path.join`-kallene i `lagring.ts` er merket `/* turbopackIgnore: true */`.
+Uten det kunne ikke Turbopack avgjøre stiene statisk (de bygges fra `UPLOAD_DIR`) og tok med
+HELE prosjektet i standalone-bundlet — kildekode og public-mappa inkludert. Volumet monteres
+ved kjøring og skal aldri traces; fjernes kommentarene, kommer advarselen tilbake i bygget.
 
 ## Å porte en modul
 
