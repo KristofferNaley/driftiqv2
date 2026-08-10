@@ -391,6 +391,103 @@ a { color: inherit; text-decoration: none; }
    `repeat(N, 1fr)` — det er nettopp faste kolonnetall som ødela mobilvisningen i v1. */
 .auto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 
+/* ── FANEMODAL ───────────────────────────────────────────────────────────────────
+ *
+ * Modal med vertikal fanerad. Fire soner: topp (hvem dette er), fanerekke, panel og
+ * bunnrad — og bare panelet scroller.
+ *
+ * `min-height: 0` står på hvert ledd i kjeden fra modalkortet ned til panelet. Det er ikke
+ * pynt: en flex-boks nekter å bli kortere enn innholdet sitt, så uten dette vokser panelet
+ * ut av modalen i stedet for å få en høyde det kan scrolle innenfor — og bunnraden skyves
+ * ut under skjermkanten, med «Lagre» på seg.
+ */
+.fanemodal { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.fanemodal-topp {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-shrink: 0;
+  padding: 15px 20px; border-bottom: 1px solid var(--border);
+}
+/*
+ * FAST høyde, ikke bare et gulv. Modalen skal ikke endre størrelse når man bytter fane:
+ * «Sikkerhet» er dobbelt så høy som «Profil», og med automatisk høyde flytter både
+ * fanerekken og bunnraden seg under pekeren idet man klikker. Panelet scroller i stedet.
+ *
+ * `min()` fordi modalkortet er begrenset til 88dvh: en fast høyde som er større enn det som
+ * er ledig etter topp- og bunnraden kan ikke krympe, og da klippes panelet nederst i stedet
+ * for å scrolle. Gjelder liggende mobil, der 88dvh er ~350px.
+ */
+.fanemodal-kropp { display: flex; height: min(460px, 62dvh); }
+.fanemodal-panel {
+  flex: 1; min-width: 0; min-height: 0; overflow-y: auto;
+  padding: 20px; display: flex; flex-direction: column; gap: 15px;
+}
+.fanemodal-fot {
+  flex-shrink: 0; padding: 14px 20px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+
+/* 210px og ikke 186: «Aktivitet» pluss «Kommer»-merket klippet etiketten til «Aktivi…» —
+   ikonet, etiketten og merket trenger til sammen ~190px før noe må vike. */
+.sidefaner {
+  width: 210px; flex-shrink: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 10px; background: var(--bg); border-right: 1px solid var(--border);
+}
+.sidefane {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 9px 11px; border-radius: 9px; border: none; background: none;
+  /* En knapp arver ikke tekstfarge — samme felle som .profil-blokk og .org-valg. */
+  color: var(--muted); font-family: var(--font-sans); font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.sidefane:hover { background: var(--surface2); color: var(--text); }
+.sidefane.valgt { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); font-weight: 600; }
+.sidefane:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Skillelinje over den første «Kommer»-fanen: det som virker, og det som skal komme, er
+   ikke samme slags punkt og skal ikke stå i én uavbrutt rekke. */
+.sidefane.skille { margin-top: 9px; padding-top: 14px; border-top: 1px solid var(--border); border-radius: 0 0 9px 9px; }
+.sidefane-etikett { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidefane-kommer {
+  flex-shrink: 0; font-size: var(--fs-label); font-weight: 600;
+  padding: 1px 7px; border-radius: 9px; background: var(--surface2); color: var(--muted);
+}
+.sidefane-prikk {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  /* Rekken legger seg på tvers og scroller sidelengs. Klasse og ikke inline `style`:
+     det er nettopp denne omleggingen inline-stiler ikke kan uttrykke. */
+  .fanemodal-kropp { flex-direction: column; height: min(420px, 58dvh); }
+  .sidefaner {
+    width: 100%; flex-direction: row; gap: 4px; padding: 10px;
+    overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border);
+  }
+  .sidefane { width: auto; flex-shrink: 0; }
+  .sidefane.skille {
+    margin: 0 0 0 6px; padding: 9px 11px; border-top: none;
+    border-left: 1px solid var(--border); border-radius: 9px;
+  }
+  .fanemodal-panel { padding: 16px; }
+}
+
+/* «Kommer»-panelet: hva fanen skal bli, og hva som står i veien i dag. */
+.kommer-panel { display: flex; flex-direction: column; gap: 13px; }
+.kommer-hode { display: flex; align-items: center; gap: 11px; }
+.kommer-ikon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); color: var(--muted);
+}
+.kommer-tekst { margin: 0; font-size: var(--fs-sm); line-height: 1.6; }
+.kommer-liste { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.kommer-punkt {
+  display: flex; gap: 10px; font-size: var(--fs-sm); line-height: 1.5; color: var(--muted);
+}
+.kommer-punkt::before {
+  content: ""; flex-shrink: 0; margin-top: 7px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+
 /* ── Innlogging ──────────────────────────────────────────────────────────────── */
 
 .logg-inn-side {
@@ -683,6 +780,87 @@ a { color: inherit; text-decoration: none; }
 .profil-blokk:hover { background: var(--surface2); }
 /* Kontohandlingene i profilmodalen: full bredde, én per linje. */
 .profil-handling { width: 100%; justify-content: center; margin-bottom: 8px; }
+
+/* ── «MIN PROFIL» ──
+   Ett lag per rad under «Mine lag». Egen klasse og ikke `.list-item`: raden står inne i et
+   panel som alt har polstring, og ville fått den to ganger. */
+.lag-rad {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.lag-rad:last-child { border-bottom: none; }
+.lag-navn { font-size: var(--fs-sm); font-weight: 600; }
+.lag-meta { font-size: var(--fs-label); color: var(--muted); margin-top: 2px; }
+
+/* ── TOFAKTOR ──
+   QR-koden og nøkkelen side om side, men de brekker om på smal skjerm: 220px QR pluss en
+   tekstkolonne får ikke plass ved siden av hverandre på 375px. */
+.tofa-oppsett { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+/* Hvit ramme rundt QR-koden er ikke pynt: koden er svart på hvitt, og på mørk bakgrunn
+   klarer mange telefonkameraer ikke å finne kantene uten den lyse sonen rundt. */
+.tofa-qr { border-radius: 10px; background: #fff; padding: 8px; flex-shrink: 0; }
+/* Nøkkelen og backup-kodene i fastbreddefont: her forveksles 0/O og 1/l/I, og teksten skal
+   kunne leses tegn for tegn av noen som skriver den inn på en telefon. */
+.tofa-hemmelighet,
+.tofa-backup {
+  display: block; margin-top: 8px; padding: 9px 11px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 9px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--fs-sm); letter-spacing: 0.5px; color: var(--text);
+  overflow-wrap: anywhere; user-select: all;
+}
+.tofa-backup { white-space: pre; line-height: 1.7; overflow-x: auto; }
+
+/* ── «MIN AKTIVITET» ──
+   Sammendraget øverst: bare slagene som har noe. `flex-wrap` og ikke et fast kolonnetall —
+   antallet poster varierer fra én til åtte, og et rutenett ville stått halvtomt. */
+.akt-sum {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.akt-sum-post { font-size: var(--fs-label); color: var(--muted); }
+.akt-sum-post b { color: var(--text); font-size: var(--fs-sm); }
+
+.akt-liste { display: flex; flex-direction: column; }
+.akt-rad {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+  color: inherit;
+}
+.akt-rad:last-child { border-bottom: none; }
+/* Bare radene som HAR en side å gå til er klikkbare. En hover-effekt på en rad som ikke
+   fører noe sted er et løfte UI-et ikke holder. */
+.akt-rad.lenke { cursor: pointer; }
+.akt-rad.lenke:hover { background: var(--surface2); }
+.akt-rad.lenke:hover .akt-tittel { color: var(--accent); }
+.akt-ikon {
+  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); color: var(--muted);
+}
+/* Fargen sier hva slags hendelse det er, uten at raden trenger et merke: grønt er noe som
+   ble fullført, amber noe som ble MELDT, blått alt annet. */
+.akt-ikon.oppgave, .akt-ikon.lukket, .akt-ikon.hms {
+  background: rgba(15, 186, 129, 0.12); color: var(--accent2);
+}
+.akt-ikon.avvik { background: rgba(245, 166, 35, 0.14); color: var(--warn); }
+.akt-ikon.behandling, .akt-ikon.driftslogg, .akt-ikon.vernerunde, .akt-ikon.enhetsarbeid {
+  background: rgba(var(--accent-rgb), 0.10); color: var(--accent);
+}
+.akt-tittel {
+  display: block; font-size: var(--fs-sm); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* ÉN linje, med ellipse. Detaljen er fritekst — en behandling kan være et helt avsnitt — og
+   med brytning ble radene ujevne i høyde. Hele teksten står i modulen raden lenker til. */
+.akt-meta {
+  display: block; font-size: var(--fs-label); color: var(--muted); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.akt-dato {
+  flex-shrink: 0; font-size: var(--fs-label); color: var(--muted); white-space: nowrap;
+  padding-top: 2px;
+}
 
 /* ══ AVVIKSSIDEN ══ */
 
@@ -2062,3 +2240,52 @@ textarea.qr-input { resize: vertical; }
   width: auto; margin: 0; padding: 9px 11px; flex-shrink: 0;
   border: 1px solid var(--border); border-radius: 9px;
 }
+
+/* Meldingen til leverandøren.
+ *
+ * 200px og ikke 300: med et høyt felt ble modalen høyere enn `88dvh`, og «Kopier teksten» og
+ * «Åpne i e-post» havnet under kanten. Da hjelper det ikke at modalkroppen kan scrolle —
+ * hjulet fanges av tekstfeltet under pekeren, og knappene er i praksis uåpnelige. Teksten er
+ * lang uansett; den scrolles i feltet, mens HANDLINGENE alltid er synlige. */
+.melding-tekst { min-height: 200px; line-height: 1.6; font-size: var(--fs-sm); }
+
+/* Statuslinja over fanene på oppgavedetaljen: frekvens og leverandør til venstre, frist og
+   status til høyre. Klasse og ikke inline `style` — de to gruppene skal legge seg under
+   hverandre på smal skjerm, ikke klemmes sammen på én linje. */
+.oppg-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  font-size: var(--fs-sm); color: var(--muted);
+}
+.oppg-status b { color: var(--text); font-weight: 600; }
+.oppg-status-frist {
+  display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin-left: auto; font-size: var(--fs-label);
+}
+@media (max-width: 620px) {
+  .oppg-status-frist { margin-left: 0; }
+}
+
+/* ── UTKVITTERINGER I OPPGAVELOGGEN ──
+   Én rad per utførelse, med sjekkpunktene som ble huket av under. Egen klasse og ikke `.Rad`:
+   raden har to nivåer — hvem/når øverst, og protokollen fra den dagen under. */
+.utkv-rad { padding: 13px 20px; border-bottom: 1px solid var(--border); }
+.utkv-rad:last-child { border-bottom: none; }
+.utkv-hode { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.utkv-punkter { margin-top: 9px; padding-left: 2px; }
+.utkv-antall { font-size: var(--fs-label); color: var(--muted); margin-bottom: 5px; }
+/* Grønt bare når ALT er huket av. Er noe utelatt, skal tallet ikke se ut som en godkjenning. */
+.utkv-antall.alle { color: var(--accent2); }
+.utkv-punkt { font-size: var(--fs-sm); color: var(--muted); line-height: 1.7; }
+.utkv-punkt.ja { color: var(--text); }
+.utkv-punktnotat { color: var(--muted); font-style: italic; }
+
+/* ── SJEKKLISTE-RADEDITOREN ──
+   Rad = nummer, tekstfelt, opp/ned/fjern. Feltet tar plassen; knappene er kvadratiske og
+   holder seg små — de er verktøy på raden, ikke handlinger på siden. */
+.sjekk-rad { display: flex; align-items: center; gap: 8px; }
+.sjekk-nr {
+  width: 22px; flex-shrink: 0; text-align: right;
+  font-size: var(--fs-label); color: var(--muted);
+}
+.sjekk-knapp { padding: 9px 11px; flex-shrink: 0; }
+.sjekk-knapp.farlig { color: var(--danger); }

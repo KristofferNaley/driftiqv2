@@ -10,6 +10,8 @@
  * enkeltside vet hva den skal gjøre med en utløpt sesjon.
  */
 
+import type { MinAktivitet } from "./aktivitetsslag";
+
 export class ApiKlientFeil extends Error {
   constructor(
     readonly status: number,
@@ -107,13 +109,48 @@ export type Oppgave = {
   frequency: string; startDate: string | null; dueDate: string | null; active: boolean;
   qrToken: string | null; vendorId: string; vendorName: string | null; unitNavn: string | null;
   ansvarligNavn: string | null;
+  /**
+   * `unitId`, `responsibleUserId` og `showOnArshjul` manglet i typen selv om API-et alltid
+   * har sendt dem — ruta returnerer hele oppgaveraden. Følgen var at redigeringsskjemaet ikke
+   * kunne forhåndsfylle sted og ansvarlig: verdiene var i svaret, men usynlige for TypeScript.
+   * Samme glipp som er dokumentert på `Dokument` lenger ned.
+   */
+  unitId: string | null; responsibleUserId: string | null; showOnArshjul: boolean;
   lastCompletedAt: string | null; nesteFrist: string | null; forsinket: boolean;
+};
+
+/**
+ * Ett SJEKKPUNKT slik det sto ved én utførelse — kopien i `completion_checklist_results`.
+ *
+ * `itemId` peker på malpunktet og er nullbar: malen kan endres, og punkter som er tatt bort
+ * settes til null. `text` er derfor protokollen, id-en er søkenøkkelen — samme skille som for
+ * aktørene i `lib/aktor.ts`.
+ */
+export type Utkvitteringspunkt = {
+  id: string;
+  itemId: string | null;
+  text: string;
+  checked: boolean;
+  order: number;
+};
+
+export type Utkvittering = {
+  id: string;
+  completedAt: string;
+  completedBy: string;
+  notes: string | null;
+  manual: boolean;
+  punkter: Utkvitteringspunkt[];
+};
+
+export type OppgaveMedHistorikk = Oppgave & {
+  sjekkliste: Array<{ id: string; text: string; order: number }>;
+  utkvitteringer: Utkvittering[];
 };
 
 export const oppgaver = {
   liste: (o: string) => api.hent<Oppgave[]>(org(o, "/tasks")),
-  hent: (o: string, id: string) =>
-    api.hent<Oppgave & { sjekkliste: Array<{ id: string; text: string; order: number }>; utkvitteringer: Array<{ id: string; completedAt: string; completedBy: string; notes: string | null; manual: boolean }> }>(org(o, `/tasks/${id}`)),
+  hent: (o: string, id: string) => api.hent<OppgaveMedHistorikk>(org(o, `/tasks/${id}`)),
   ny: (o: string, d: unknown) => api.send<Oppgave>(org(o, "/tasks"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Oppgave>(org(o, `/tasks/${id}`), d),
   deaktiver: (o: string, id: string) => api.slett(org(o, `/tasks/${id}`)),
@@ -222,6 +259,12 @@ export const leverandorer = {
   slett: (o: string, id: string) => api.slett(org(o, `/vendors/${id}`)),
   nyKontakt: (o: string, id: string, d: unknown) => api.send(org(o, `/vendors/${id}/contacts`), d),
   nyttNotat: (o: string, id: string, d: unknown) => api.send(org(o, `/vendors/${id}/notes`), d),
+  /**
+   * Sender QR-informasjonen til leverandøren. Mottakeren valideres SERVERSIDE mot
+   * kontaktpersonene — se `sendQrInfo`. Svaret bekrefter hvilken adresse som fikk den.
+   */
+  sendQrInfo: (o: string, id: string, d: { emne: string; tekst: string; til: string }) =>
+    api.send<{ sendt: true; til: string }>(org(o, `/vendors/${id}/qr-info`), d),
 };
 
 export type Dokument = {
@@ -229,7 +272,7 @@ export type Dokument = {
   originalName: string; fileSize: number | null; aiReadable: boolean;
   // API-et returnerer hele raden; disse manglet i typen og gjorde at kallsteder som
   // trengte filikon eller opplastingsdato ikke kompilerte.
-  contentType: string; uploadedAt: string;
+  contentType: string; uploadedAt: string; description: string | null;
 };
 export type Mappe = { id: string; name: string; icon: string; parentId: string | null };
 
@@ -465,6 +508,11 @@ export const brukere = {
   egneVarsler: (o: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, "/users/meg/varsler")),
   settEgneVarsler: (o: string, prefs: Record<string, boolean>) =>
     api.endre(org(o, "/users/meg/varsler"), { prefs }),
+  /** Egen aktivitet på tvers av modulene. Ingen `[brukerId]`-variant — se kommentaren på ruta. */
+  egenAktivitet: (o: string) => api.hent<MinAktivitet>(org(o, "/users/meg/aktivitet")),
+  // Typen kommer fra `lib/aktivitetsslag.ts`, ikke fra `lib/aktivitet.ts`: sistnevnte
+  // importerer databaseklienten. Importen er `type`-only og forsvinner ved kompilering, men
+  // fila den peker på skal uansett være ren — se kommentaren der.
 };
 
 export type StyreSvar = {
@@ -488,6 +536,8 @@ export type MegSvar = {
   email: string;
   phone: string | null;
   role: string;
+  /** Bekreftet tofaktor. Settes av Better Auth først når første kode er godkjent. */
+  twoFactorEnabled: boolean;
   organisasjoner: Array<{
     id: string; name: string; nivaa: string;
     /** Vervet i DENNE org-en — «Styreleder». Null når det ikke er fylt ut. */

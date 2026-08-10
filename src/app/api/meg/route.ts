@@ -72,6 +72,12 @@ export const GET = plattformRute({
       email: bruker.email,
       phone: bruker.phone,
       role: bruker.role,
+      /**
+       * Om tofaktor er bekreftet. Kolonnen eies av Better Auths twoFactor-plugin og settes
+       * først når brukeren har tastet en gyldig kode — se `skipVerificationOnEnable` i auth.ts.
+       * Profilen trenger den for å vite om den skal tilby oppsett eller avslåing.
+       */
+      twoFactorEnabled: bruker.twoFactorEnabled,
       organisasjoner: rader
         .filter((r) => r.org.active)
         .map((r) => ({
