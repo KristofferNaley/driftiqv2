@@ -14,7 +14,7 @@ const MODULER = [
     tekst:
       "Risikovurdering, HMS-mål og vernerunde i én struktur, bygget rundt " +
       "internkontrollforskriften § 5. Dokumentasjonen samles etter hvert som arbeidet " +
-      "gjøres — ikke kvelden før tilsynet.",
+      "gjøres, ikke kvelden før tilsynet.",
   },
   {
     tittel: "Avvik",
@@ -43,7 +43,7 @@ const MODULER = [
   {
     tittel: "Dokumentarkiv",
     tekst:
-      "Vedtekter, protokoller, tegninger og rapporter ett sted — også når styret byttes ut.",
+      "Vedtekter, protokoller, tegninger og rapporter på ett sted, også når styret byttes ut.",
   },
   {
     tittel: "Årshjul",
@@ -68,21 +68,26 @@ export default function Landing() {
         </h1>
         <p className="mk-ingress">
           DriftIQ samler oppgaver, avvik, internkontroll, vedlikeholdsplan og dokumentasjon på
-          ett sted — slik at historikken følger bygget og ikke personen som tilfeldigvis satt i
-          styret. Systemet er i daglig drift i et borettslag i Bergen.
+          ett sted, slik at historikken følger bygget og ikke personen som tilfeldigvis satt i
+          styret. Jeg bygde systemet som styreleder i mitt eget borettslag i Bergen, der det er
+          i daglig drift.
         </p>
         <div className="mk-knapper">
           <a className="mk-knapp" href="#kontakt">Bli pilotlag</a>
           <a className="mk-knapp sekundaer" href="#moduler">Se hva systemet gjør</a>
         </div>
         <p className="mk-liten">
-          Uforpliktende. Du får svar fra utvikleren selv, normalt innen én virkedag.
+          Uforpliktende. Du får svar fra meg direkte, normalt innen én virkedag.
         </p>
       </section>
 
       {/* Et glimt av systemet. Bevisst en HTML-mock og ikke et skjermbilde: et bilde blir
           utdatert i det UI-et endres, og det gjør det ofte. Denne følger designtokenene og
-          blir aldri feil på samme måte. */}
+          blir aldri feil på samme måte.
+
+          Tallene viser et lag som stort sett er à jour, med ett avvik og én forsinket
+          oppgave. Et dashbord fullt av rødt leser som kaos, ikke som et system som virker —
+          førsteinntrykket skal være kontroll med varsling. */}
       <section className="mk-seksjon">
         <span className="mk-overtittel">Et glimt av systemet</span>
         <h2>Slik ser det ut i praksis</h2>
@@ -99,19 +104,19 @@ export default function Landing() {
               ))}
             </aside>
             <div className="mk-app-innhold">
-              <div className="mk-app-tittel">Test Borettslag</div>
+              <div className="mk-app-tittel">Fjellsiden Borettslag</div>
               <div className="mk-app-tall">
                 <div><b>15</b><span>Oppgaver</span></div>
-                <div><b className="gronn">7</b><span>À jour</span></div>
-                <div><b className="gul">8</b><span>Forsinket</span></div>
-                <div><b className="rod">3</b><span>Åpne avvik</span></div>
+                <div><b className="gronn">13</b><span>À jour</span></div>
+                <div><b className="gul">1</b><span>Forsinket</span></div>
+                <div><b className="rod">1</b><span>Åpent avvik</span></div>
               </div>
               <div className="mk-app-liste">
                 {[
-                  ["Gulvvask med maskin", "Renholdsfirma · Månedlig", "Forsinket", "gul"],
-                  ["Ukentlig renhold fellesarealer", "Renholdsfirma · Ukentlig", "Ikke utført", "grå"],
+                  ["Ukentlig renhold fellesarealer", "Renholdsfirma · Ukentlig", "À jour", "gronn"],
                   ["Vindusvask fellesarealer", "Renholdsfirma · Kvartalsvis", "Forsinket", "gul"],
                   ["Årlig sjekk av avtrekksvifter", "Vaktmesterfirma · Årlig", "À jour", "gronn"],
+                  ["Kontroll av brannslokkere", "Brannvernfirma · Årlig", "À jour", "gronn"],
                 ].map(([tittel, meta, status, farge]) => (
                   <div key={tittel}>
                     <span>
@@ -127,9 +132,30 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Historien er salgsargumentet: et styre kjøper ikke fra «en utvikler i Bergen», de
+          kjøper fra en styreleder med samme problem som dem. Derfor egen seksjon med navn og
+          rolle, ikke en bisetning i ingressen. */}
+      <section className="mk-seksjon smal" id="hvem">
+        <span className="mk-overtittel">Hvem står bak</span>
+        <h2>Bygget av en styreleder som ikke fikk gått av</h2>
+        <div className="mk-person">
+          <span className="mk-person-bilde" aria-hidden>KN</span>
+          <span className="mk-person-info">
+            <b>Kristoffer Naley Nornes</b>
+            <em>Styreleder i et borettslag i Bergen</em>
+          </span>
+        </div>
+        <p className="mk-ingress">
+          DriftIQ ble til av et konkret problem: driften av bygget satt i hodet mitt. Avtaler,
+          frister, historikk og hvem som fikser hva var ting jeg husket, ikke noe laget eide,
+          og ingen kunne ta over vervet uten meg. DriftIQ er systemet jeg bygde for å kunne gå
+          av, og det er i daglig drift i mitt eget lag.
+        </p>
+      </section>
+
       <section className="mk-seksjon" id="moduler">
         <span className="mk-overtittel">Hva systemet dekker</span>
-        <h2>Det styret er ansvarlig for — samlet ett sted</h2>
+        <h2>Alt styret er ansvarlig for, samlet på ett sted</h2>
         <div className="mk-rutenett">
           {MODULER.map((m) => (
             <article key={m.tittel} className="mk-kort">
@@ -140,14 +166,29 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Bussinnvendingen, besvart uoppfordret. Spørsmålet kommer i hvert styremøte der en
+          enmannsbedrift skal vedtas, og et svar i klartekst snur innvendingen til et
+          argument. */}
+      <section className="mk-seksjon smal">
+        <span className="mk-overtittel">Dataeierskap</span>
+        <h2>Hva skjer hvis DriftIQ forsvinner?</h2>
+        <p className="mk-ingress">
+          Spørsmålet kommer i hvert styremøte der en liten leverandør skal vedtas, så her er
+          svaret før dere spør: dataene er lagets, ikke mine. Velger dere å gå, eller skulle
+          DriftIQ legges ned, får dere alt utlevert i formater dere kan ta med videre:
+          dokumenter, avvik, oppgavehistorikk og vedlikeholdsplan. Poenget med systemet er at
+          driften følger bygget, og det gjelder også overfor leverandøren av systemet.
+        </p>
+      </section>
+
       <section className="mk-seksjon smal" id="kontakt">
         <span className="mk-overtittel">Pilot høsten 2026</span>
         <h2>Vil dere være pilotlag?</h2>
         <p className="mk-ingress">
-          Jeg tar inn et lite antall borettslag og sameier i høst — styrer som vil være med å
-          forme hvordan dette fungerer i praksis. Sitter du i et styre, eller er
-          forretningsfører og nysgjerrig, tar jeg gjerne en uforpliktende prat. Oppsett av
-          bygget deres er inkludert — dere starter ikke med et tomt system.
+          Jeg tar inn et lite antall borettslag og sameier i høst: styrer som vil være med å
+          forme hvordan dette fungerer i praksis. Send en henvendelse, så avtaler vi en
+          20 minutters gjennomgang der jeg viser systemet med deres eget bygg som eksempel.
+          Oppsett av bygget er inkludert, dere starter ikke med et tomt system.
         </p>
         <Kontaktskjema />
       </section>

@@ -104,8 +104,10 @@ export function Kontaktskjema() {
     return (
       <div className="mk-kvittering">
         <div className="mk-hake" aria-hidden>✓</div>
-        <h3>Takk — meldingen er mottatt</h3>
-        <p>Du får svar fra utvikleren selv, normalt innen én virkedag.</p>
+        <h3>Takk, meldingen er mottatt</h3>
+        <p>
+          Du hører fra meg innen én virkedag med forslag til tidspunkt for gjennomgangen.
+        </p>
       </div>
     );
   }
@@ -132,7 +134,7 @@ export function Kontaktskjema() {
           <input
             value={lag}
             autoComplete="off"
-            placeholder="Skriv navnet — vi finner det i Enhetsregisteret"
+            placeholder="Skriv navnet, så finner vi det i Enhetsregisteret"
             onChange={(e) => {
               setLag(e.target.value);
               // Endrer de navnet etter et valg, gjelder ikke valget lenger.
@@ -176,7 +178,7 @@ export function Kontaktskjema() {
             <span className="mk-hint">
               {leter && lag.trim().length >= 3
                 ? "Søker i Enhetsregisteret …"
-                : "Valgfritt. Finner vi laget, henter vi adresse og kontaktinfo automatisk."}
+                : "Valgfritt. Vi bruker Enhetsregisteret bare til å finne riktig lag, så du slipper å lete fram organisasjonsnummeret."}
             </span>
           )}
         </label>
@@ -184,7 +186,12 @@ export function Kontaktskjema() {
 
       <label className="mk-felt">
         <span>Melding</span>
-        <textarea rows={4} value={melding} onChange={(e) => setMelding(e.target.value)} />
+        <textarea
+          rows={4}
+          value={melding}
+          onChange={(e) => setMelding(e.target.value)}
+          placeholder="Skriv gjerne når en gjennomgang passer for dere"
+        />
       </label>
 
       {/* Honningkrukka. `aria-hidden` + `tabIndex={-1}` så den heller ikke finnes for
@@ -204,7 +211,7 @@ export function Kontaktskjema() {
       {feil && <p className="mk-feil">{feil}</p>}
 
       <button className="mk-knapp" disabled={sender || !navn.trim() || !epost.trim()}>
-        {sender ? "Sender …" : "Send henvendelse"}
+        {sender ? "Sender …" : "Avtal en 20 minutters gjennomgang"}
       </button>
       <p className="mk-liten">
         Vi bruker opplysningene kun til å svare deg. Se{" "}

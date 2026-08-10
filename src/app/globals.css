@@ -1481,6 +1481,18 @@ textarea.qr-input { resize: vertical; }
 .mk-kvittering h3 { font-size: var(--fs-lg); margin: 0 0 6px; }
 .mk-kvittering p { font-size: var(--fs-sm); color: var(--mk-dempet); margin: 0; }
 
+/* «Hvem står bak»: navn og rolle skal stå synlig, ikke i en bisetning. Bildet er
+   initialer inntil et ekte portrett legges inn. */
+.mk-person { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.mk-person-bilde {
+  width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(var(--accent-rgb), 0.14); color: var(--accent);
+  font-weight: 800; font-size: var(--fs-md); letter-spacing: 0.5px;
+  display: flex; align-items: center; justify-content: center;
+}
+.mk-person-info b { display: block; font-size: var(--fs-md); }
+.mk-person-info em { display: block; font-size: var(--fs-sm); color: var(--mk-dempet); font-style: normal; }
+
 .mk-tekst h2 { font-size: var(--fs-lg); font-weight: 700; margin: 28px 0 10px; }
 .mk-tekst p { font-size: var(--fs-sm); line-height: 1.75; color: var(--mk-dempet); margin: 0 0 12px; }
 

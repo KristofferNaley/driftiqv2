@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Personvern — DriftIQ",
+  title: "Personvern – DriftIQ",
   description: "Hvilke opplysninger DriftIQ behandler, hvorfor, og hvor lenge.",
 };
 
@@ -22,7 +22,7 @@ export default function Personvern() {
         <p>
           Fyller du ut skjemaet på forsiden, lagrer vi navnet, e-postadressen og det du
           eventuelt skriver om telefon, borettslag og ærend. Det brukes til å svare deg og til
-          å følge opp en mulig avtale — ingenting annet. Vi selger ikke opplysninger videre og
+          å følge opp en mulig avtale, ingenting annet. Vi selger ikke opplysninger videre og
           bruker dem ikke til markedsføring mot andre.
         </p>
         <p>
@@ -34,7 +34,7 @@ export default function Personvern() {
         <p>
           Da er DriftIQ <strong>databehandler</strong> og borettslaget eller sameiet er
           behandlingsansvarlig. Vi behandler opplysningene på deres instruks, og de eier
-          dataene sine. Hva som lagres — brukerkontoer, avvik, oppgaver, enheter — styrer dere
+          dataene sine. Hva som lagres (brukerkontoer, avvik, oppgaver, enheter) styrer dere
           selv gjennom bruken av systemet.
         </p>
         <p>

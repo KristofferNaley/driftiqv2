@@ -21,16 +21,24 @@ import { MARKED_URL } from "@/lib/urler";
 export const metadata: Metadata = {
     // MARKED_URL, ikke BASE_URL: metadata skal peke på markedsdomenet, ikke kunde-appen.
   metadataBase: new URL(MARKED_URL),
-  title: "DriftIQ — driftsforvaltning for borettslag og sameier",
+  title: "DriftIQ – driftsforvaltning for borettslag og sameier",
   description:
     "Oppgaver, avvik, internkontroll, vedlikeholdsplan og dokumentasjon samlet ett sted. " +
     "Driftshistorikken følger bygget, ikke styret som satt der i fjor.",
   openGraph: {
-    title: "DriftIQ — driftsforvaltning for borettslag og sameier",
+    title: "DriftIQ – driftsforvaltning for borettslag og sameier",
     description:
       "Alt styret er ansvarlig for, samlet ett sted. Historikken følger bygget, ikke personen.",
     locale: "nb_NO",
     type: "website",
+  },
+  // `summary_large_image`, ikke `summary`: uten dette blir en deling på LinkedIn en ren
+  // tekstlenke. Selve bildet kommer fra `opengraph-image.tsx` i samme mappe.
+  twitter: {
+    card: "summary_large_image",
+    title: "DriftIQ – driftsforvaltning for borettslag og sameier",
+    description:
+      "Alt styret er ansvarlig for, samlet ett sted. Historikken følger bygget, ikke personen.",
   },
 };
 
@@ -61,7 +69,7 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
       <footer className="mk-fot">
         <div className="mk-fot-inn">
           <span>
-            <span className="mk-ord">Drift<span>IQ</span></span> — driftsforvaltning for
+            <span className="mk-ord">Drift<span>IQ</span></span> · driftsforvaltning for
             borettslag og sameier
           </span>
           <span className="mk-fot-lenker">
