@@ -9,8 +9,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { logEntries } from "../db/schema/driftslogg";
+import { users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet } from "./api";
+import type { Aktor } from "./aktor";
 
 export const loggInn = z.object({
   title: z.string().trim().min(1, "Tittel må fylles ut"),
@@ -24,18 +26,28 @@ export async function hentLogg(db: Db, orgId: string) {
     .select({
       logg: logEntries,
       vendorName: vendors.name,
+      forfatterNavn: users.name,
     })
     .from(logEntries)
     .leftJoin(vendors, eq(vendors.id, logEntries.vendorId))
+    // Forfatterens NÅVÆRENDE navn vinner når raden har en id. Snapshotet i `created_by` blir
+    // stående i basen — det er reserven for rader uten id, ikke fasiten når vi vet bedre.
+    .leftJoin(users, eq(users.id, logEntries.createdByUserId))
     .where(eq(logEntries.orgId, orgId))
     .orderBy(desc(logEntries.entryDate), desc(logEntries.createdAt))
-    .then((rader) => rader.map((r) => ({ ...r.logg, vendorName: r.vendorName })));
+    .then((rader) =>
+      rader.map((r) => ({
+        ...r.logg,
+        createdBy: r.forfatterNavn ?? r.logg.createdBy,
+        vendorName: r.vendorName,
+      })),
+    );
 }
 
 export async function opprettLogg(
   db: Db,
   orgId: string,
-  forfatter: string,
+  forfatter: Aktor,
   data: z.infer<typeof loggInn>,
 ) {
   // Fremmednøkkelen må peke inn i SAMME org. RLS ville også stoppet en leverandør fra en
@@ -52,7 +64,13 @@ export async function opprettLogg(
 
   const [ny] = await db
     .insert(logEntries)
-    .values({ id: randomUUID(), orgId, createdBy: forfatter, ...data })
+    .values({
+      id: randomUUID(),
+      orgId,
+      createdBy: forfatter.navn,
+      createdByUserId: forfatter.brukerId,
+      ...data,
+    })
     .returning();
   return ny!;
 }

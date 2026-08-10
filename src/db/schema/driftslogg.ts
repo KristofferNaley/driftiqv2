@@ -1,5 +1,6 @@
 import { date, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
+import { users } from "./users";
 import { vendors } from "./vendors";
 
 /**
@@ -22,6 +23,14 @@ export const logEntries = pgTable("log_entries", {
   description: text("description"),
   entryDate: date("entry_date").notNull(),
   createdBy: varchar("created_by").notNull(),
+  /**
+   * Den som førte linja, som id — ved siden av navnet, ikke i stedet for det. Navnet blir
+   * stående uansett; id-en er der for at «min aktivitet» skal overleve et navnebytte. Se
+   * kommentaren på `completions.completedByUserId`.
+   */
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -84,6 +84,33 @@ export const completions = pgTable("completions", {
   completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
   /** Navnet kopiert inn, ikke en peker. Historikk skal ikke endres i ettertid. */
   completedBy: varchar("completed_by").notNull(),
+  /**
+   * Hvem det VAR, når vi vet det. Ved siden av navnet, ikke i stedet for det.
+   *
+   * Navnet over er fortsatt det som VISES — en utkvittering skal lese likt om ti år, også
+   * etter at kontoen er slettet. Id-en er til oppslag den andre veien: «hva har JEG gjort»
+   * (`lib/aktivitet.ts`) kan ikke bygges på navn, for da forsvinner historikken din den dagen
+   * du bytter etternavn.
+   *
+   * Nullbar, og det er ikke en svakhet: en utkvittering fra QR-skjemaet eller
+   * leverandørportalen har ingen innlogget bruker å peke på. `SET NULL` fordi raden skal
+   * overleve at kontoen slettes — navnet blir stående.
+   */
+  completedByUserId: varchar("completed_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  /**
+   * Leverandøren som sto på oppgaven DA jobben ble utført — et snapshot, ikke et oppslag.
+   *
+   * Uten dette var leverandøren bare utledet via `tasks.vendor_id`, og den peker på hvem som
+   * har avtalen NÅ. Bytter laget rørlegger, ville hele historikken lest som om den nye
+   * rørleggeren utførte jobber de aldri var i nærheten av — og for en QR-utkvittering, der
+   * navnefeltet er valgfri fritekst, er leverandøren ofte det eneste som sier hvem som kom.
+   *
+   * Nullbar: oppgaven har alltid en leverandør i dag, men gamle rader fra før kolonnen har
+   * ingen, og en backfill av dem ville vært nettopp den gjetningen kolonnen skal hindre.
+   */
+  vendorId: varchar("vendor_id").references(() => vendors.id),
   notes: text("notes"),
   hasDeviation: boolean("has_deviation").notNull().default(false),
   deviationDescription: text("deviation_description"),

@@ -29,6 +29,10 @@ import {
   slettElement,
   slettFdv,
 } from "../src/lib/vedlikehold";
+import { anonymAktor } from "../src/lib/aktor";
+
+/** Aktøren i testene: navn uten konto. Koblingen til bruker-id testes i aktivitet.test.ts. */
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -168,7 +172,7 @@ describe("bygningselementer", () => {
     const { orgId, unitId } = await oppsett();
     const e = await i(orgId, (db) => opprettElement(db, orgId, element));
     const a = await i(orgId, (db) =>
-      registrerArbeid(db, orgId, "Kari", {
+      registrerArbeid(db, orgId, KARI, {
         unitId,
         elementId: e.id,
         workDate: "2026-03-01",
@@ -191,7 +195,7 @@ describe("bygningselementer", () => {
     const { orgId, unitId } = await oppsett();
     const e = await i(orgId, (db) => opprettElement(db, orgId, element));
     await i(orgId, (db) =>
-      registrerArbeid(db, orgId, "Kari", {
+      registrerArbeid(db, orgId, KARI, {
         unitId,
         elementId: e.id,
         workDate: "2026-03-01",
@@ -227,14 +231,14 @@ describe("arbeid i enheter", () => {
 
   it("kopierer enhetsmerket inn ved registrering", async () => {
     const { orgId, unitId } = await oppsett();
-    const a = await i(orgId, (db) => registrerArbeid(db, orgId, "Kari", arbeid(unitId)));
+    const a = await i(orgId, (db) => registrerArbeid(db, orgId, KARI, arbeid(unitId)));
     expect(a.unitLabel).toBe("H0203 · oppg. B");
   });
 
   it("omskriver ikke merket når enheten omnummereres", async () => {
     // Historikk skal ikke kunne endres i ettertid — samme prinsipp som sjekklisteresultater.
     const { orgId, unitId } = await oppsett();
-    const a = await i(orgId, (db) => registrerArbeid(db, orgId, "Kari", arbeid(unitId)));
+    const a = await i(orgId, (db) => registrerArbeid(db, orgId, KARI, arbeid(unitId)));
 
     await eier.query("UPDATE units SET leilighetsnr = 'H9999' WHERE id = $1", [unitId]);
 
@@ -246,14 +250,14 @@ describe("arbeid i enheter", () => {
     const a = await oppsett();
     const b = await oppsett();
     const feil = await feilFra(() =>
-      i(a.orgId, (db) => registrerArbeid(db, a.orgId, "Kari", arbeid(b.unitId))),
+      i(a.orgId, (db) => registrerArbeid(db, a.orgId, KARI, arbeid(b.unitId))),
     );
     expect(feil.message).toMatch(/ugyldig enhet/i);
   });
 
   it("filtrerer på enhet", async () => {
     const { orgId, unitId } = await oppsett();
-    await i(orgId, (db) => registrerArbeid(db, orgId, "Kari", arbeid(unitId)));
+    await i(orgId, (db) => registrerArbeid(db, orgId, KARI, arbeid(unitId)));
     expect((await i(orgId, (db) => hentArbeider(db, orgId, { unitId }))).length).toBe(1);
     expect((await i(orgId, (db) => hentArbeider(db, orgId, { unitId: randomUUID() }))).length).toBe(0);
   });
@@ -262,10 +266,10 @@ describe("arbeid i enheter", () => {
     // Skillet avgjør regnskapsføringen: vedlikehold er driftskostnad, påkostning aktiveres.
     const { orgId, unitId } = await oppsett();
     await i(orgId, (db) =>
-      registrerArbeid(db, orgId, "K", { ...arbeid(unitId), cost: 10000 }),
+      registrerArbeid(db, orgId, anonymAktor("K"), { ...arbeid(unitId), cost: 10000 }),
     );
     await i(orgId, (db) =>
-      registrerArbeid(db, orgId, "K", { ...arbeid(unitId), workType: "påkostning", cost: 50000 }),
+      registrerArbeid(db, orgId, anonymAktor("K"), { ...arbeid(unitId), workType: "påkostning", cost: 50000 }),
     );
 
     const per = await i(orgId, (db) => kostnaderPerType(db, orgId));

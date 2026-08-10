@@ -27,6 +27,7 @@ import { users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { erForsinket, nesteFrist } from "./oppgaveregler";
+import type { Aktor } from "./aktor";
 
 export const FREKVENSER = [
   "weekly", "biweekly", "monthly", "quarterly", "semiannual", "annual",
@@ -157,11 +158,49 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
   if (!rad) throw ikkeFunnet("Oppgave");
   const oppgave = rad.oppgave;
 
-  const [sjekkliste, utkvitteringer, sist] = await Promise.all([
+  const [sjekkliste, radene, sist] = await Promise.all([
     db.select().from(taskChecklistItems).where(eq(taskChecklistItems.taskId, taskId)).orderBy(asc(taskChecklistItems.order)),
-    db.select().from(completions).where(eq(completions.taskId, taskId)).orderBy(desc(completions.completedAt)),
+    // Utførerens nåværende navn når utkvitteringen har en bruker-id; ellers navnet som ble
+    // ført — for QR-utkvitteringer er det ofte et leverandørnavn og aldri en konto.
+    db
+      .select({ u: completions, utforerNavn: users.name })
+      .from(completions)
+      .leftJoin(users, eq(users.id, completions.completedByUserId))
+      .where(eq(completions.taskId, taskId))
+      .orderBy(desc(completions.completedAt))
+      .then((rader) =>
+        rader.map((r) => ({ ...r.u, completedBy: r.utforerNavn ?? r.u.completedBy })),
+      ),
     sisteUtkvitteringer(db, [taskId]),
   ]);
+
+  /**
+   * Sjekkpunktene SOM DE STO ved hver utførelse — kopien i `completion_checklist_results`,
+   * ikke dagens mal.
+   *
+   * Dette er hele grunnen til at tabellen finnes, og v2 lagret dem uten å vise dem noe sted:
+   * loggen sa «utført» og ingenting om HVA som ble gjort. For en internkontrollperm er det
+   * forskjellen på en kvittering og en dokumentasjon — «3 av 3 punkter huket av, ett av dem var
+   * brannslukker kontrollert» er svaret et tilsyn spør om.
+   *
+   * ÉN spørring for alle utførelsene, ikke én per rad: en oppgave med ukentlig frekvens har
+   * hundrevis av dem etter noen år.
+   */
+  const resultater =
+    radene.length === 0
+      ? []
+      : await db
+          .select()
+          .from(completionChecklistResults)
+          .where(inArray(completionChecklistResults.completionId, radene.map((u) => u.id)))
+          .orderBy(asc(completionChecklistResults.order));
+
+  const perUtkvittering = new Map<string, typeof resultater>();
+  for (const r of resultater) {
+    const liste = perUtkvittering.get(r.completionId) ?? [];
+    liste.push(r);
+    perUtkvittering.set(r.completionId, liste);
+  }
 
   return {
     ...berik(oppgave, sist.get(taskId) ?? null),
@@ -169,7 +208,7 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
     unitNavn: rad.unitNavn,
     ansvarligNavn: rad.ansvarligNavn,
     sjekkliste,
-    utkvitteringer,
+    utkvitteringer: radene.map((u) => ({ ...u, punkter: perUtkvittering.get(u.id) ?? [] })),
   };
 }
 
@@ -219,7 +258,7 @@ export async function registrerUtkvittering(
   db: Db,
   orgId: string,
   taskId: string,
-  utfortAv: string,
+  utfortAv: Aktor,
   data: z.infer<typeof utkvitteringInn>,
 ) {
   await hentOppgave(db, orgId, taskId);
@@ -250,16 +289,27 @@ export async function registrerUtkvittering(
 export async function opprettUtkvittering(
   db: Db,
   taskId: string,
-  utfortAv: string,
+  /** Navn OG id: navnet føres i protokollen, id-en gjør raden søkbar per person. Se aktor.ts. */
+  utfortAv: Aktor,
   data: z.infer<typeof utkvitteringInn>,
   opts: { manuell: boolean; tidspunkt?: Date; orgId?: string; avvikstittel?: string },
 ) {
+  // Leverandøren fryses PÅ raden, ikke utledet ved lesing: `tasks.vendorId` sier hvem som har
+  // avtalen nå, og et leverandørbytte skal ikke omskrive hvem som utførte gamle jobber.
+  const [oppgaverad] = await db
+    .select({ vendorId: tasks.vendorId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
   const [ny] = await db
     .insert(completions)
     .values({
       id: randomUUID(),
       taskId,
-      completedBy: utfortAv,
+      completedBy: utfortAv.navn,
+      completedByUserId: utfortAv.brukerId,
+      vendorId: oppgaverad?.vendorId ?? null,
       ...(opts.tidspunkt ? { completedAt: opts.tidspunkt } : {}),
       manual: opts.manuell,
       notes: data.notes,
@@ -291,12 +341,7 @@ export async function opprettUtkvittering(
 
   if (data.hasDeviation) {
     const orgId = opts.orgId ?? (await orgForOppgave(db, taskId));
-    const [oppgave] = await db
-      .select({ vendorId: tasks.vendorId })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1);
-
+    // Samme leverandør som utkvitteringen fikk — slått opp én gang, over.
     const nummer = await db
       .select({ maks: sql<number | null>`max(${deviations.number})` })
       .from(deviations)
@@ -308,11 +353,12 @@ export async function opprettUtkvittering(
       number: (nummer[0]?.maks ?? 0) + 1,
       taskId,
       completionId: utkvittering.id,
-      vendorId: oppgave?.vendorId ?? null,
+      vendorId: oppgaverad?.vendorId ?? null,
       title: data.deviationDescription?.trim() || opts.avvikstittel || "Avvik registrert ved utkvittering",
       description: data.deviationDescription ?? null,
       severity: data.severity ?? null,
-      reportedBy: utfortAv,
+      reportedBy: utfortAv.navn,
+      reportedByUserId: utfortAv.brukerId,
     });
   }
 
@@ -332,11 +378,31 @@ async function orgForOppgave(db: Db, taskId: string): Promise<string> {
 }
 
 /**
- * Erstatter hele sjekklistemalen.
+ * Oppdaterer sjekklistemalen og BEHOLDER id-en på punkter som fortsatt finnes.
  *
- * Gamle punkter slettes, men utført historikk berøres IKKE: `completion_checklist_results`
- * har sin egen kopi av teksten, og `itemId` er SET NULL. Det er hele grunnen til at
- * resultatraden duplisterer teksten i stedet for å peke på malen.
+ * ## Hvorfor dette ikke er «slett alt og sett inn på nytt»
+ *
+ * Det var nettopp det den gjorde før, og prisen var usynlig: hver redigering ga alle punktene
+ * nye UUID-er, `completion_checklist_results.itemId` ble `SET NULL` for ALL historikk — også
+ * for punktene du ikke rørte — og «har «Gangveier strødd» blitt huket av de siste ti gangene?»
+ * kunne ikke besvares på annet enn tekstmatch. Å rette en skrivefeil i én linje kostet altså
+ * sporbarheten til hele lista.
+ *
+ * Teksten kopieres fortsatt inn i resultatraden, og det skal den: den er protokollen for hva
+ * som sto der DA jobben ble gjort. Id-en er søkenøkkelen. Samme skille som for aktørene i
+ * `lib/aktor.ts` — begge trengs, ingen av dem kan utledes av den andre i ettertid.
+ *
+ * ## Regelen er med vilje så enkel som den kan være: UENDRET tekst beholder id-en
+ *
+ * Punkter med nøyaktig samme tekst som før beholder id-en sin, uansett rekkefølge. Alt annet er
+ * et nytt punkt med ny id, og den gamle historikken beholder sin egen tekst med `itemId = NULL`.
+ *
+ * Det betyr at et NAVNEBYTTE nullstiller punktets statistikk — og det er et valg, ikke en
+ * mangel. Sjekkpunktene er ofte fysiske ting («Vask 1», «Tørk 3»), og «hvor mange rens har Vask
+ * 3 hatt?» er bare til å stole på hvis et punkt aldri kan arve et annets historikk. Enhver
+ * gjetning (posisjon, likhet) ville før eller siden gitt en ny maskin den gamles tall. Bytter
+ * kunden navn i stedet for å legge til et nytt punkt, er brutt statistikk deres valg — teksten i
+ * redigeringsdialogen sier det rett ut.
  */
 export async function erstattSjekkliste(
   db: Db,
@@ -346,13 +412,54 @@ export async function erstattSjekkliste(
 ) {
   await hentOppgave(db, orgId, taskId);
 
-  await db.delete(taskChecklistItems).where(eq(taskChecklistItems.taskId, taskId));
-  if (data.items.length === 0) return [];
+  const fra = await db
+    .select()
+    .from(taskChecklistItems)
+    .where(eq(taskChecklistItems.taskId, taskId))
+    .orderBy(asc(taskChecklistItems.order));
+
+  const nokkel = (t: string) => t.trim().toLowerCase();
+  const ubrukt = new Map<string, string[]>();
+  for (const p of fra) {
+    const liste = ubrukt.get(nokkel(p.text)) ?? [];
+    liste.push(p.id);
+    ubrukt.set(nokkel(p.text), liste);
+  }
+
+  // Eksakt tekst er hele regelen. Duplikater («Vask 1» to ganger) kobles i rekkefølge.
+  const tildelt: Array<string | null> = data.items.map((p) => {
+    const treff = ubrukt.get(nokkel(p.text));
+    return treff && treff.length > 0 ? treff.shift()! : null;
+  });
+
+  // Det som ikke ble gjenbrukt, finnes ikke lenger i malen. Historikken består: resultatraden
+  // har sin egen tekst, og fremmednøkkelen er SET NULL.
+  const beholdt = new Set(tildelt.filter((id): id is string => id !== null));
+  const skalBort = fra.filter((p) => !beholdt.has(p.id)).map((p) => p.id);
+  if (skalBort.length > 0) {
+    await db.delete(taskChecklistItems).where(inArray(taskChecklistItems.id, skalBort));
+  }
+
+  for (let i = 0; i < data.items.length; i++) {
+    const id = tildelt[i];
+    const punkt = data.items[i]!;
+    if (id) {
+      await db
+        .update(taskChecklistItems)
+        .set({ text: punkt.text, order: i })
+        .where(eq(taskChecklistItems.id, id));
+    } else {
+      await db
+        .insert(taskChecklistItems)
+        .values({ id: randomUUID(), taskId, text: punkt.text, order: i });
+    }
+  }
 
   return db
-    .insert(taskChecklistItems)
-    .values(data.items.map((p, i) => ({ id: randomUUID(), taskId, text: p.text, order: i })))
-    .returning();
+    .select()
+    .from(taskChecklistItems)
+    .where(eq(taskChecklistItems.taskId, taskId))
+    .orderBy(asc(taskChecklistItems.order));
 }
 
 /** Historikken for én utkvittering, med de kopierte sjekkpunktene. */

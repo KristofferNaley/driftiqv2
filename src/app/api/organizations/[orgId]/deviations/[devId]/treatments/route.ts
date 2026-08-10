@@ -1,5 +1,6 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { behandlingInn, leggTilBehandling } from "@/lib/avvik";
+import { aktorFor } from "@/lib/aktor";
 
 /**
  * Append-only. Det finnes med vilje ingen PUT eller DELETE: behandlingsjournalen er
@@ -10,5 +11,5 @@ export const POST = orgRute<{ devId: string }>({
   nivaa: "redigering",
   modul: "avvik",
   handler: async ({ db, orgId, params, bruker, req }) =>
-    leggTilBehandling(db, orgId, params.devId, bruker.name, await lesKropp(req, behandlingInn)),
+    leggTilBehandling(db, orgId, params.devId, aktorFor(bruker), await lesKropp(req, behandlingInn)),
 });

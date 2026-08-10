@@ -1,5 +1,6 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { avvikInn, avvikSok, avvikStatistikk, hentAvvik, hentKategorier, opprettAvvik } from "@/lib/avvik";
+import { aktorFor } from "@/lib/aktor";
 
 /**
  * Avvikslista med filtre, sortering, paginering og nøkkeltall — i ÉN forespørsel.
@@ -31,5 +32,5 @@ export const POST = orgRute({
   nivaa: "lesing",
   modul: "avvik",
   handler: async ({ db, orgId, bruker, req }) =>
-    opprettAvvik(db, orgId, bruker.name, await lesKropp(req, avvikInn)),
+    opprettAvvik(db, orgId, aktorFor(bruker), await lesKropp(req, avvikInn)),
 });

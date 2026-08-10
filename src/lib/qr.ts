@@ -38,6 +38,7 @@ import { units } from "../db/schema/units";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { lagreFil } from "./lagring";
+import { anonymAktor } from "./aktor";
 import { opprettUtkvittering, utkvitteringInn } from "./oppgaver";
 
 /**
@@ -130,7 +131,10 @@ export async function registrerViaQr(token: string, data: z.infer<typeof qrUtkvi
 
     // Uten navn føres leverandørselskapet, som uansett er avtaleparten som svarer for
     // jobben. Loggen skal aldri stå tom for hvem som utførte.
-    const utfortAv = data.completedBy?.trim() || oppgave.leverandor || "Ukjent";
+    //
+    // `anonymAktor`: her finnes ingen innlogget bruker å knytte raden til, og det er meningen
+    // — QR-flyten er anonym med vilje. Navnet står derfor alene, som før. Se lib/aktor.ts.
+    const utfortAv = anonymAktor(data.completedBy?.trim() || oppgave.leverandor || "Ukjent");
 
     const utkvittering = await opprettUtkvittering(db, oppgave.id, utfortAv, data, {
       manuell: false,

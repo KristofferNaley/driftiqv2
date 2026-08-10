@@ -21,6 +21,7 @@ import {
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { lagreFil, slettFil } from "./lagring";
+import type { Aktor } from "./aktor";
 
 /**
  * FDV-slottene. Rekkefølgen styrer visningen, og lista driver komplett-prosenten:
@@ -341,7 +342,7 @@ export async function hentArbeid(db: Db, orgId: string, workId: string) {
 export async function registrerArbeid(
   db: Db,
   orgId: string,
-  registrertAv: string,
+  registrertAv: Aktor,
   data: z.infer<typeof arbeidInn>,
 ) {
   await krevIEgenOrg(db, orgId, data);
@@ -355,7 +356,8 @@ export async function registrerArbeid(
     orgId,
     ...data,
     unitLabel: enhetsmerke(enhet[0]),
-    createdBy: registrertAv,
+    createdBy: registrertAv.navn,
+    createdByUserId: registrertAv.brukerId,
   }).returning();
   return ny!;
 }

@@ -1,5 +1,6 @@
 import { orgRute, ugyldig } from "@/lib/api";
 import { lastOppVedlegg } from "@/lib/avvik";
+import { aktorFor } from "@/lib/aktor";
 
 /**
  * `redigering`, ikke `lesing`: å MELDE et avvik skal alle kunne, men å legge dokumentasjon
@@ -17,7 +18,7 @@ export const POST = orgRute<{ devId: string }>({
       db,
       orgId,
       params.devId,
-      bruker.name,
+      aktorFor(bruker),
       fil,
       typeof behandling === "string" && behandling ? behandling : null,
     );

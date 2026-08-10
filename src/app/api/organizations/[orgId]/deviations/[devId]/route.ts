@@ -1,5 +1,6 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { avvikEndring, endreAvvik, hentEttAvvik } from "@/lib/avvik";
+import { aktorFor } from "@/lib/aktor";
 
 type P = { devId: string };
 
@@ -13,5 +14,5 @@ export const PUT = orgRute<P>({
   nivaa: "redigering",
   modul: "avvik",
   handler: async ({ db, orgId, params, bruker, req }) =>
-    endreAvvik(db, orgId, params.devId, bruker.name, await lesKropp(req, avvikEndring)),
+    endreAvvik(db, orgId, params.devId, aktorFor(bruker), await lesKropp(req, avvikEndring)),
 });

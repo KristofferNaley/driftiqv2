@@ -34,6 +34,14 @@ export const deviations = pgTable("deviations", {
   /** ny | under_behandling | lukket. Lukking skjer KUN via lukk-handlingen. */
   status: varchar("status").notNull().default("ny"),
   reportedBy: varchar("reported_by").notNull(),
+  /**
+   * Melderen som id, ved siden av navnet. Nullbar: QR-flyten er anonym med vilje, og et avvik
+   * meldt av en beboer uten konto har ingen bruker å peke på. Se kommentaren på
+   * `completions.completedByUserId` for hvorfor begge feltene finnes.
+   */
+  reportedByUserId: varchar("reported_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
   /**
    * `responsibleUserId` er SANNHETEN — den brukes til varsling og «mine avvik».
@@ -46,6 +54,10 @@ export const deviations = pgTable("deviations", {
   dueDate: date("due_date"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   resolvedBy: varchar("resolved_by"),
+  /** Den som lukket saken, som id. Samme begrunnelse som `reportedByUserId`. */
+  resolvedByUserId: varchar("resolved_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   resolutionNotes: text("resolution_notes"),
 });
 
@@ -64,6 +76,10 @@ export const deviationTreatments = pgTable("deviation_treatments", {
     .references(() => deviations.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
   createdBy: varchar("created_by").notNull(),
+  /** Forfatteren som id, ved siden av navnet. Se `completions.completedByUserId`. */
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -93,6 +109,10 @@ export const deviationAttachments = pgTable("deviation_attachments", {
   contentType: varchar("content_type"),
   fileSize: bigint("file_size", { mode: "number" }),
   uploadedBy: varchar("uploaded_by").notNull(),
+  /** Den som lastet opp, som id. Nullbar — QR-flyten laster opp bilder anonymt. Se `lib/aktor.ts`. */
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -103,6 +123,10 @@ export const deviationLogs = pgTable("deviation_logs", {
     .notNull()
     .references(() => deviations.id, { onDelete: "cascade" }),
   changedBy: varchar("changed_by").notNull(),
+  /** Den som utløste hendelsen, som id. Nullbar — QR-flyten er anonym. Se `lib/aktor.ts`. */
+  changedByUserId: varchar("changed_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   event: varchar("event").notNull(),
 });

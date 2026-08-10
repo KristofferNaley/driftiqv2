@@ -35,6 +35,10 @@ import {
   status,
 } from "../src/lib/internkontroll";
 import { leggTilKategori, leggTilPunkt, opprettMal as opprettHmsMal } from "../src/lib/maler";
+import { anonymAktor } from "../src/lib/aktor";
+
+/** Aktøren i testene: navn uten konto. Id-koblingen testes i aktivitet.test.ts. */
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -289,7 +293,7 @@ describe("vernerunde", () => {
   it("lister avvikene som ble meldt under runden", async () => {
     const org = await oppsett();
     const runde = await i(org, (db) => opprettRunde(db, org, { title: "Vår" }));
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Skadet rekkverk", roundId: runde.id }));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { title: "Skadet rekkverk", roundId: runde.id }));
 
     const etter = await i(org, (db) => hentRunde(db, org, runde.id));
     expect(etter.avvik.map((a) => a.title)).toEqual(["Skadet rekkverk"]);

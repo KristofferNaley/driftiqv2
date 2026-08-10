@@ -15,6 +15,7 @@
 import { and, asc, count, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "../db/client";
 import { deviationAttachments, deviationLogs, deviationTreatments, deviations } from "../db/schema/avvik";
 import { tasks } from "../db/schema/tasks";
@@ -24,6 +25,7 @@ import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { lagreFil } from "./lagring";
 import { organizations } from "../db/schema/organizations";
+import type { Aktor } from "./aktor";
 
 export const STATUSER = ["ny", "under_behandling", "lukket"] as const;
 export const ALVORLIGHET = ["lav", "middels", "akutt"] as const;
@@ -58,11 +60,12 @@ export const behandlingInn = z.object({
   text: z.string().trim().min(1, "Innlegget kan ikke være tomt"),
 });
 
-async function skrivLogg(db: Db, deviationId: string, av: string, hendelse: string) {
+async function skrivLogg(db: Db, deviationId: string, av: Aktor, hendelse: string) {
   await db.insert(deviationLogs).values({
     id: randomUUID(),
     deviationId,
-    changedBy: av,
+    changedBy: av.navn,
+    changedByUserId: av.brukerId,
     event: hendelse,
   });
 }
@@ -99,6 +102,28 @@ async function validerKoblinger(
 function medAnsvarlig<T extends { assignedTo: string | null }>(rad: T, brukernavn: string | null) {
   return { ...rad, assignedTo: brukernavn ?? rad.assignedTo };
 }
+
+/**
+ * Egne alias for brukertabellen per rolle på avviket.
+ *
+ * `users` er allerede med i spørringen for ANSVARLIG. Skal melderen og den som lukket saken
+ * også slås opp, må hver av dem ha sin egen instans av tabellen — ellers blir det én join som
+ * må stemme for tre ulike id-er, og resultatet er rader som forsvinner.
+ */
+const melderBruker = alias(users, "melder_bruker");
+const lukkerBruker = alias(users, "lukker_bruker");
+const forfatterBruker = alias(users, "forfatter_bruker");
+
+/**
+ * Aktørnavnet slik det skal VISES: personens nåværende navn når raden har en id, ellers
+ * navnet som ble kopiert inn da raden ble skrevet.
+ *
+ * Samme regel som `medAnsvarlig` har hatt hele tiden, nå brukt på melder, lukker og
+ * behandlingsforfatter. Poenget er at et navnebytte ikke skal gi feil visning — snapshotet i
+ * kolonnen er reserven for rader uten id (QR-anonym, leverandørportal, slettet konto), ikke
+ * fasiten når vi vet bedre.
+ */
+const visNavn = (naa: string | null, lagret: string) => naa ?? lagret;
 
 /**
  * Kolonnene som kan sorteres på, og hva de faktisk sorterer.
@@ -184,9 +209,15 @@ export async function hentAvvik(
 
   const [rader, antall] = await Promise.all([
     db
-      .select({ avvik: deviations, brukernavn: users.name, unitNavn: units.navn })
+      .select({
+        avvik: deviations,
+        brukernavn: users.name,
+        melderNavn: melderBruker.name,
+        unitNavn: units.navn,
+      })
       .from(deviations)
       .leftJoin(users, eq(users.id, deviations.responsibleUserId))
+      .leftJoin(melderBruker, eq(melderBruker.id, deviations.reportedByUserId))
       .leftJoin(units, eq(units.id, deviations.unitId))
       .where(hvor)
       // Løpenummeret som andrenøkkel: uten det kan to rader med samme dato bytte plass
@@ -199,7 +230,11 @@ export async function hentAvvik(
 
   const total = antall[0]?.n ?? 0;
   return {
-    items: rader.map((r) => ({ ...medAnsvarlig(r.avvik, r.brukernavn), unitNavn: r.unitNavn })),
+    items: rader.map((r) => ({
+      ...medAnsvarlig(r.avvik, r.brukernavn),
+      reportedBy: visNavn(r.melderNavn, r.avvik.reportedBy),
+      unitNavn: r.unitNavn,
+    })),
     total,
     side,
     sider: Math.max(1, Math.ceil(total / SIDESTORRELSE)),
@@ -287,12 +322,16 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
     .select({
       avvik: deviations,
       brukernavn: users.name,
+      melderNavn: melderBruker.name,
+      lukkerNavn: lukkerBruker.name,
       unitNavn: units.navn,
       vendorNavn: vendors.name,
       taskTittel: tasks.title,
     })
     .from(deviations)
     .leftJoin(users, eq(users.id, deviations.responsibleUserId))
+    .leftJoin(melderBruker, eq(melderBruker.id, deviations.reportedByUserId))
+    .leftJoin(lukkerBruker, eq(lukkerBruker.id, deviations.resolvedByUserId))
     .leftJoin(units, eq(units.id, deviations.unitId))
     .leftJoin(vendors, eq(vendors.id, deviations.vendorId))
     .leftJoin(tasks, eq(tasks.id, deviations.taskId))
@@ -302,9 +341,15 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
   if (!rad) throw ikkeFunnet("Avvik");
 
   const [behandlinger, logg, vedlegg] = await Promise.all([
-    db.select().from(deviationTreatments)
+    db
+      .select({ b: deviationTreatments, forfatterNavn: forfatterBruker.name })
+      .from(deviationTreatments)
+      .leftJoin(forfatterBruker, eq(forfatterBruker.id, deviationTreatments.createdByUserId))
       .where(eq(deviationTreatments.deviationId, devId))
-      .orderBy(asc(deviationTreatments.createdAt)),
+      .orderBy(asc(deviationTreatments.createdAt))
+      .then((rader) =>
+        rader.map((r) => ({ ...r.b, createdBy: visNavn(r.forfatterNavn, r.b.createdBy) })),
+      ),
     db.select().from(deviationLogs)
       .where(eq(deviationLogs.deviationId, devId))
       .orderBy(asc(deviationLogs.changedAt)),
@@ -315,6 +360,8 @@ export async function hentEttAvvik(db: Db, orgId: string, devId: string) {
 
   return {
     ...medAnsvarlig(rad.avvik, rad.brukernavn),
+    reportedBy: visNavn(rad.melderNavn, rad.avvik.reportedBy),
+    resolvedBy: rad.lukkerNavn ?? rad.avvik.resolvedBy,
     unitNavn: rad.unitNavn,
     vendorNavn: rad.vendorNavn,
     taskTittel: rad.taskTittel,
@@ -340,7 +387,7 @@ export async function lastOppVedlegg(
   db: Db,
   orgId: string,
   devId: string,
-  lastetAv: string,
+  lastetAv: Aktor,
   fil: File,
   treatmentId?: string | null,
 ) {
@@ -366,7 +413,8 @@ export async function lastOppVedlegg(
       originalName: lagret.originalnavn,
       contentType: lagret.contentType,
       fileSize: lagret.storrelse,
-      uploadedBy: lastetAv,
+      uploadedBy: lastetAv.navn,
+      uploadedByUserId: lastetAv.brukerId,
     })
     .returning();
 
@@ -381,7 +429,7 @@ export async function lastOppVedlegg(
  * fra disk er det ikke, og en feilklikket sletting av dokumentasjon på et avvik er dyr.
  * Opprydding av foreldreløse filer hører til en egen jobb, ikke til et klikk i UI-et.
  */
-export async function slettVedlegg(db: Db, orgId: string, devId: string, vedleggId: string, av: string) {
+export async function slettVedlegg(db: Db, orgId: string, devId: string, vedleggId: string, av: Aktor) {
   const rader = await db
     .select({ navn: deviationAttachments.originalName })
     .from(deviationAttachments)
@@ -412,7 +460,7 @@ async function nesteNummer(db: Db, orgId: string): Promise<number> {
 export async function opprettAvvik(
   db: Db,
   orgId: string,
-  melder: string,
+  melder: Aktor,
   data: z.infer<typeof avvikInn>,
 ) {
   await validerKoblinger(db, orgId, data);
@@ -427,13 +475,14 @@ export async function opprettAvvik(
       id: randomUUID(),
       orgId,
       number: await nesteNummer(db, orgId),
-      reportedBy: melder,
+      reportedBy: melder.navn,
+      reportedByUserId: melder.brukerId,
       assignedTo: navn ?? null,
       ...data,
     })
     .returning();
 
-  await skrivLogg(db, ny!.id, melder, `Avvik meldt av ${melder}`);
+  await skrivLogg(db, ny!.id, melder, `Avvik meldt av ${melder.navn}`);
   return ny!;
 }
 
@@ -441,7 +490,7 @@ export async function endreAvvik(
   db: Db,
   orgId: string,
   devId: string,
-  endretAv: string,
+  endretAv: Aktor,
   data: z.infer<typeof avvikEndring>,
 ) {
   const avvik = await hentEttAvvik(db, orgId, devId);
@@ -466,7 +515,7 @@ export async function endreAvvik(
     .returning();
 
   if (data.status && data.status !== avvik.status) {
-    await skrivLogg(db, devId, endretAv, `Status endret til ${data.status} av ${endretAv}`);
+    await skrivLogg(db, devId, endretAv, `Status endret til ${data.status} av ${endretAv.navn}`);
   }
   return endret!;
 }
@@ -482,6 +531,13 @@ export async function lukkAvvik(
   db: Db,
   orgId: string,
   devId: string,
+  /**
+   * Den som utfører lukkingen — altså den innloggede. Navnet i `data.resolvedBy` er et eget
+   * felt brukeren fyller ut selv og kan være en annen enn den som trykker, f.eks. når styret
+   * lukker på vegne av en leverandør. Protokollen beholder DET navnet; id-en her sier hvem som
+   * gjorde det i systemet, og er det «min aktivitet» skal finne igjen.
+   */
+  utfortAv: Aktor,
   data: z.infer<typeof lukkInn>,
 ) {
   const avvik = await hentEttAvvik(db, orgId, devId);
@@ -493,6 +549,7 @@ export async function lukkAvvik(
       status: "lukket",
       resolvedAt: sql`now()`,
       resolvedBy: data.resolvedBy,
+      resolvedByUserId: utfortAv.brukerId,
       resolutionNotes: data.resolutionNotes,
     })
     .where(and(eq(deviations.id, devId), eq(deviations.orgId, orgId)))
@@ -501,7 +558,7 @@ export async function lukkAvvik(
   await skrivLogg(
     db,
     devId,
-    data.resolvedBy,
+    { navn: data.resolvedBy, brukerId: utfortAv.brukerId },
     `Avvik lukket av ${data.resolvedBy}. Løsning: ${data.resolutionNotes}`,
   );
   return lukket!;
@@ -512,7 +569,7 @@ export async function leggTilBehandling(
   db: Db,
   orgId: string,
   devId: string,
-  forfatter: string,
+  forfatter: Aktor,
   data: z.infer<typeof behandlingInn>,
 ) {
   const avvik = await hentEttAvvik(db, orgId, devId);
@@ -522,7 +579,13 @@ export async function leggTilBehandling(
 
   const [ny] = await db
     .insert(deviationTreatments)
-    .values({ id: randomUUID(), deviationId: devId, text: data.text, createdBy: forfatter })
+    .values({
+      id: randomUUID(),
+      deviationId: devId,
+      text: data.text,
+      createdBy: forfatter.navn,
+      createdByUserId: forfatter.brukerId,
+    })
     .returning();
 
   // Første behandlingsinnlegg flytter avviket fra «ny» til «under behandling» av seg selv.

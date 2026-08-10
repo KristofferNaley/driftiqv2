@@ -12,6 +12,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import { endreHendelse, hentHendelser, opprettHendelse, slettHendelse } from "../src/lib/arshjul";
 import { hentLogg, opprettLogg, slettLogg } from "../src/lib/driftslogg";
+import { anonymAktor } from "../src/lib/aktor";
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -126,7 +127,7 @@ describe("driftslogg", () => {
     // fortsatt vise hvem som førte den.
     const org = await nyOrg();
     const rad = await i(org, (db) =>
-      opprettLogg(db, org, "Kari Nordmann", { title: "Skiftet lyspære", entryDate: "2026-08-01" }),
+      opprettLogg(db, org, anonymAktor("Kari Nordmann"), { title: "Skiftet lyspære", entryDate: "2026-08-01" }),
     );
     expect(rad.createdBy).toBe("Kari Nordmann");
   });
@@ -134,8 +135,8 @@ describe("driftslogg", () => {
   it("lister nyeste først", async () => {
     const org = await nyOrg();
     await i(org, async (db) => {
-      await opprettLogg(db, org, "A", { title: "Eldst", entryDate: "2026-01-01" });
-      await opprettLogg(db, org, "A", { title: "Nyest", entryDate: "2026-08-01" });
+      await opprettLogg(db, org, anonymAktor("A"), { title: "Eldst", entryDate: "2026-01-01" });
+      await opprettLogg(db, org, anonymAktor("A"), { title: "Nyest", entryDate: "2026-08-01" });
     });
     const liste = await i(org, (db) => hentLogg(db, org));
     expect(liste.map((r) => r.title)).toEqual(["Nyest", "Eldst"]);
@@ -145,7 +146,7 @@ describe("driftslogg", () => {
     const org = await nyOrg();
     const vendorId = await nyLeverandor(org);
     await i(org, (db) =>
-      opprettLogg(db, org, "A", { title: "Service", entryDate: "2026-08-01", vendorId }),
+      opprettLogg(db, org, anonymAktor("A"), { title: "Service", entryDate: "2026-08-01", vendorId }),
     );
     const liste = await i(org, (db) => hentLogg(db, org));
     expect(liste[0]!.vendorName).toBe("Vaktmester");
@@ -158,7 +159,7 @@ describe("driftslogg", () => {
     const vendorB = await nyLeverandor(b);
 
     const feil = await feilFra(() =>
-      i(a, (db) => opprettLogg(db, a, "A", { title: "Tyveri", entryDate: "2026-08-01", vendorId: vendorB })),
+      i(a, (db) => opprettLogg(db, a, anonymAktor("A"), { title: "Tyveri", entryDate: "2026-08-01", vendorId: vendorB })),
     );
     expect(feil.status).toBe(404);
   });

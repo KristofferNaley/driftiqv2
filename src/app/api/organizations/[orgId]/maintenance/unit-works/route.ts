@@ -1,5 +1,6 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { arbeidInn, hentArbeider, registrerArbeid } from "@/lib/vedlikehold";
+import { aktorFor } from "@/lib/aktor";
 
 export const GET = orgRute({
   nivaa: "lesing", modul: "vedlikehold",
@@ -16,5 +17,5 @@ export const GET = orgRute({
 export const POST = orgRute({
   nivaa: "redigering", modul: "vedlikehold",
   handler: async ({ db, orgId, bruker, req }) =>
-    registrerArbeid(db, orgId, bruker.name, await lesKropp(req, arbeidInn)),
+    registrerArbeid(db, orgId, aktorFor(bruker), await lesKropp(req, arbeidInn)),
 });

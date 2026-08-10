@@ -22,6 +22,10 @@ import {
   opprettAvvik,
   tellPerStatus,
 } from "../src/lib/avvik";
+import { anonymAktor } from "../src/lib/aktor";
+
+/** Aktøren i testene: navn uten konto. Id-koblingen testes i aktivitet.test.ts. */
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -96,8 +100,8 @@ const grunn = { title: "Fukt i kjeller" };
 describe("løpenummer", () => {
   it("teller opp per org", async () => {
     const org = await nyOrg();
-    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    const b = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
+    const a = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    const b = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
     expect(a.number).toBe(1);
     expect(b.number).toBe(2);
   });
@@ -105,9 +109,9 @@ describe("løpenummer", () => {
   it("teller uavhengig i hver org", async () => {
     const a = await nyOrg();
     const b = await nyOrg();
-    await i(a, (db) => opprettAvvik(db, a, "Kari", grunn));
-    await i(a, (db) => opprettAvvik(db, a, "Kari", grunn));
-    const iB = await i(b, (db) => opprettAvvik(db, b, "Kari", grunn));
+    await i(a, (db) => opprettAvvik(db, a, KARI, grunn));
+    await i(a, (db) => opprettAvvik(db, a, KARI, grunn));
+    const iB = await i(b, (db) => opprettAvvik(db, b, KARI, grunn));
     expect(iB.number).toBe(1);
   });
 });
@@ -120,7 +124,7 @@ describe("ansvarlig", () => {
     const utenfor = await nyBrukerIOrg(null, "Utenforstående");
 
     const feil = await feilFra(() =>
-      i(org, (db) => opprettAvvik(db, org, "Kari", { ...grunn, responsibleUserId: utenfor })),
+      i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, responsibleUserId: utenfor })),
     );
     expect(feil.status).toBe(400);
     expect(feil.message).toMatch(/medlem av organisasjonen/i);
@@ -130,7 +134,7 @@ describe("ansvarlig", () => {
     const org = await nyOrg();
     const bruker = await nyBrukerIOrg(org, "Ola Gammelnavn");
     const avvik = await i(org, (db) =>
-      opprettAvvik(db, org, "Kari", { ...grunn, responsibleUserId: bruker }),
+      opprettAvvik(db, org, KARI, { ...grunn, responsibleUserId: bruker }),
     );
     expect(avvik.assignedTo).toBe("Ola Gammelnavn");
 
@@ -146,7 +150,7 @@ describe("lukking", () => {
     // Zod-skjemaet tillater bare `ny` og `under_behandling`. Kravet om løsningsbeskrivelse
     // ville vært trivielt å omgå hvis status var et vanlig felt.
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
 
     const { avvikEndring } = await import("../src/lib/avvik");
     expect(avvikEndring.safeParse({ status: "lukket" }).success).toBe(false);
@@ -162,9 +166,9 @@ describe("lukking", () => {
 
   it("setter status, tidspunkt og logg", async () => {
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
     await i(org, (db) =>
-      lukkAvvik(db, org, avvik.id, { resolvedBy: "Kari", resolutionNotes: "Drenert og tørket" }),
+      lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Drenert og tørket" }),
     );
 
     const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
@@ -175,11 +179,11 @@ describe("lukking", () => {
 
   it("hindrer endring av et lukket avvik", async () => {
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    await i(org, (db) => lukkAvvik(db, org, avvik.id, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
     const feil = await feilFra(() =>
-      i(org, (db) => endreAvvik(db, org, avvik.id, "Kari", { title: "Omskrevet i ettertid" })),
+      i(org, (db) => endreAvvik(db, org, avvik.id, anonymAktor("Kari"), { title: "Omskrevet i ettertid" })),
     );
     expect(feil.status).toBe(400);
     expect(feil.message).toMatch(/lukket og kan ikke endres/i);
@@ -187,11 +191,11 @@ describe("lukking", () => {
 
   it("hindrer at behandlingen fortsetter etter lukking", async () => {
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    await i(org, (db) => lukkAvvik(db, org, avvik.id, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
     const feil = await feilFra(() =>
-      i(org, (db) => leggTilBehandling(db, org, avvik.id, "Kari", { text: "Etterpåklokskap" })),
+      i(org, (db) => leggTilBehandling(db, org, avvik.id, KARI, { text: "Etterpåklokskap" })),
     );
     expect(feil.message).toMatch(/behandlingen kan ikke fortsette/i);
   });
@@ -200,8 +204,8 @@ describe("lukking", () => {
 describe("behandlingsjournal", () => {
   it("flytter avviket til under_behandling ved første innlegg", async () => {
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    await i(org, (db) => leggTilBehandling(db, org, avvik.id, "Ola", { text: "Ringt rørlegger" }));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => leggTilBehandling(db, org, avvik.id, anonymAktor("Ola"), { text: "Ringt rørlegger" }));
 
     const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
     expect(etter.status).toBe("under_behandling");
@@ -211,9 +215,9 @@ describe("behandlingsjournal", () => {
 
   it("beholder rekkefølgen på innleggene", async () => {
     const org = await nyOrg();
-    const avvik = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    await i(org, (db) => leggTilBehandling(db, org, avvik.id, "Ola", { text: "Først" }));
-    await i(org, (db) => leggTilBehandling(db, org, avvik.id, "Ola", { text: "Så" }));
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => leggTilBehandling(db, org, avvik.id, anonymAktor("Ola"), { text: "Først" }));
+    await i(org, (db) => leggTilBehandling(db, org, avvik.id, anonymAktor("Ola"), { text: "Så" }));
 
     const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
     expect(etter.behandlinger.map((b) => b.text)).toEqual(["Først", "Så"]);
@@ -223,9 +227,9 @@ describe("behandlingsjournal", () => {
 describe("oversikter", () => {
   it("filtrerer på åpne og lukkede", async () => {
     const org = await nyOrg();
-    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Åpent" }));
-    await i(org, (db) => lukkAvvik(db, org, a.id, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    const a = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { title: "Åpent" }));
+    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
     expect((await i(org, (db) => hentAvvik(db, org, { lukkede: false }))).total).toBe(1);
     expect((await i(org, (db) => hentAvvik(db, org, { lukkede: true }))).total).toBe(1);
@@ -234,8 +238,8 @@ describe("oversikter", () => {
 
   it("søker på tittel og på løpenummer", async () => {
     const org = await nyOrg();
-    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Lekkasje i kjeller" }));
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "Rekkverk løst" }));
+    const a = await i(org, (db) => opprettAvvik(db, org, KARI, { title: "Lekkasje i kjeller" }));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { title: "Rekkverk løst" }));
 
     const tittel = await i(org, (db) => hentAvvik(db, org, { sok: "lekkasje" }));
     expect(tittel.items.map((r) => r.id)).toEqual([a.id]);
@@ -247,8 +251,8 @@ describe("oversikter", () => {
 
   it("filtrerer på kategori", async () => {
     const org = await nyOrg();
-    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "A", category: "hms" }));
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "B", category: "teknisk" }));
+    const a = await i(org, (db) => opprettAvvik(db, org, KARI, { title: "A", category: "hms" }));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { title: "B", category: "teknisk" }));
     const ut = await i(org, (db) => hentAvvik(db, org, { kategori: "hms" }));
     expect(ut.items.map((r) => r.id)).toEqual([a.id]);
   });
@@ -257,7 +261,7 @@ describe("oversikter", () => {
     // Feltet kommer fra en URL-parameter. Uten hvitelista ville dette vært en SQL-injeksjon;
     // testen slår fast at ukjent input gir et normalt svar, ikke en feil eller rar SQL.
     const org = await nyOrg();
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { title: "A" }));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { title: "A" }));
     const ut = await i(org, (db) =>
       hentAvvik(db, org, { sorter: "title; DROP TABLE deviations" }),
     );
@@ -267,7 +271,7 @@ describe("oversikter", () => {
   it("paginerer, og teller totalen uavhengig av siden", async () => {
     const org = await nyOrg();
     for (let n = 0; n < 3; n++) {
-      await i(org, (db) => opprettAvvik(db, org, "Kari", { title: `Avvik ${n}` }));
+      await i(org, (db) => opprettAvvik(db, org, KARI, { title: `Avvik ${n}` }));
     }
     const side1 = await i(org, (db) => hentAvvik(db, org, { side: 1 }));
     expect(side1.total).toBe(3);
@@ -282,9 +286,9 @@ describe("oversikter", () => {
     await eier.query("INSERT INTO units (id, org_id, type, andelsnr) VALUES ($1,$2,'bolig','1')", [
       unitId, org,
     ]);
-    const a = await i(org, (db) => opprettAvvik(db, org, "Kari", { ...grunn, unitId }));
-    await i(org, (db) => opprettAvvik(db, org, "Kari", { ...grunn, unitId }));
-    await i(org, (db) => lukkAvvik(db, org, a.id, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    const a = await i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, unitId }));
+    await i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, unitId }));
+    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
     const kart = await i(org, (db) => apneAvvikPerEnhet(db, org));
     expect(kart.get(unitId), "Lukkede avvik skal ikke telles").toBe(1);
@@ -292,7 +296,7 @@ describe("oversikter", () => {
 
   it("teller per status", async () => {
     const org = await nyOrg();
-    await i(org, (db) => opprettAvvik(db, org, "Kari", grunn));
+    await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
     expect(await i(org, (db) => tellPerStatus(db, org))).toEqual({ ny: 1 });
   });
 });
@@ -312,5 +316,26 @@ describe("avvikSok", () => {
     expect(ut.side).toBe(1);
     expect(ut.sorter).toBe("reported_at");
     expect(ut.retning).toBe("desc");
+  });
+
+  it("viser melderens NÅVÆRENDE navn, men beholder snapshotet i basen", async () => {
+    // Regelen som allerede gjaldt for ansvarlig, nå også for melder og behandlingsforfatter:
+    // har raden en bruker-id, vinner personens nåværende navn ved LESING. Kolonnen skrives
+    // aldri om — den er protokollen, og reserven for rader uten id (QR-anonym, slettet konto).
+    const org = await nyOrg();
+    const brukerId = await nyBrukerIOrg(org, "Kari Nordmann");
+    const melder = { navn: "Kari Nordmann", brukerId };
+
+    const avvik = await i(org, (db) => opprettAvvik(db, org, melder, grunn));
+    await i(org, (db) => leggTilBehandling(db, org, avvik.id, melder, { text: "Ringt rørlegger" }));
+
+    await eier.query("UPDATE users SET name = $1 WHERE id = $2", ["Kari Nordmann-Hansen", brukerId]);
+
+    const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
+    expect(etter.reportedBy).toBe("Kari Nordmann-Hansen");
+    expect(etter.behandlinger[0]!.createdBy).toBe("Kari Nordmann-Hansen");
+
+    const rad = await eier.query("SELECT reported_by FROM deviations WHERE id = $1", [avvik.id]);
+    expect(rad.rows[0].reported_by).toBe("Kari Nordmann");
   });
 });

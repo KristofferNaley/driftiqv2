@@ -1,6 +1,7 @@
 import { date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { units } from "./units";
+import { users } from "./users";
 import { vendors } from "./vendors";
 
 /**
@@ -118,6 +119,10 @@ export const unitWorks = pgTable("unit_works", {
   cost: integer("cost"),
   /** Navn-snapshot, ikke fremmednøkkel. */
   createdBy: varchar("created_by").notNull(),
+  /** …og id-en ved siden av, for oppslag per person. Se `completions.completedByUserId`. */
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

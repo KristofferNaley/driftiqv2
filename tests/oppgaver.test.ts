@@ -20,6 +20,10 @@ import {
   opprettOppgave,
   registrerUtkvittering,
 } from "../src/lib/oppgaver";
+import { anonymAktor } from "../src/lib/aktor";
+
+/** Aktøren i testene: navn uten konto. Koblingen til bruker-id testes i aktivitet.test.ts. */
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -155,7 +159,7 @@ describe("utkvittering", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const kvitt = await i(orgId, (db) =>
-      registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false, checkedItemIds: [] }),
+      registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [] }),
     );
     expect(kvitt.manual).toBe(true);
     expect(kvitt.completedBy).toBe("Kari");
@@ -168,7 +172,7 @@ describe("utkvittering", () => {
 
     const feil = await feilFra(() =>
       i(orgId, (db) =>
-        registrerUtkvittering(db, orgId, oppgave.id, "Kari", {
+        registrerUtkvittering(db, orgId, oppgave.id, KARI, {
           completedAt: iMorgen,
           hasDeviation: false,
           checkedItemIds: [],
@@ -186,7 +190,7 @@ describe("utkvittering", () => {
     );
     expect((await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id))).forsinket).toBe(true);
 
-    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, "Kari", { hasDeviation: false, checkedItemIds: [] }));
+    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [] }));
 
     const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
     expect(etter.forsinket).toBe(false);
@@ -220,7 +224,7 @@ describe("sjekkliste", () => {
     // opprinnelige punktet her og lar funksjonen gjøre jobben, i stedet for å sette inn
     // en rad for hånd. Det er nettopp kopieringen testen skal verne om.
     const kvitt = await i(orgId, (db) =>
-      registrerUtkvittering(db, orgId, oppgave.id, "Kari", {
+      registrerUtkvittering(db, orgId, oppgave.id, KARI, {
         hasDeviation: false,
         checkedItemIds: [mal[0]!.id],
       }),
@@ -235,5 +239,85 @@ describe("sjekkliste", () => {
     expect(historikk[0]!.text, "Loggen endret seg da malen ble byttet").toBe("Opprinnelig punkt");
     expect(historikk[0]!.checked).toBe(true);
     expect(historikk[0]!.itemId, "Pekeren skal nulles, ikke ta raden med seg").toBeNull();
+  });
+
+  it("uendrede punkter beholder id-en når et annet punkt endres", async () => {
+    // Kjernen i sporbarheten: å rette ETT punkt skal ikke nullstille statistikken på de andre.
+    // Før reconcileringen ble alle punktene slettet og laget på nytt ved hver redigering, så
+    // `completion_checklist_results.itemId` ble SET NULL for hele historikken.
+    const { orgId, vendorId } = await oppsett();
+    const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    const fra = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, {
+        items: [{ text: "Vask 1" }, { text: "Vask 2" }],
+      }),
+    );
+
+    const til = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, {
+        items: [{ text: "Vask 1" }, { text: "Tørk 1" }],
+      }),
+    );
+
+    // «Vask 1» sto uendret og beholder id-en. «Tørk 1» er en NY maskin og får ny id — den
+    // skal ikke arve Vask 2s servicehistorikk, uansett at den står på samme linje.
+    expect(til[0]!.id).toBe(fra[0]!.id);
+    expect(til[1]!.id).not.toBe(fra[1]!.id);
+  });
+
+  it("et navnebytte gir et NYTT punkt — historikken følger ikke med", async () => {
+    // Bevisst valg: sjekkpunktene er ofte fysiske ting, og et punkt skal aldri kunne arve et
+    // annets tall. Vil kunden beholde statistikken, legger de til nytt punkt i stedet for å
+    // omdøpe — det står i redigeringsdialogen.
+    const { orgId, vendorId } = await oppsett();
+    const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    const fra = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Vask 1" }] }),
+    );
+    const til = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Vaskemaskin 1" }] }),
+    );
+    expect(til[0]!.id).not.toBe(fra[0]!.id);
+  });
+
+  it("beholder id-ene når punktene bare bytter rekkefølge", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    const fra = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "A" }, { text: "B" }] }),
+    );
+    const til = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "B" }, { text: "A" }] }),
+    );
+    expect(til.map((p) => p.id)).toEqual([fra[1]!.id, fra[0]!.id]);
+    expect(til.map((p) => p.order)).toEqual([0, 1]);
+  });
+
+  it("kobler resultatradene til malpunktet, og nuller koblingen ved navnebytte", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    const punkter = await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Gangveier strødd" }] }),
+    );
+    await i(orgId, (db) =>
+      registrerUtkvittering(db, orgId, oppgave.id, KARI, {
+        hasDeviation: false,
+        checkedItemIds: [punkter[0]!.id],
+      }),
+    );
+
+    // Uendret mal → koblingen består.
+    const foer = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
+    expect(foer.utkvitteringer[0]!.punkter[0]!.itemId).toBe(punkter[0]!.id);
+
+    // Navnebytte → nytt punkt, og historikkens peker nulles. Teksten består som protokoll.
+    await i(orgId, (db) =>
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Gangveier og trapper strødd" }] }),
+    );
+    const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
+    const resultat = etter.utkvitteringer[0]!.punkter[0]!;
+    expect(resultat.text).toBe("Gangveier strødd");
+    expect(resultat.checked).toBe(true);
+    expect(resultat.itemId).toBeNull();
   });
 });
