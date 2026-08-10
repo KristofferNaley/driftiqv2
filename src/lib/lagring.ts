@@ -155,7 +155,8 @@ export function orgSti(orgId: string, ...deler: string[]): string {
       throw new Error(`Ugyldig stikomponent: ${JSON.stringify(del)}`);
     }
   }
-  return path.join(UPLOAD_DIR, "orgs", orgId, ...deler);
+  // `turbopackIgnore`: se kommentaren i `lagreFil` — stier under UPLOAD_DIR skal ikke traces.
+  return path.join(/* turbopackIgnore: true */ UPLOAD_DIR, "orgs", orgId, ...deler);
 }
 
 export type Opplasting = {
@@ -212,9 +213,21 @@ export async function lagreFil(
 
   const filnavn = `${randomUUID()}${endelse}`;
   const mappe = orgSti(orgId, modul);
-  await mkdir(mappe, { recursive: true });
-  const sti = path.join(mappe, filnavn);
-  await writeFile(sti, Buffer.from(await fil.arrayBuffer()));
+  /*
+   * `turbopackIgnore` på filsystemkallene i denne fila, med vilje.
+   *
+   * Turbopack sporer filstier statisk for å avgjøre hva standalone-bygget må ta med. En sti
+   * bygget fra `UPLOAD_DIR` (miljøvariabel, `/app/uploads` i Docker) kan ikke avgjøres
+   * statisk, og da falt traceren tilbake til å ta med HELE prosjektet i serverbundlet —
+   * kildekode og public-mappa inkludert, med en advarsel i hvert bygg.
+   *
+   * Ignoreringen er trygg her fordi uploads-treet aldri SKAL inn i bundlet: det er et
+   * docker-volum som monteres inn ved kjøring, og finnes ikke ved byggetid. Kommentaren må
+   * stå INNE i kallet, foran sti-argumentet — det er slik Turbopack leser den.
+   */
+  await mkdir(/* turbopackIgnore: true */ mappe, { recursive: true });
+  const sti = path.join(/* turbopackIgnore: true */ mappe, filnavn);
+  await writeFile(/* turbopackIgnore: true */ sti, Buffer.from(await fil.arrayBuffer()));
 
   return {
     filnavn,
@@ -236,7 +249,8 @@ export async function slettFil(orgId: string, modul: string, filnavn: string): P
     throw new Error(`Ugyldig filnavn: ${JSON.stringify(filnavn)}`);
   }
   try {
-    await unlink(path.join(orgSti(orgId, modul), filnavn));
+    // `turbopackIgnore`: se kommentaren i `lagreFil` — uploads-treet skal ikke traces.
+    await unlink(path.join(/* turbopackIgnore: true */ orgSti(orgId, modul), filnavn));
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
@@ -247,5 +261,6 @@ export function filSti(orgId: string, modul: string, filnavn: string): string {
   if (filnavn.includes("/") || filnavn.includes("\\") || filnavn.includes("..")) {
     throw new Error(`Ugyldig filnavn: ${JSON.stringify(filnavn)}`);
   }
-  return path.join(orgSti(orgId, modul), filnavn);
+  // `turbopackIgnore`: samme grunn som i `lagreFil` — leses av file-rutene ved kjøring.
+  return path.join(/* turbopackIgnore: true */ orgSti(orgId, modul), filnavn);
 }
