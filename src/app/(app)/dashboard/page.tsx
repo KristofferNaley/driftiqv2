@@ -469,7 +469,7 @@ function Kontrakter({ rader }: { rader: NonNullable<Dashbord["utlopende"]> }) {
         <Tom tekst="Ingen avtaler utløper de neste seks månedene." />
       ) : (
         rader.map((k) => (
-          <div className="list-item" key={k.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/kontrakter/${k.id}`)}>
+          <div className="list-item" key={k.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/kontrakter?apen=${k.id}`)}>
             <div style={{ minWidth: 0 }}>
               <div className="list-tittel">{k.title}</div>
               <div className="list-meta">{k.vendorName}</div>

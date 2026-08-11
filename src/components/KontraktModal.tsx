@@ -33,7 +33,6 @@ export default function KontraktModal({
   sendEtikett = "Lagre",
   onLukk,
   onLagre,
-  onSlett,
 }: {
   tittel: string;
   orgId: string;
@@ -42,8 +41,6 @@ export default function KontraktModal({
   sendEtikett?: string;
   onLukk: () => void;
   onLagre: (felter: KontraktFelter) => Promise<void>;
-  /** Vis «Slett kontrakt» med bekreftelsessteg. Kun redigering sender denne. */
-  onSlett?: () => Promise<void>;
 }) {
   const [vendorId, setVendorId] = useState(utgangspunkt?.vendorId ?? "");
   const [navn, setNavn] = useState(utgangspunkt?.title ?? "");
@@ -57,7 +54,6 @@ export default function KontraktModal({
   const [kontaktTelefon, setKontaktTelefon] = useState(utgangspunkt?.contactPhone ?? "");
   const [aiDeling, setAiDeling] = useState(utgangspunkt?.aiReadable ?? false);
   const [firmaer, setFirmaer] = useState<Array<{ id: string; navn: string }>>([]);
-  const [bekreftSlett, setBekreftSlett] = useState(false);
 
   const { sender, feil, send } = useSending(onLukk);
 
@@ -77,27 +73,6 @@ export default function KontraktModal({
       ? [{ verdi: kategori, etikett: kategori }]
       : []),
   ];
-
-  if (bekreftSlett && onSlett) {
-    return (
-      <Modal tittel="Slett kontrakt" onLukk={onLukk} bredde={420}>
-        <Feil melding={feil} />
-        <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, margin: 0 }}>
-          Slett <strong>{navn || "avtalen"}</strong>? Prishistorikken og et eventuelt
-          avtaledokument slettes også. En avsluttet avtale bør heller arkiveres — sletting er
-          for feilregistreringer.
-        </p>
-        <Knapperad
-          onAvbryt={() => setBekreftSlett(false)}
-          avbrytEtikett="Tilbake"
-          sendEtikett="Slett"
-          farlig
-          sender={sender}
-          onSend={() => void send(onSlett)}
-        />
-      </Modal>
-    );
-  }
 
   return (
     <Modal tittel={tittel} onLukk={onLukk}>
@@ -160,25 +135,7 @@ export default function KontraktModal({
           notat="Lar AI-rådgiveren lese avtalen og dokumentet. Kan skrus av når som helst."
         />
 
-        <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
-          {onSlett && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ color: "var(--danger)" }}
-              onClick={() => setBekreftSlett(true)}
-            >
-              Slett kontrakt …
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          <button type="button" className="btn btn-ghost" onClick={onLukk}>
-            Avbryt
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={sender || !navn.trim() || !vendorId}>
-            {sender ? "Lagrer …" : sendEtikett}
-          </button>
-        </div>
+        <Knapperad onAvbryt={onLukk} sendEtikett={sendEtikett} sender={sender} deaktivert={!navn.trim() || !vendorId} />
       </form>
     </Modal>
   );

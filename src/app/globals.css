@@ -2469,3 +2469,79 @@ textarea.qr-input { resize: vertical; }
 .ai-samtalevalg:hover { background: var(--surface2); }
 /* Tittel over, tidspunkt under — spans i en knapp stables ikke av seg selv. */
 .ai-samtalevalg .list-tittel, .ai-samtalevalg .list-meta { display: block; }
+
+/* ── Kontraktlista som kolonnetabell ──────────────────────────────────────────────────────
+   Tittel, leverandør, fra, til, pris og status i faste kolonner — radene i «meta-prosa»
+   («BoligPartner · Forretningsfører · 01.01.2023 → løpende») lot seg ikke skumme nedover.
+   Samme grid i hoderaden og radene, så kolonnene aldri kan drive fra overskriftene sine. */
+.kontrakt-hode, .kontrakt-rad {
+  display: grid;
+  grid-template-columns: minmax(180px, 2.2fr) minmax(120px, 1.4fr) 88px 88px 100px 96px;
+  gap: 12px; align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.kontrakt-rad { cursor: pointer; }
+.kontrakt-rad:hover { background: var(--surface2); }
+.kontrakt-rad:last-child { border-bottom: none; }
+.kontrakt-hode {
+  font-size: var(--fs-label); color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.kontrakt-tittel { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.kontrakt-tittel .list-tittel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kontrakt-celle { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+.kontrakt-pris { font-size: var(--fs-sm); font-weight: 600; text-align: right; white-space: nowrap; }
+.kontrakt-hode .kontrakt-pris { font-size: var(--fs-label); color: var(--muted); }
+.kontrakt-status { justify-self: start; }
+
+/* Trangt: datokolonnene ryker først — status og pris er det man faktisk skummer etter. */
+@media (max-width: 900px) {
+  .kontrakt-hode, .kontrakt-rad { grid-template-columns: minmax(140px, 2fr) minmax(100px, 1.2fr) 100px 96px; }
+  .kontrakt-fra, .kontrakt-til { display: none; }
+}
+@media (max-width: 560px) {
+  .kontrakt-hode, .kontrakt-rad { grid-template-columns: 1fr 100px 96px; }
+  .kontrakt-leverandor { display: none; }
+}
+
+/* ── Brreg-søket i «Ny leverandør» ────────────────────────────────────────────────────────
+   Trefflista ligger OVER innholdet under feltet, ikke i flyten — den kommer og går for
+   hvert tastetrykk, og skal ikke dytte resten av skjemaet opp og ned imens. */
+.brreg-sok { position: relative; }
+.brreg-treff {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  margin: 0; padding: 4px; list-style: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  max-height: 260px; overflow-y: auto;
+}
+.brreg-treff button {
+  display: block; width: 100%; padding: 8px 10px; border: none; border-radius: 7px;
+  background: none; color: inherit; text-align: left; cursor: pointer;
+  font-family: var(--font-sans);
+}
+.brreg-treff button:hover { background: var(--surface2); }
+.brreg-treff b { display: block; font-size: var(--fs-sm); font-weight: 600; }
+.brreg-treff em { display: block; font-style: normal; font-size: var(--fs-label); color: var(--muted); }
+
+/* ── Leverandørlista som kolonnetabell — samme grep som kontraktlista. ──────────────────── */
+.leverandor-hode, .leverandor-rad {
+  display: grid;
+  grid-template-columns: minmax(180px, 2.2fr) minmax(130px, 1.5fr) 74px 82px;
+  gap: 12px; align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.leverandor-rad { cursor: pointer; }
+.leverandor-rad:hover { background: var(--surface2); }
+.leverandor-hode {
+  font-size: var(--fs-label); color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.leverandor-celle { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+.leverandor-tall { font-size: var(--fs-sm); font-weight: 600; text-align: right; }
+.leverandor-hode .leverandor-tall { font-size: var(--fs-label); color: var(--muted); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .leverandor-hode, .leverandor-rad { grid-template-columns: 1fr 74px 82px; }
+  .leverandor-kontakt { display: none; }
+}

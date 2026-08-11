@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { Paperclip } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
-import { Faner, Feil, Kort, Nokkeltall, Rad, Tom, dato, kr, useOrgData } from "@/components/felles";
+import { Faner, Feil, Kort, Nokkeltall, Tom, dato, kr, useOrgData } from "@/components/felles";
+import Dokumentviser from "@/components/Dokumentviser";
+import KontraktDetaljModal from "@/components/KontraktDetaljModal";
 import KontraktModal from "@/components/KontraktModal";
 import { kontrakter, type Kontrakt } from "@/lib/klient";
 import {
@@ -18,8 +19,10 @@ import {
 
 type StatusFilter = "alle" | Exclude<KontraktStatusNokkel, "arkiv">;
 
-export default function Kontrakter() {
-  const router = useRouter();
+export default function Kontrakter({ searchParams }: { searchParams: Promise<{ apen?: string }> }) {
+  // `?apen=<id>` åpner detaljmodalen direkte — det gamle /kontrakter/<id> omdirigerer hit,
+  // så lenker fra dashbordet, e-poster og bokmerker fortsatt lander på riktig avtale.
+  const { apen: apenStart } = use(searchParams);
   const { aktivOrg } = useOkt();
   const [fane, setFane] = useState<"aktive" | "arkiverte">("aktive");
   const { data, feil, laster, last, orgId } = useOrgData(
@@ -27,6 +30,8 @@ export default function Kontrakter() {
     [fane],
   );
   const [nyKontrakt, setNyKontrakt] = useState(false);
+  const [visDokument, setVisDokument] = useState<Kontrakt | null>(null);
+  const [apen, setApen] = useState<string | null>(apenStart ?? null);
   const [leverandor, setLeverandor] = useState("");
   const [kategori, setKategori] = useState("");
   const [status, setStatus] = useState<StatusFilter>("alle");
@@ -198,10 +203,47 @@ export default function Kontrakter() {
           ) : vist.length === 0 ? (
             <Tom tekst={liste.length === 0 ? "Ingen avtaler her." : "Ingen avtaler matcher filteret."} />
           ) : (
-            vist.map((k) => <KontraktRad key={k.id} k={k} onClick={() => router.push(`/kontrakter/${k.id}`)} />)
+            <>
+              <div className="kontrakt-hode" aria-hidden>
+                <span>Tittel</span>
+                <span className="kontrakt-leverandor">Leverandør</span>
+                <span className="kontrakt-fra">Fra</span>
+                <span className="kontrakt-til">Til</span>
+                <span className="kontrakt-pris">Pris / år</span>
+                <span>Status</span>
+              </div>
+              {vist.map((k) => (
+                <KontraktRad
+                  key={k.id}
+                  k={k}
+                  onClick={() => setApen(k.id)}
+                  onVisDokument={() => setVisDokument(k)}
+                />
+              ))}
+            </>
           )}
         </Kort>
       </div>
+
+      {apen && orgId && (
+        <KontraktDetaljModal
+          orgId={orgId}
+          id={apen}
+          kanRedigere={kanRedigere}
+          onLukk={() => setApen(null)}
+          onEndret={last}
+          onBytt={setApen}
+        />
+      )}
+
+      {visDokument?.fileName && orgId && (
+        <Dokumentviser
+          filnavn={visDokument.fileName}
+          visningsnavn={visDokument.fileOriginalName}
+          url={`/api/organizations/${orgId}/contracts/${visDokument.id}/file`}
+          onLukk={() => setVisDokument(null)}
+        />
+      )}
 
       {nyKontrakt && orgId && (
         <KontraktModal
@@ -219,41 +261,60 @@ export default function Kontrakter() {
   );
 }
 
-function KontraktRad({ k, onClick }: { k: Kontrakt; onClick: () => void }) {
+function KontraktRad({
+  k,
+  onClick,
+  onVisDokument,
+}: {
+  k: Kontrakt;
+  onClick: () => void;
+  onVisDokument: () => void;
+}) {
   const status = kontraktStatus(k);
+  // Kategori under tittelen; arkiverte rader bærer arkivnotatet der i stedet — de har
+  // ingen annen plass til å si HVORFOR de ble tatt ut.
   const meta = k.archivedAt
-    ? [
-        k.vendorName ?? "Ukjent leverandør",
-        `arkivert ${dato(k.archivedAt)}${k.archiveNote ? ` — ${k.archiveNote}` : ""}`,
-      ]
-    : [
-        k.vendorName ?? "Ukjent leverandør",
-        kontraktKategoriEtikett(k.category),
-        !k.startDate && !k.endDate
-          ? "ingen datoer"
-          : `${dato(k.startDate)} → ${k.endDate ? dato(k.endDate) : "løpende"}`,
-      ];
+    ? `arkivert ${dato(k.archivedAt)}${k.archiveNote ? ` — ${k.archiveNote}` : ""}`
+    : kontraktKategoriEtikett(k.category);
 
   return (
-    <Rad
-      onClick={onClick}
-      tittel={k.title}
-      meta={meta.filter(Boolean).join(" · ")}
-      hoyre={
-        <>
+    <div className="kontrakt-rad" onClick={onClick}>
+      <div style={{ minWidth: 0 }}>
+        <div className="kontrakt-tittel">
+          <span className="list-tittel">{k.title}</span>
           {k.fileName && (
-            <span className="badge muted" title={k.fileOriginalName ?? undefined}>
+            // Bindersen ÅPNER dokumentet — raden bak åpner avtalen, derfor stopPropagation.
+            <button
+              className="badge muted"
+              style={{ cursor: "pointer", flexShrink: 0 }}
+              title={k.fileOriginalName ?? "Vis dokument"}
+              aria-label={`Vis dokument: ${k.fileOriginalName ?? k.title}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onVisDokument();
+              }}
+            >
               <Paperclip size={13} strokeWidth={2} aria-hidden />
-            </span>
+            </button>
           )}
           {/* Opt-in per avtale — AI-rådgiveren leser bare det styret har delt. */}
-          {k.aiReadable && <span className="badge info">Delt med AI</span>}
-          <span style={{ fontWeight: 600, fontSize: "var(--fs-sm)" }}>
-            {k.annualSum ? kr(k.annualSum) : "—"}
-          </span>
-          {!k.archivedAt && <span className={`badge ${status.merke}`}>{status.etikett}</span>}
-        </>
-      }
-    />
+          {k.aiReadable && (
+            <span className="badge info" style={{ flexShrink: 0 }} title="Delt med AI-rådgiveren">
+              AI
+            </span>
+          )}
+        </div>
+        {meta && <div className="list-meta">{meta}</div>}
+      </div>
+      <span className="kontrakt-celle kontrakt-leverandor">{k.vendorName ?? "—"}</span>
+      <span className="kontrakt-celle kontrakt-fra">{k.startDate ? dato(k.startDate) : "—"}</span>
+      <span className="kontrakt-celle kontrakt-til">
+        {k.endDate ? dato(k.endDate) : k.startDate ? "løpende" : "—"}
+      </span>
+      <span className="kontrakt-pris">{k.annualSum ? kr(k.annualSum) : "—"}</span>
+      <span className="kontrakt-status">
+        <span className={`badge ${status.merke}`}>{status.etikett}</span>
+      </span>
+    </div>
   );
 }
