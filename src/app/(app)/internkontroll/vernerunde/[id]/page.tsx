@@ -120,9 +120,16 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
       tittel={data.title}
       handlinger={
         laast ? (
-          <span className="badge ok">
-            <Lock size={13} strokeWidth={2.2} aria-hidden /> Fullført og låst
-          </span>
+          <>
+            {/* Rapporten er utskriften: siden er ren dokumentasjon når runden er låst,
+                og print-CSS-en fjerner alt som hører til skjermen. */}
+            <button className="btn btn-ghost" onClick={() => window.print()}>
+              Skriv ut rapport
+            </button>
+            <span className="badge ok">
+              <Lock size={13} strokeWidth={2.2} aria-hidden /> Fullført og låst
+            </span>
+          </>
         ) : (
           <button className="btn btn-primary" onClick={() => setBekreftFullfor(true)}>
             Fullfør runden

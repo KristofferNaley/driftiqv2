@@ -2659,3 +2659,16 @@ textarea.qr-input { resize: vertical; }
 .tiltak-rad { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .tiltak-rad:last-of-type { border-bottom: none; }
 .tiltak-felt { width: 140px; flex-shrink: 0; padding: 6px 8px; font-size: var(--fs-label); }
+
+/* ── Utskrift av appsider (vernerunderapporten er første bruker) ─────────────────────────
+   Papiret får innholdet: meny, faner og knapper hører til skjermen. Kortene beholder
+   kantene sine så seksjonene er lesbare i svart-hvitt. */
+@media print {
+  .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
+  .tilbake-lenke, .sidebar-backdrop { display: none !important; }
+  .app-shell { display: block; }
+  .app-main, .app-body, .page-content { display: block; overflow: visible; height: auto; }
+  .page-content { padding: 0; max-width: none; }
+  .card { break-inside: avoid; box-shadow: none; }
+  body { background: #fff; color: #000; }
+}
