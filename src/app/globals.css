@@ -227,7 +227,7 @@ a { color: inherit; text-decoration: none; }
 .logo-tekst { font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.3px; }
 .logo-tekst .iq { color: var(--logo-iq); }
 
-.sidebar-nav { flex: 1; overflow-y: auto; padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 10px 14px; display: flex; flex-direction: column; gap: 2px; }
 .nav-gruppe {
   font-size: var(--fs-label);
   font-weight: 600;
@@ -236,6 +236,9 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
   padding: 14px 12px 6px;
 }
+/* Org-velgeren rett over har egen luft — uten dette stables tre polstringer mellom velgeren
+   og «Daglig drift», og gapet leses som at noe mangler. */
+.sidebar-nav > div:first-child > .nav-gruppe { padding-top: 4px; }
 .nav-lenke {
   display: flex;
   align-items: center;
@@ -899,6 +902,8 @@ a { color: inherit; text-decoration: none; }
   padding: 6px 15px; border-radius: 20px; font-size: var(--fs-label); font-weight: 500;
   border: 1px solid var(--border); background: var(--surface); color: var(--muted);
   cursor: pointer; font-family: var(--font-sans);
+  /* Brikker med ikon (Meld feil-typene) trenger flex — rene tekstbrikker merker ingenting. */
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .pille.valgt { background: var(--accent); border-color: var(--accent); color: #fff; }
 
@@ -2069,7 +2074,7 @@ textarea.qr-input { resize: vertical; }
 /* --- Org-velger i sidemenyen ------------------------------------------------------- */
 /* Luft over: uten den klistrer velgeren seg til skillelinjen under logoblokken og ser ut
    som en del av den, i stedet for som starten på menyen under. */
-.org-velger { position: relative; padding: 12px 10px 0; margin-bottom: 10px; }
+.org-velger { position: relative; padding: 12px 10px 0; margin-bottom: 2px; }
 .org-blokk {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; padding: 9px 11px; border-radius: 9px;
@@ -2574,3 +2579,10 @@ textarea.qr-input { resize: vertical; }
 .bryter-boks:checked ~ .bryter { background: var(--accent); border-color: var(--accent); }
 .bryter-boks:checked ~ .bryter::after { transform: translateX(16px); background: #fff; }
 .bryter-boks:focus-visible ~ .bryter { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* «Meld feil» skal alltid vise teksten sin — en knapp som bare er et insekt sier ingenting.
+   På trange skjermer strammes polstringen i stedet for at teksten klemmes vekk. */
+.meldfeil-knapp { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 560px) {
+  .meldfeil-knapp { padding: 9px 12px; }
+}
