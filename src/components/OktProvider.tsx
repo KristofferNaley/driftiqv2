@@ -49,20 +49,48 @@ export function OktProvider({ versjon, children }: { versjon: string; children: 
 
   useEffect(() => {
     let avbrutt = false;
-    meg
-      .hent()
-      .then((svar) => {
-        if (avbrutt) return;
-        setBruker(svar);
-        setAktivOrg(velgStartOrg(svar.organisasjoner));
-      })
-      .catch(() => {
-        // 401 håndteres av klienten, som allerede har sendt brukeren til innlogging.
-        if (!avbrutt) router.replace("/logg-inn");
-      })
-      .finally(() => !avbrutt && setLaster(false));
+    let sistHentet = 0;
+
+    const hent = (forsteGang: boolean) => {
+      sistHentet = Date.now();
+      meg
+        .hent()
+        .then((svar) => {
+          if (avbrutt) return;
+          setBruker(svar);
+          // Aktiv org PEKES PÅ NYTT inn i det ferske svaret — beholdt vi det gamle
+          // objektet, ville modullista og tilgangsnivået i det vært et snapshot.
+          setAktivOrg((forrige) => {
+            const orgs = svar.organisasjoner;
+            return (forrige && orgs.find((o) => o.id === forrige.id)) ?? velgStartOrg(orgs);
+          });
+        })
+        .catch(() => {
+          // 401 håndteres av klienten, som allerede har sendt brukeren til innlogging.
+          if (!avbrutt && forsteGang) router.replace("/logg-inn");
+        })
+        .finally(() => !avbrutt && setLaster(false));
+    };
+
+    hent(true);
+
+    /**
+     * Stille gjenoppfriskning når fanen får fokus igjen (maks hvert minutt): skrur
+     * plattformadmin av en modul, skal menypunktet være borte neste gang kunden ser på
+     * fanen — ikke først ved neste harde sidelast. API-et gater uansett hvert kall, så
+     * dette er visningen som henger etter, ikke tilgangen.
+     */
+    const vedFokus = () => {
+      if (document.visibilityState === "visible" && Date.now() - sistHentet > 60_000) {
+        hent(false);
+      }
+    };
+    window.addEventListener("focus", vedFokus);
+    document.addEventListener("visibilitychange", vedFokus);
     return () => {
       avbrutt = true;
+      window.removeEventListener("focus", vedFokus);
+      document.removeEventListener("visibilitychange", vedFokus);
     };
   }, [router]);
 
