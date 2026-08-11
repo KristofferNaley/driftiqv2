@@ -876,7 +876,9 @@ a { color: inherit; text-decoration: none; }
  * `::before` i sin standardblå, og border-top i sin egen farge. Én mekanisme, ikke to.
  */
 .kpi-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;
+  /* 160 px minimum, ikke 210: fire kort skal stå på ÉN rad på en iPad (~730 px innhold
+     ved siden av sidemenyen). Ved 210 brøt det fjerde ned på egen linje. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;
 }
 .kpi-kort.k-blaa { --kpi-farge: var(--accent); }
 .kpi-kort.k-roed { --kpi-farge: var(--danger); }

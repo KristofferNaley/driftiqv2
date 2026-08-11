@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Layout from "@/components/Layout";
-import { Feil, Tom, dato, useOrgData } from "@/components/felles";
+import { Faner, Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { arshjul, oppgaver, type Arshjulsdata, type Hjulhendelse } from "@/lib/klient";
 import { HJULKATEGORIER, KATEGORIER } from "@/lib/arshjulkategorier";
@@ -52,6 +52,10 @@ export default function Arshjul() {
   const [aar, setAar] = useState(new Date().getFullYear());
   const [filter, setFilter] = useState<Filter>("alle");
   const [skjema, setSkjema] = useState<Hjulhendelse | "ny" | null>(null);
+  // Hjulet, lista og oppgavevalget som FANER, ikke stablet på én side: hjulet trenger hele
+  // bredden på mindre skjermer, og høyrekolonnen stjal den. Lista er et annet spørsmål
+  // («hva er neste»), og hører like lite hjemme under hjulet som ved siden av.
+  const [fane, setFane] = useState<"hjul" | "liste" | "oppgavevalg">("hjul");
 
   const { data, feil, setFeil, laster, last, orgId } = useOrgData(
     (o) => arshjul.hjul(o, aar),
@@ -83,46 +87,62 @@ export default function Arshjul() {
           </button>
         ) : undefined
       }
-      aside={
-        kanEndre && data ? (
-          <Oppgavevalg valg={data.oppgavevalg} orgId={orgId} onEndret={last} onFeil={setFeil} />
-        ) : undefined
+      subnav={
+        <Faner
+          valgt={fane}
+          onVelg={setFane}
+          faner={[
+            { nokkel: "hjul", etikett: "Årshjul" },
+            { nokkel: "liste", etikett: "Alle hendelser" },
+            // Valget skriver til Oppgaver-modulen — uten redigeringsrett er fanen bare
+            // en liste man ikke får gjort noe med.
+            ...(kanEndre ? [{ nokkel: "oppgavevalg" as const, etikett: "Vis på årshjul" }] : []),
+          ]}
+        />
       }
     >
       <div className="page-content">
         <Feil melding={feil} />
 
-        <p className="ah-intro">
-          Oversikt over faste hendelser, frister og oppgaver gjennom året
-          {aktivOrg ? ` — ${aktivOrg.name}` : ""} {aar}
-        </p>
+        {fane !== "oppgavevalg" && (
+          <>
+            <p className="ah-intro">
+              Oversikt over faste hendelser, frister og oppgaver gjennom året
+              {aktivOrg ? ` — ${aktivOrg.name}` : ""} {aar}
+            </p>
 
-        <div className="ah-topp">
-          <div className="ah-filtre">
-            {FILTRE.map((f) => (
-              <button
-                key={f.nokkel}
-                className={`ah-chip${filter === f.nokkel ? " valgt" : ""}`}
-                onClick={() => setFilter(f.nokkel)}
-              >
-                {f.etikett} {tellinger[f.nokkel] ?? 0}
-              </button>
-            ))}
-          </div>
-          <div className="ah-aar">
-            <button className="btn btn-ghost" onClick={() => setAar(aar - 1)} aria-label="Forrige år">
-              ‹
-            </button>
-            <span>{aar}</span>
-            <button className="btn btn-ghost" onClick={() => setAar(aar + 1)} aria-label="Neste år">
-              ›
-            </button>
-          </div>
-        </div>
+            <div className="ah-topp">
+              <div className="ah-filtre">
+                {FILTRE.map((f) => (
+                  <button
+                    key={f.nokkel}
+                    className={`ah-chip${filter === f.nokkel ? " valgt" : ""}`}
+                    onClick={() => setFilter(f.nokkel)}
+                  >
+                    {f.etikett} {tellinger[f.nokkel] ?? 0}
+                  </button>
+                ))}
+              </div>
+              <div className="ah-aar">
+                <button className="btn btn-ghost" onClick={() => setAar(aar - 1)} aria-label="Forrige år">
+                  ‹
+                </button>
+                <span>{aar}</span>
+                <button className="btn btn-ghost" onClick={() => setAar(aar + 1)} aria-label="Neste år">
+                  ›
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {laster && !data ? (
           <Tom tekst="Henter …" />
-        ) : (
+        ) : fane === "oppgavevalg" ? (
+          kanEndre && data && (
+            <Oppgavevalg valg={data.oppgavevalg} orgId={orgId} onEndret={last} onFeil={setFeil} />
+          )
+        ) : fane === "hjul" ? (
           <>
             <div className="ah-rutenett">
               {MANEDER.map((navn, i) => {
@@ -169,7 +189,9 @@ export default function Arshjul() {
                 </span>
               ))}
             </div>
-
+          </>
+        ) : (
+          <>
             <div className="card">
               <div className="card-header">
                 <div>
