@@ -5,7 +5,7 @@ import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Faner, Feil, Kort, Rad, Tom, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
-import { enheter, organisasjon, type Enhet, type OrgInfo } from "@/lib/klient";
+import { enheter, organisasjon, type Adressetreff, type Enhet, type OrgInfo } from "@/lib/klient";
 import { lesKategorier } from "@/lib/avvikkategorier";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
@@ -94,30 +94,30 @@ function Organisasjonen() {
     <>
       <Feil melding={feil} />
 
+      {/* Kontooppsettet (navn, org.nr., antall enheter) vises IKKE her lenger — det eies og
+          vedlikeholdes av plattformadmin, og kunden trenger ikke et forhold til det. Igjen
+          står bare driftsfeltene styret selv eier: «Om bygget» og «Har ansatte». */}
       <Kort
-        tittel="Om organisasjonen"
+        tittel="Om bygget"
         handling={
           <button className="btn btn-ghost" onClick={() => setRedigerer(true)}>
             Rediger
           </button>
         }
       >
-        <Rad tittel="Navn" hoyre={data.name} />
-        <Rad tittel="Organisasjonsnummer" hoyre={data.orgNr ?? "—"} />
-        <Rad tittel="Organisasjonsform" hoyre={data.orgForm ?? "—"} />
-        <Rad tittel="Kommune" hoyre={data.municipality ?? "—"} />
-        <Rad tittel="Antall enheter" hoyre={data.unitCount ?? "—"} />
+        {data.buildingInfo ? (
+          <div style={{ padding: "14px 20px 6px", fontSize: "var(--fs-sm)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            {data.buildingInfo}
+          </div>
+        ) : (
+          <Tom tekst="Ingenting om bygget ennå — byggeår, materialer, anlegg. Brukes i det daglige og av AI-rådgiveren." />
+        )}
         <Rad
           tittel="Har ansatte"
           hoyre={
             data.hasEmployees ? <span className="badge info">Ja</span> : <span className="badge muted">Nei</span>
           }
         />
-        {data.buildingInfo && (
-          <div style={{ padding: "14px 20px", fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>
-            {data.buildingInfo}
-          </div>
-        )}
       </Kort>
 
       <Kort
@@ -190,38 +190,25 @@ function Organisasjonen() {
         </Kort>
       )}
 
-      {!erAdmin && (
-        <div className="field-note">
-          Uten administratortilgang kan du bare endre «Om bygget» og «Har ansatte» — resten er
-          kontooppsett.
-        </div>
-      )}
-
       {redigerer && (
-        <RedigerOrg org={data} orgId={orgId!} erAdmin={erAdmin} onLukk={() => setRedigerer(false)} onLagret={last} setFeil={setFeil} />
+        <RedigerBygg org={data} orgId={orgId!} onLukk={() => setRedigerer(false)} onLagret={last} />
       )}
     </>
   );
 }
 
-function RedigerOrg({
+/** Bare driftsfeltene — kontooppsettet (navn, org.nr., antall enheter) eies av plattformadmin. */
+function RedigerBygg({
   org,
   orgId,
-  erAdmin,
   onLukk,
   onLagret,
 }: {
   org: OrgInfo;
   orgId: string;
-  erAdmin: boolean;
   onLukk: () => void;
   onLagret: () => Promise<void>;
-  setFeil: (f: string | null) => void;
 }) {
-  const [navn, setNavn] = useState(org.name);
-  const [orgNr, setOrgNr] = useState(org.orgNr ?? "");
-  const [kommune, setKommune] = useState(org.municipality ?? "");
-  const [antall, setAntall] = useState(org.unitCount?.toString() ?? "");
   const [bygg, setBygg] = useState(org.buildingInfo ?? "");
   const [ansatte, setAnsatte] = useState(org.hasEmployees);
   const { sender, feil, send } = useSending(async () => {
@@ -230,44 +217,15 @@ function RedigerOrg({
   });
 
   return (
-    <Modal tittel="Rediger organisasjon" onLukk={onLukk} bredde={560}>
+    <Modal tittel="Om bygget" onLukk={onLukk} bredde={560}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          // Sender bare DRIFTSFELT når brukeren ikke er admin. Sendes ett kontofelt med,
-          // krever API-et orgadmin for hele kallet — og da ville lagringen feilet.
-          const data = erAdmin
-            ? {
-                name: navn,
-                orgNr: orgNr || null,
-                municipality: kommune || null,
-                unitCount: antall ? Number(antall) : null,
-                buildingInfo: bygg || null,
-                hasEmployees: ansatte,
-              }
-            : { buildingInfo: bygg || null, hasEmployees: ansatte };
-          void send(() => organisasjon.endre(orgId, data));
+          void send(() => organisasjon.endre(orgId, { buildingInfo: bygg || null, hasEmployees: ansatte }));
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
-
-        {erAdmin ? (
-          <>
-            <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} />
-            <div className="field-row">
-              <Tekstfelt etikett="Organisasjonsnummer" verdi={orgNr} onEndre={setOrgNr} notat="Ni siffer." />
-              <Tekstfelt etikett="Kommune" verdi={kommune} onEndre={setKommune} />
-            </div>
-            <Tekstfelt etikett="Antall enheter" type="number" verdi={antall} onEndre={setAntall} />
-          </>
-        ) : (
-          <div className="field-note">
-            Navn, organisasjonsnummer og antall enheter er kontooppsett og krever
-            administratortilgang.
-          </div>
-        )}
-
         <Tekstomrade
           etikett="Om bygget"
           verdi={bygg}
@@ -422,6 +380,7 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
   );
   const [nyEnhet, setNyEnhet] = useState(false);
   const [endrer, setEndrer] = useState<Enhet | null>(null);
+  const [kartverk, setKartverk] = useState(false);
   const liste = (data ?? []).filter((e) =>
     fellesareal ? e.type === "fellesareal" : e.type !== "fellesareal",
   );
@@ -452,6 +411,11 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
               />
               <span className="list-meta">Vis arkiverte</span>
             </label>
+            {!fellesareal && (
+              <button className="btn btn-ghost" onClick={() => setKartverk(true)}>
+                Hent fra Kartverket
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={() => setNyEnhet(true)}>
               {fellesareal ? "Nytt fellesområde" : "Ny leilighet"}
             </button>
@@ -469,24 +433,31 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
             }
           />
         ) : (
-          liste.map((e) => (
-            <Rad
-              key={e.id}
-              tittel={e.navn ?? e.leilighetsnr ?? `Andel ${e.andelsnr ?? "?"}`}
-              // Kvadratmeterne står i basen, men ikke her — de svarer ikke på noe man leter
-              // etter i denne lista.
-              meta={[
-                e.andelsnr && `andel ${e.andelsnr}`,
-                e.oppgang && `oppg. ${e.oppgang}`,
-                e.etasje && `${e.etasje}. etasje`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-              hoyre={
-                <>
-                  {/* Totalen er historikken (gjentakende fukt over år), de åpne er nå. */}
-                  {e.antallAvvik > 0 && <span className="badge muted">{e.antallAvvik} avvik</span>}
-                  {e.apneAvvik > 0 && <span className="badge warn">{e.apneAvvik} åpne</span>}
+          <>
+            <div className="enhet-hode" aria-hidden>
+              <span>{fellesareal ? "Navn" : "Leilighet"}</span>
+              <span className="enhet-oppgang">Oppgang</span>
+              <span className="enhet-etasje">Etasje</span>
+              {/* Totalen er historikken (gjentakende fukt over år), de åpne er nå. */}
+              <span className="enhet-tall">Avvik</span>
+              <span className="enhet-tall">Åpne</span>
+              <span />
+            </div>
+            {liste.map((e) => (
+              <div key={e.id} className="enhet-rad">
+                <div style={{ minWidth: 0 }}>
+                  <div className="list-tittel">{e.navn ?? e.leilighetsnr ?? `Andel ${e.andelsnr ?? "?"}`}</div>
+                  {/* Kvadratmeterne står i basen, men ikke her — de svarer ikke på noe man
+                      leter etter i denne lista. */}
+                  {e.andelsnr && <div className="list-meta">andel {e.andelsnr}</div>}
+                </div>
+                <span className="enhet-celle enhet-oppgang">{e.oppgang ?? "—"}</span>
+                <span className="enhet-celle enhet-etasje">{e.etasje ?? "—"}</span>
+                <span className="enhet-tall">{e.antallAvvik || "—"}</span>
+                <span className="enhet-tall" style={e.apneAvvik ? { fontWeight: 600 } : undefined}>
+                  {e.apneAvvik || "—"}
+                </span>
+                <span className="enhet-handling">
                   {e.archivedAt ? (
                     <span className="badge muted">Arkivert</span>
                   ) : (
@@ -499,10 +470,10 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
                       </button>
                     </>
                   )}
-                </>
-              }
-            />
-          ))
+                </span>
+              </div>
+            ))}
+          </>
         )}
       </Kort>
 
@@ -530,7 +501,183 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
           onLagret={last}
         />
       )}
+      {kartverk && (
+        <KartverketImport
+          orgId={orgId!}
+          eksisterende={liste}
+          onLukk={() => setKartverk(false)}
+          onImportert={last}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * H0101 → «1», U0101 → «U1», K0101 → «K1», L0101 → «L1». H-prefikset er hovedetasje og
+ * trenger ingen bokstav i visningen; de andre beholder den (underetasje/kjeller/loft).
+ */
+function etasjeFraBruksenhet(nr: string): string {
+  const m = /^([HULK])(\d{2})\d{2}$/.exec(nr.trim().toUpperCase());
+  if (!m) return "";
+  const etasje = String(parseInt(m[2]!, 10));
+  return m[1] === "H" ? etasje : `${m[1]}${etasje}`;
+}
+
+/**
+ * Autofyll fra Kartverkets adresse-API (via vår proxy): hver vegadresse har en liste
+ * bruksenhetsnummer (H0101 …) som blir leilighetsnummer, med etasje utledet av nummeret og
+ * oppgang fra husbokstaven — eller husnummeret der bokstav mangler (Gata 9 og Gata 11 er to
+ * innganger). Andelsnummer finnes ikke i det åpne API-et og fylles inn etterpå.
+ */
+function KartverketImport({
+  orgId,
+  eksisterende,
+  onLukk,
+  onImportert,
+}: {
+  orgId: string;
+  eksisterende: Enhet[];
+  onLukk: () => void;
+  onImportert: () => Promise<void>;
+}) {
+  const [sok, setSok] = useState("");
+  const [soker, setSoker] = useState(false);
+  const [adresser, setAdresser] = useState<Adressetreff[] | null>(null);
+  const [valgte, setValgte] = useState<Set<string>>(new Set());
+  const [sender, setSender] = useState(false);
+  const [resultat, setResultat] = useState<{ opprettet: number; hoppetOver: number } | null>(null);
+  const [feil, setFeil] = useState<string | null>(null);
+
+  async function kjorSok(e: React.FormEvent) {
+    e.preventDefault();
+    setSoker(true);
+    setFeil(null);
+    setValgte(new Set());
+    try {
+      setAdresser(await enheter.adressesok(orgId, sok));
+    } catch (err) {
+      setFeil(err instanceof Error ? err.message : "Søket feilet");
+    } finally {
+      setSoker(false);
+    }
+  }
+
+  // Radene som ville blitt opprettet fra valgte adresser — og hvor mange som alt finnes
+  // (nøkkel oppgang + leilighetsnummer, samme som serverens hopp-over-regel).
+  const rader = (adresser ?? [])
+    .filter((a) => a.adressetekst && valgte.has(a.adressetekst))
+    .flatMap((a) =>
+      a.bruksenhetsnummer.map((b) => ({
+        leilighetsnr: b,
+        oppgang: a.bokstav || String(a.nummer ?? ""),
+        etasje: etasjeFraBruksenhet(b),
+      })),
+    );
+  const opptatt = new Set(
+    eksisterende.map((e) => `${(e.oppgang ?? "").toLowerCase()}|${(e.leilighetsnr ?? "").toLowerCase()}`),
+  );
+  const nye = rader.filter((r) => !opptatt.has(`${r.oppgang.toLowerCase()}|${r.leilighetsnr.toLowerCase()}`));
+
+  async function importer() {
+    setSender(true);
+    setFeil(null);
+    try {
+      const res = await enheter.importer(orgId, rader);
+      setResultat(res);
+      await onImportert();
+    } catch (err) {
+      setFeil(err instanceof Error ? err.message : "Importen feilet");
+    } finally {
+      setSender(false);
+    }
+  }
+
+  return (
+    <Modal tittel="Hent leiligheter fra Kartverket" onLukk={onLukk} bredde={560}>
+      {resultat ? (
+        <>
+          <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, margin: 0 }}>
+            Opprettet <b>{resultat.opprettet}</b> leilighet{resultat.opprettet === 1 ? "" : "er"}
+            {resultat.hoppetOver > 0 && (
+              <> — {resultat.hoppetOver} fantes fra før og ble hoppet over</>
+            )}
+            . Andelsnummer finnes ikke hos Kartverket; de legges inn med «Endre» på hver rad.
+          </p>
+          <Knapperad onAvbryt={onLukk} avbrytEtikett="Lukk" sendEtikett="Nytt søk" onSend={() => { setResultat(null); setAdresser(null); setSok(""); }} />
+        </>
+      ) : (
+        <>
+          <form onSubmit={kjorSok} style={{ display: "flex", gap: "10px" }}>
+            <input
+              className="input"
+              style={{ flex: 1 }}
+              placeholder="Gateadresse, f.eks. «Håsteinsgate 9, Bergen»"
+              aria-label="Adresse"
+              autoFocus
+              value={sok}
+              onChange={(e) => setSok(e.target.value)}
+            />
+            <button className="btn btn-primary" disabled={soker || sok.trim().length < 3}>
+              {soker ? "Søker …" : "Søk"}
+            </button>
+          </form>
+          <div className="field-note">
+            Kartverkets adresseregister har bruksenhetsnumrene (H0101 …) per oppgang — de blir
+            leilighetsnummer, med etasje og oppgang utledet. Leiligheter som alt finnes hoppes over.
+          </div>
+
+          <Feil melding={feil} />
+
+          {adresser !== null &&
+            (adresser.length === 0 ? (
+              <Tom tekst="Ingen adresser funnet. Prøv med gatenavn og husnummer." />
+            ) : (
+              <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+                {adresser.map((a) => (
+                  <label
+                    key={a.adressetekst ?? ""}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "7px 2px", cursor: "pointer" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={valgte.has(a.adressetekst ?? "")}
+                      onChange={(e) => {
+                        const neste = new Set(valgte);
+                        if (e.target.checked) neste.add(a.adressetekst ?? "");
+                        else neste.delete(a.adressetekst ?? "");
+                        setValgte(neste);
+                      }}
+                    />
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span className="varsel-navn">{a.adressetekst}</span>
+                      <span className="varsel-desc">
+                        {[a.postnummer && `${a.postnummer} ${a.poststed}`, `${a.bruksenhetsnummer.length} bruksenhet${a.bruksenhetsnummer.length === 1 ? "" : "er"}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ))}
+
+          {rader.length > 0 && (
+            <div className="field-note">
+              {nye.length} nye opprettes{rader.length - nye.length > 0 && <>, {rader.length - nye.length} finnes fra før og hoppes over</>}.
+            </div>
+          )}
+
+          <Knapperad
+            onAvbryt={onLukk}
+            sendEtikett={`Opprett ${nye.length || ""} leilighet${nye.length === 1 ? "" : "er"}`.replace("  ", " ")}
+            sender={sender}
+            deaktivert={nye.length === 0}
+            onSend={() => void importer()}
+          />
+        </>
+      )}
+    </Modal>
   );
 }
 

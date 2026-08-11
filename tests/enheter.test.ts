@@ -15,6 +15,7 @@ import {
   endreEnhet,
   gjenopprettEnhet,
   hentEnheter,
+  importerEnheter,
   opprettEnhet,
 } from "../src/lib/enheter";
 
@@ -93,6 +94,31 @@ describe("identitet", () => {
 
     const feil = await feilFra(() => i(org, (db) => endreEnhet(db, org, enhet.id, { andelsnr: null })));
     expect(feil.status).toBe(400);
+  });
+});
+
+describe("kartverket-import", () => {
+  it("hopper over enheter som finnes, også dubletter i samme batch", async () => {
+    const org = await nyOrg();
+    await i(org, (db) => opprettEnhet(db, org, { type: "bolig", leilighetsnr: "H0101", oppgang: "A" }));
+
+    const res = await i(org, (db) =>
+      importerEnheter(db, org, [
+        { leilighetsnr: "H0101", oppgang: "A", etasje: "1" }, // finnes fra før
+        { leilighetsnr: "H0201", oppgang: "A", etasje: "2" },
+        { leilighetsnr: "H0201", oppgang: "A", etasje: "2" }, // dublett i batchen
+        { leilighetsnr: "H0101", oppgang: "B", etasje: "1" }, // annen oppgang = annen enhet
+      ]),
+    );
+    expect(res).toEqual({ opprettet: 2, hoppetOver: 2 });
+
+    const alle = await i(org, (db) => hentEnheter(db, org));
+    expect(alle.length).toBe(3);
+    // Importen er idempotent — samme kjøring én gang til oppretter ingenting.
+    const igjen = await i(org, (db) =>
+      importerEnheter(db, org, [{ leilighetsnr: "H0201", oppgang: "A", etasje: "2" }]),
+    );
+    expect(igjen).toEqual({ opprettet: 0, hoppetOver: 1 });
   });
 });
 

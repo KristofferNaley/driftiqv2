@@ -2586,3 +2586,26 @@ textarea.qr-input { resize: vertical; }
 @media (max-width: 560px) {
   .meldfeil-knapp { padding: 9px 12px; }
 }
+
+/* ── Enhetsregisteret som kolonnetabell — samme grep som kontrakt- og leverandørlistene.
+   Avvikstallene er KOLONNER med overskrift, ikke fargede merker: i et register på 170
+   rader ble merkene støy, mens en tallkolonne kan skummes. ────────────────────────────── */
+.enhet-hode, .enhet-rad {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) 90px 70px 70px 70px minmax(140px, auto);
+  gap: 12px; align-items: center; padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.enhet-hode {
+  font-size: var(--fs-label); color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.enhet-celle { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+.enhet-tall { font-size: var(--fs-sm); text-align: right; font-variant-numeric: tabular-nums; }
+.enhet-hode .enhet-tall { font-size: var(--fs-label); color: var(--muted); font-weight: 600; }
+.enhet-handling { display: flex; gap: 6px; justify-content: flex-end; }
+
+@media (max-width: 760px) {
+  .enhet-hode, .enhet-rad { grid-template-columns: minmax(120px, 2fr) 70px 70px minmax(120px, auto); }
+  .enhet-oppgang, .enhet-etasje { display: none; }
+}

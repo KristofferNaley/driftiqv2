@@ -464,12 +464,22 @@ export type Enhet = {
   arealM2: string | null; archivedAt: string | null; apneAvvik: number; antallAvvik: number;
 };
 
+export type Adressetreff = {
+  adressetekst: string | null; nummer: number | null; bokstav: string;
+  postnummer: string | null; poststed: string | null; kommunenavn: string | null;
+  bruksenhetsnummer: string[];
+};
+
 export const enheter = {
   liste: (o: string, medArkiverte = false) =>
     api.hent<Enhet[]>(org(o, `/units${medArkiverte ? "?arkiverte=true" : ""}`)),
   ny: (o: string, d: unknown) => api.send<Enhet>(org(o, "/units"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Enhet>(org(o, `/units/${id}`), d),
   arkiver: (o: string, id: string) => api.slett(org(o, `/units/${id}`)),
+  adressesok: (o: string, adresse: string) =>
+    api.hent<Adressetreff[]>(org(o, `/units/adressesok?adresse=${encodeURIComponent(adresse)}`)),
+  importer: (o: string, rader: unknown) =>
+    api.send<{ opprettet: number; hoppetOver: number }>(org(o, "/units/import"), { rader }),
 };
 
 export type Dashbord = {

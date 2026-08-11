@@ -155,6 +155,60 @@ export async function endreEnhet(
   return endret!;
 }
 
+export const importInn = z.object({
+  rader: z
+    .array(
+      z.object({
+        leilighetsnr: z.string().trim().min(1, "Leilighetsnummer må fylles ut"),
+        oppgang: tekst,
+        etasje: tekst,
+      }),
+    )
+    .min(1, "Ingen rader å importere")
+    .max(500, "Maks 500 enheter per import"),
+});
+
+/**
+ * Masseoppretting fra Kartverket-søket. Nøkkelen er oppgang + leilighetsnummer — samme som
+ * v1s regneark-import: en enhet som allerede finnes hoppes over i stedet for å dobles, så
+ * importen trygt kan kjøres igjen når det er bygget på en ny oppgang.
+ */
+export async function importerEnheter(
+  db: Db,
+  orgId: string,
+  rader: z.infer<typeof importInn>["rader"],
+) {
+  const eksisterende = await db
+    .select({ leilighetsnr: units.leilighetsnr, oppgang: units.oppgang })
+    .from(units)
+    .where(eq(units.orgId, orgId));
+
+  const nokkel = (oppgang: string | null | undefined, leilighetsnr: string | null | undefined) =>
+    `${(oppgang ?? "").trim().toLowerCase()}|${(leilighetsnr ?? "").trim().toLowerCase()}`;
+  const opptatt = new Set(eksisterende.map((e) => nokkel(e.oppgang, e.leilighetsnr)));
+
+  let opprettet = 0;
+  let hoppetOver = 0;
+  for (const rad of rader) {
+    const n = nokkel(rad.oppgang, rad.leilighetsnr);
+    if (opptatt.has(n)) {
+      hoppetOver++;
+      continue;
+    }
+    opptatt.add(n); // dubletter INNE i batchen skal heller ikke dobles
+    await db.insert(units).values({
+      id: randomUUID(),
+      orgId,
+      type: "bolig",
+      leilighetsnr: rad.leilighetsnr,
+      oppgang: rad.oppgang ?? null,
+      etasje: rad.etasje ?? null,
+    });
+    opprettet++;
+  }
+  return { opprettet, hoppetOver };
+}
+
 /** Arkiverer — sletter aldri. Se kommentaren på `units.archivedAt`. */
 export async function arkiverEnhet(db: Db, orgId: string, unitId: string) {
   const enhet = await hentEnhet(db, orgId, unitId);
