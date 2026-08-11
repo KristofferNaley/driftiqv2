@@ -20,7 +20,7 @@ import { AKTIVITETSSLAG, SLAG, type MinAktivitet } from "@/lib/aktivitetsslag";
 import { NIVA_ETIKETT, erPlattformadminRolle } from "@/lib/nivaer";
 import { VARSLER, VARSEL_STANDARD } from "@/lib/varselvalg";
 import { Feil, dato } from "./felles";
-import { Fanemodal, Tekstfelt, type Fanevalg } from "./skjema";
+import { Bryter, Fanemodal, Tekstfelt, type Fanevalg } from "./skjema";
 
 /**
  * «Min profil» — egne opplysninger, egne varsler, hvilke lag man sitter i, og passord.
@@ -260,17 +260,13 @@ export default function ProfilModal({
               <div className="field-note">Henter …</div>
             ) : (
               VARSLER.map((v) => (
-                <label key={v.nokkel} className="varsel-valg">
-                  <input
-                    type="checkbox"
-                    checked={varsler[v.nokkel] ?? false}
-                    onChange={(e) => setVarsler({ ...varsler, [v.nokkel]: e.target.checked })}
-                  />
-                  <span style={{ minWidth: 0 }}>
-                    <span className="varsel-navn">{v.etikett}</span>
-                    <span className="varsel-desc">{v.beskrivelse}</span>
-                  </span>
-                </label>
+                <Bryter
+                  key={v.nokkel}
+                  etikett={v.etikett}
+                  beskrivelse={v.beskrivelse}
+                  verdi={varsler[v.nokkel] ?? false}
+                  onEndre={(paa) => setVarsler({ ...varsler, [v.nokkel]: paa })}
+                />
               ))
             )}
           </div>

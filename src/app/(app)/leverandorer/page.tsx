@@ -129,7 +129,6 @@ function LeverandorRad({ l, onClick }: { l: LeverandorIListe; onClick: () => voi
       <div style={{ minWidth: 0 }}>
         <div className="kontrakt-tittel">
           <span className="list-tittel">{l.name}</span>
-          {l.ehf && <span className="badge muted" style={{ flexShrink: 0 }}>EHF</span>}
           {!l.active && <span className="badge muted" style={{ flexShrink: 0 }}>Inaktiv</span>}
         </div>
         {(l.category || l.orgNumber || l.customerNumber) && (

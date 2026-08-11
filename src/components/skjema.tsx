@@ -71,7 +71,9 @@ export function Modal({
         style={{ width: "100%", maxWidth: `${bredde}px`, maxHeight: "88dvh", display: "flex", flexDirection: "column" }}
       >
         <div className="card-header">
-          <div className="card-title">{tittel}</div>
+          {/* Egen klasse: korttitlene ellers er små og KAPITALISERTE etiketter, men her er
+              tittelen objektets NAVN — «Vaktmestertjenester Vest AS» skal leses som navn. */}
+          <div className="card-title modal-tittel">{tittel}</div>
           <button className="btn btn-ghost" onClick={onLukk} aria-label="Lukk">
             ✕
           </button>
@@ -398,6 +400,43 @@ export function Avkryssing({
       </label>
       {notat && <div className="field-note">{notat}</div>}
     </div>
+  );
+}
+
+/**
+ * Av/på-bryter med teksten til venstre og bryteren HELT til høyre.
+ *
+ * For innstillinger som er i kraft med en gang (varsler): en bryter sier «dette er PÅ», en
+ * avkryssingsboks sier «dette blir valgt når du lagrer». Skjemafelter som lagres med resten
+ * skal fortsatt bruke `Avkryssing`.
+ */
+export function Bryter({
+  etikett,
+  beskrivelse,
+  verdi,
+  onEndre,
+}: {
+  etikett: string;
+  beskrivelse?: string;
+  verdi: boolean;
+  onEndre: (v: boolean) => void;
+}) {
+  return (
+    <label className="bryter-rad">
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span className="varsel-navn">{etikett}</span>
+        {beskrivelse && <span className="varsel-desc">{beskrivelse}</span>}
+      </span>
+      {/* Ekte checkbox for tastatur og skjermleser — det visuelle er spennet etterpå. */}
+      <input
+        type="checkbox"
+        role="switch"
+        className="bryter-boks"
+        checked={verdi}
+        onChange={(e) => onEndre(e.target.checked)}
+      />
+      <span className="bryter" aria-hidden />
+    </label>
   );
 }
 

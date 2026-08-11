@@ -247,14 +247,14 @@ export default function LeverandorDetaljModal({
                   verdi={relasjon}
                   onEndre={setRelasjon}
                   valg={Object.entries(RELASJON).map(([verdi, etikett]) => ({ verdi, etikett }))}
+                  notat="Faste leverandører har et løpende forhold, innkjøpssteder er butikker med kundenummer, «ved behov» er enkeltoppdrag."
                 />
-                <Tekstfelt etikett="Fagfelt" verdi={fagfelt} onEndre={setFagfelt} plassholder="Rørlegger, elektriker, renhold …" />
+                <Tekstfelt etikett="Kategori" verdi={fagfelt} onEndre={setFagfelt} plassholder="Rørlegger, elektriker, renhold …" />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <Tekstfelt etikett="Organisasjonsnummer" verdi={orgNr} onEndre={setOrgNr} />
                   <Tekstfelt etikett="Kundenummer" verdi={kundenr} onEndre={setKundenr} />
                 </div>
                 <Tekstomrade etikett="Notat" verdi={notat} onEndre={setNotat} />
-                <Avkryssing etikett="EHF-faktura" verdi={ehf} onEndre={setEhf} />
                 <Avkryssing
                   etikett="Aktiv"
                   verdi={aktiv}
@@ -267,10 +267,9 @@ export default function LeverandorDetaljModal({
             {fane === "om" && !redigerer && (
               <>
                 <Rad tittel="Relasjon" hoyre={RELASJON[data.relationshipType] ?? data.relationshipType} />
-                <Rad tittel="Fagfelt" hoyre={data.category ?? "—"} />
+                <Rad tittel="Kategori" hoyre={data.category ?? "—"} />
                 <Rad tittel="Organisasjonsnummer" hoyre={data.orgNumber ?? "—"} />
                 <Rad tittel="Kundenummer" hoyre={data.customerNumber ?? "—"} />
-                <Rad tittel="EHF" hoyre={data.ehf ? "Ja" : "Nei"} />
                 {!data.active && (
                   <Rad tittel="Status" hoyre={<span className="badge muted">Inaktiv</span>} />
                 )}

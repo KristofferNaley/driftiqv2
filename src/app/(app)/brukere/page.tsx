@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Feil, Tom, dagerSiden, initialer, siden, useOrgData } from "@/components/felles";
-import { Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
+import { Bryter, Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
 import { VARSLER, VARSEL_STANDARD } from "@/lib/varselvalg";
 import { brreg, brukere, type OrgBruker, type StyreSvar } from "@/lib/klient";
 import { formatOrgNr } from "@/lib/orgnr";
@@ -472,17 +472,13 @@ function BrukerModal({
               <div className="field-note">Henter …</div>
             ) : (
               VARSLER.map((v) => (
-                <label key={v.nokkel} className="varsel-valg">
-                  <input
-                    type="checkbox"
-                    checked={varsler[v.nokkel] ?? false}
-                    onChange={(e) => setVarsler({ ...varsler, [v.nokkel]: e.target.checked })}
-                  />
-                  <span style={{ minWidth: 0 }}>
-                    <span className="varsel-navn">{v.etikett}</span>
-                    <span className="varsel-desc">{v.beskrivelse}</span>
-                  </span>
-                </label>
+                <Bryter
+                  key={v.nokkel}
+                  etikett={v.etikett}
+                  beskrivelse={v.beskrivelse}
+                  verdi={varsler[v.nokkel] ?? false}
+                  onEndre={(paa) => setVarsler({ ...varsler, [v.nokkel]: paa })}
+                />
               ))
             )}
           </div>

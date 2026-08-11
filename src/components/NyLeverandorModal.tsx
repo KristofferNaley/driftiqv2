@@ -144,8 +144,9 @@ export default function NyLeverandorModal({
             { verdi: "handelskonto", etikett: "Innkjøpssteder" },
             { verdi: "adhoc", etikett: "Ved behov" },
           ]}
+          notat="Faste leverandører har et løpende forhold, innkjøpssteder er butikker med kundenummer, «ved behov» er enkeltoppdrag."
         />
-        <Tekstfelt etikett="Fagfelt" verdi={fagfelt} onEndre={setFagfelt} plassholder="Rørlegger, elektriker, renhold …" />
+        <Tekstfelt etikett="Kategori" verdi={fagfelt} onEndre={setFagfelt} plassholder="Rørlegger, elektriker, renhold …" />
 
         <Knapperad
           onAvbryt={onLukk}
