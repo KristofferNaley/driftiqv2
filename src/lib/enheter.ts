@@ -26,7 +26,7 @@ import { z } from "zod";
 import type { Db } from "../db/client";
 import { units } from "../db/schema/units";
 import { ikkeFunnet, ugyldig } from "./api";
-import { apneAvvikPerEnhet } from "./avvik";
+import { avvikPerEnhet } from "./avvik";
 
 export const ENHETSTYPER = ["bolig", "fellesareal"] as const;
 
@@ -92,17 +92,21 @@ export async function hentEnheter(db: Db, orgId: string, opts: { medArkiverte?: 
   const betingelser = [eq(units.orgId, orgId)];
   if (!opts.medArkiverte) betingelser.push(isNull(units.archivedAt));
 
-  const [rader, apne] = await Promise.all([
+  const [rader, avvik] = await Promise.all([
     db
       .select()
       .from(units)
       .where(and(...betingelser))
       .orderBy(asc(units.andelsnr), asc(units.oppgang), asc(units.leilighetsnr)),
     // Én spørring for hele org-en, ikke én per rad.
-    apneAvvikPerEnhet(db, orgId),
+    avvikPerEnhet(db, orgId),
   ]);
 
-  return rader.map((r) => ({ ...r, apneAvvik: apne.get(r.id) ?? 0 }));
+  return rader.map((r) => ({
+    ...r,
+    apneAvvik: avvik.get(r.id)?.apne ?? 0,
+    antallAvvik: avvik.get(r.id)?.totalt ?? 0,
+  }));
 }
 
 export async function hentEnhet(db: Db, orgId: string, unitId: string) {

@@ -461,7 +461,7 @@ export const aiRadgiver = {
 export type Enhet = {
   id: string; type: string; navn: string | null; andelsnr: string | null;
   leilighetsnr: string | null; oppgang: string | null; etasje: string | null;
-  arealM2: string | null; archivedAt: string | null; apneAvvik: number;
+  arealM2: string | null; archivedAt: string | null; apneAvvik: number; antallAvvik: number;
 };
 
 export const enheter = {
@@ -473,6 +473,7 @@ export const enheter = {
 };
 
 export type Dashbord = {
+  banner: boolean;
   moduler: Record<string, boolean>;
   kpi: { oppgaver: number | null; aJour: number | null; forsinket: number | null; apneAvvik: number | null };
   oppfolging: Array<{ slag: string; alvor: "hoy" | "middels" | "lav"; tekst: string; detalj: string; sti: string }>;
@@ -505,12 +506,15 @@ export type OrgInfo = {
   deviationCategories: string | null;
   municipality: string | null; unitCount: number | null; enabledModules: string | null;
   buildingInfo: string | null; hasEmployees: boolean;
+  bannerFileName: string | null; bannerOriginalName: string | null;
   lagring: { brukt: number; kvote: number; prosent: number };
 };
 
 export const organisasjon = {
   hent: (o: string) => api.hent<OrgInfo>(`/organizations/${o}`),
   endre: (o: string, d: unknown) => api.endre<OrgInfo>(`/organizations/${o}`, d),
+  lastOppBanner: (o: string, f: FormData) => api.lastOpp<OrgInfo>(`/organizations/${o}/banner`, f),
+  fjernBanner: (o: string) => api.slett(`/organizations/${o}/banner`),
   /**
    * Modulvalg — plattformadmin. Blir stående her fordi plattformpanelet skal bruke det;
    * kundens innstillinger gjør det IKKE, og API-et avviser dem uansett.

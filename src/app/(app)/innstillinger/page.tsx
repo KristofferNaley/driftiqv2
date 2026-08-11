@@ -6,7 +6,6 @@ import { useOkt } from "@/components/OktProvider";
 import { Faner, Feil, Kort, Rad, Tom, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { enheter, organisasjon, type Enhet, type OrgInfo } from "@/lib/klient";
-import { ALLE_MODULER, MENY, modulErAktivert } from "@/lib/moduler";
 import { lesKategorier } from "@/lib/avvikkategorier";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
@@ -18,9 +17,7 @@ function storrelse(n: number): string {
 }
 
 export default function Innstillinger() {
-  const [fane, setFane] = useState<
-    "org" | "kategorier" | "moduler" | "leiligheter" | "fellesomrader"
-  >("org");
+  const [fane, setFane] = useState<"org" | "kategorier" | "leiligheter" | "fellesomrader">("org");
   return (
     <Layout
       tittel="Innstillinger"
@@ -29,9 +26,8 @@ export default function Innstillinger() {
           valgt={fane}
           onVelg={setFane}
           faner={[
-            { nokkel: "org", etikett: "Organisasjonen" },
+            { nokkel: "org", etikett: "Generelt" },
             { nokkel: "kategorier", etikett: "Avvikskategorier" },
-            { nokkel: "moduler", etikett: "Moduler" },
             { nokkel: "leiligheter", etikett: "Leiligheter" },
             { nokkel: "fellesomrader", etikett: "Fellesområder" },
           ]}
@@ -41,7 +37,6 @@ export default function Innstillinger() {
       <div className="page-content">
         {fane === "org" && <Organisasjonen />}
         {fane === "kategorier" && <Kategorier />}
-        {fane === "moduler" && <Moduler />}
         {fane === "leiligheter" && <Enheter visning="bolig" />}
         {fane === "fellesomrader" && <Enheter visning="fellesareal" />}
       </div>
@@ -55,7 +50,36 @@ function Organisasjonen() {
   const { aktivOrg } = useOkt();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => organisasjon.hent(o));
   const [redigerer, setRedigerer] = useState(false);
+  const [lasterBanner, setLasterBanner] = useState(false);
   const erAdmin = aktivOrg?.nivaa === "orgadmin";
+
+  async function lastOppBanner(e: React.ChangeEvent<HTMLInputElement>) {
+    const fil = e.target.files?.[0];
+    if (!fil || !orgId) return;
+    setLasterBanner(true);
+    setFeil(null);
+    const form = new FormData();
+    form.append("file", fil);
+    try {
+      await organisasjon.lastOppBanner(orgId, form);
+      await last();
+    } catch (err) {
+      setFeil(err instanceof Error ? err.message : "Opplasting feilet");
+    } finally {
+      setLasterBanner(false);
+      e.target.value = "";
+    }
+  }
+
+  async function fjernBanner() {
+    if (!orgId) return;
+    try {
+      await organisasjon.fjernBanner(orgId);
+      await last();
+    } catch (err) {
+      setFeil(err instanceof Error ? err.message : "Kunne ikke fjerne banneret");
+    }
+  }
 
   if (laster || !data) {
     return (
@@ -93,6 +117,38 @@ function Organisasjonen() {
           <div style={{ padding: "14px 20px", fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>
             {data.buildingInfo}
           </div>
+        )}
+      </Kort>
+
+      <Kort
+        tittel="Dashbordbanner"
+        handling={
+          erAdmin && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              {data.bannerFileName && (
+                <button className="btn btn-ghost" style={{ color: "var(--muted)" }} onClick={() => void fjernBanner()}>
+                  Fjern
+                </button>
+              )}
+              <label className="btn btn-ghost" style={{ cursor: "pointer" }}>
+                {lasterBanner ? "Laster opp …" : data.bannerFileName ? "Bytt bilde" : "Last opp bilde"}
+                <input type="file" hidden accept="image/png,image/jpeg,image/webp" disabled={lasterBanner} onChange={(e) => void lastOppBanner(e)} />
+              </label>
+            </div>
+          )
+        }
+      >
+        {data.bannerFileName ? (
+          <div style={{ padding: "0 20px 16px" }}>
+            {/* Nøkkelen i src tvinger ny henting når bildet byttes — samme URL, ny fil. */}
+            <img
+              src={`/api/organizations/${orgId}/banner/file?v=${encodeURIComponent(data.bannerFileName)}`}
+              alt={data.bannerOriginalName ?? "Dashbordbanner"}
+              style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", display: "block" }}
+            />
+          </div>
+        ) : (
+          <Tom tekst="Ingen banner — dashbordet viser bare widgetene. Et bilde av bygget gjør forsiden til deres." />
         )}
       </Kort>
 
@@ -302,7 +358,7 @@ function Kategorier() {
                   setRader(rader.map((x, j) => (j === i ? { ...x, aktiv: e.target.checked } : x)))
                 }
               />
-              <span>{r.aktiv ? "I bruk" : "Av"}</span>
+              <span>{r.aktiv ? "Aktiv" : "Av"}</span>
             </label>
           </div>
         ))}
@@ -328,53 +384,6 @@ function Kategorier() {
   );
 }
 
-/**
- * Modulene kunden har — som LESEVISNING.
- *
- * Her sto tidligere avkryssingsbokser kunden kunne lagre selv. Det er feil modell: modulene
- * er det de har kjøpt, og styres fra plattformpanelet (samme sted som i v1). API-et avviser
- * nå kundens forsøk uansett, så boksene her ville bare vært knapper som svarte 403.
- *
- * Lista blir stående fordi kunden skal kunne SE hva de har. Moduler de ikke har, hører
- * hjemme i modulkatalogen, som selger dem — ikke i en avkryssingsliste her.
- */
-function Moduler() {
-  const { data, feil, laster } = useOrgData((o) => organisasjon.hent(o));
-
-  if (laster || !data) {
-    return (
-      <>
-        <Feil melding={feil} />
-        {!feil && <Tom tekst="Henter …" />}
-      </>
-    );
-  }
-
-  const aktive = ALLE_MODULER.filter((n) => MENY[n] && modulErAktivert(data.enabledModules, n));
-
-  return (
-    <>
-      <Feil melding={feil} />
-      <Kort tittel="Moduler i abonnementet">
-        {aktive.map((n) => (
-          <div key={n} className="list-item">
-            <div style={{ minWidth: 0 }}>
-              <div className="list-tittel">{MENY[n]!.etikett}</div>
-              <div className="list-meta">{MENY[n]!.gruppe}</div>
-            </div>
-            <span className="badge ok">Aktiv</span>
-          </div>
-        ))}
-      </Kort>
-
-      <div className="field-note">
-        Modulene følger avtalen deres og settes av DriftIQ. Vil dere ha en modul til — eller
-        fjerne en dere ikke bruker — ta kontakt, så ordner vi det.
-      </div>
-    </>
-  );
-}
-
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -395,6 +404,7 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
     [medArkiverte],
   );
   const [nyEnhet, setNyEnhet] = useState(false);
+  const [endrer, setEndrer] = useState<Enhet | null>(null);
   const liste = (data ?? []).filter((e) =>
     fellesareal ? e.type === "fellesareal" : e.type !== "fellesareal",
   );
@@ -446,23 +456,31 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
             <Rad
               key={e.id}
               tittel={e.navn ?? e.leilighetsnr ?? `Andel ${e.andelsnr ?? "?"}`}
+              // Kvadratmeterne står i basen, men ikke her — de svarer ikke på noe man leter
+              // etter i denne lista.
               meta={[
                 e.andelsnr && `andel ${e.andelsnr}`,
                 e.oppgang && `oppg. ${e.oppgang}`,
                 e.etasje && `${e.etasje}. etasje`,
-                e.arealM2 && `${e.arealM2} m²`,
               ]
                 .filter(Boolean)
                 .join(" · ")}
               hoyre={
                 <>
-                  {e.apneAvvik > 0 && <span className="badge warn">{e.apneAvvik} åpne avvik</span>}
+                  {/* Totalen er historikken (gjentakende fukt over år), de åpne er nå. */}
+                  {e.antallAvvik > 0 && <span className="badge muted">{e.antallAvvik} avvik</span>}
+                  {e.apneAvvik > 0 && <span className="badge warn">{e.apneAvvik} åpne</span>}
                   {e.archivedAt ? (
                     <span className="badge muted">Arkivert</span>
                   ) : (
-                    <button className="btn btn-ghost" onClick={() => arkiver(e)}>
-                      Arkiver
-                    </button>
+                    <>
+                      <button className="btn btn-ghost" onClick={() => setEndrer(e)}>
+                        Endre
+                      </button>
+                      <button className="btn btn-ghost" style={{ color: "var(--muted)" }} onClick={() => arkiver(e)}>
+                        Arkiver
+                      </button>
+                    </>
                   )}
                 </>
               }
@@ -479,10 +497,19 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
       </div>
 
       {nyEnhet && (
-        <NyEnhet
+        <EnhetSkjema
           orgId={orgId!}
           fellesareal={fellesareal}
           onLukk={() => setNyEnhet(false)}
+          onLagret={last}
+        />
+      )}
+      {endrer && (
+        <EnhetSkjema
+          orgId={orgId!}
+          fellesareal={fellesareal}
+          utgangspunkt={endrer}
+          onLukk={() => setEndrer(null)}
           onLagret={last}
         />
       )}
@@ -490,41 +517,54 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
   );
 }
 
-function NyEnhet({
+/** Ett skjema for ny og endre — utgangspunktet avgjør hvilket API-kall som gjøres. */
+function EnhetSkjema({
   orgId,
   fellesareal,
+  utgangspunkt,
   onLukk,
   onLagret,
 }: {
   orgId: string;
   fellesareal: boolean;
+  utgangspunkt?: Enhet;
   onLukk: () => void;
   onLagret: () => Promise<void>;
 }) {
   // Typen følger av fanen man står i — ingen avkryssingsboks å glemme.
   const type = fellesareal ? "fellesareal" : "bolig";
-  const [navn, setNavn] = useState("");
-  const [andelsnr, setAndelsnr] = useState("");
-  const [leilighetsnr, setLeilighetsnr] = useState("");
-  const [oppgang, setOppgang] = useState("");
+  const [navn, setNavn] = useState(utgangspunkt?.navn ?? "");
+  const [andelsnr, setAndelsnr] = useState(utgangspunkt?.andelsnr ?? "");
+  const [leilighetsnr, setLeilighetsnr] = useState(utgangspunkt?.leilighetsnr ?? "");
+  const [oppgang, setOppgang] = useState(utgangspunkt?.oppgang ?? "");
+  const [etasje, setEtasje] = useState(utgangspunkt?.etasje ?? "");
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
     onLukk();
   });
 
   return (
-    <Modal tittel={fellesareal ? "Nytt fellesområde" : "Ny leilighet"} onLukk={onLukk}>
+    <Modal
+      tittel={
+        utgangspunkt
+          ? fellesareal ? "Endre fellesområde" : "Endre leilighet"
+          : fellesareal ? "Nytt fellesområde" : "Ny leilighet"
+      }
+      onLukk={onLukk}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          const felter = {
+            type,
+            navn: navn || null,
+            andelsnr: andelsnr || null,
+            leilighetsnr: leilighetsnr || null,
+            oppgang: oppgang || null,
+            etasje: etasje || null,
+          };
           void send(() =>
-            enheter.ny(orgId, {
-              type,
-              navn: navn || null,
-              andelsnr: andelsnr || null,
-              leilighetsnr: leilighetsnr || null,
-              oppgang: oppgang || null,
-            }),
+            utgangspunkt ? enheter.endre(orgId, utgangspunkt.id, felter) : enheter.ny(orgId, felter),
           );
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
@@ -539,18 +579,32 @@ function NyEnhet({
             notat="Fellesområder kjennes på navn, ikke nummer — bossrom, takterrasse, vaskeri."
           />
         ) : (
-          <>
-            <div className="field-row">
-              <Tekstfelt etikett="Andelsnummer" verdi={andelsnr} onEndre={setAndelsnr} />
-              <Tekstfelt etikett="Leilighetsnummer" verdi={leilighetsnr} onEndre={setLeilighetsnr} plassholder="H0101" />
-            </div>
+          <div className="field-row">
             <Tekstfelt
-              etikett="Oppgang"
-              verdi={oppgang}
-              onEndre={setOppgang}
-              notat="Minst ett av de tre feltene må fylles ut — sameier uten andelsnummer bruker oppgang og leilighetsnummer."
+              etikett="Andelsnummer"
+              verdi={andelsnr}
+              onEndre={setAndelsnr}
+              notat="Fra andelsregisteret hos forretningsføreren."
             />
-          </>
+            <Tekstfelt
+              etikett="Leilighetsnummer"
+              verdi={leilighetsnr}
+              onEndre={setLeilighetsnr}
+              plassholder="H0101"
+              notat="Kartverkets bruksenhetsnummer (H-nr) — står også i matrikkelen."
+            />
+          </div>
+        )}
+        {/* Oppgang og etasje gjelder begge: også et bossrom ligger et sted i bygget. */}
+        <div className="field-row">
+          <Tekstfelt etikett="Oppgang" verdi={oppgang} onEndre={setOppgang} />
+          <Tekstfelt etikett="Etasje" verdi={etasje} onEndre={setEtasje} />
+        </div>
+        {!fellesareal && (
+          <div className="field-note">
+            Minst ett av andelsnummer, leilighetsnummer eller oppgang må fylles ut — sameier
+            uten andelsnummer bruker oppgang og leilighetsnummer.
+          </div>
         )}
         <Knapperad onAvbryt={onLukk} sender={sender} />
       </form>

@@ -174,6 +174,21 @@ export default function Dashbord() {
           <Tom tekst="Henter …" />
         ) : (
           <>
+            {/* Dashbordbanneret fra Innstillinger → Generelt. Bare et bilde, aldri et krav:
+                uten banner starter siden rett på widgetene. */}
+            {data.banner && orgId && (
+              <img
+                src={`/api/organizations/${orgId}/banner/file`}
+                alt=""
+                style={{
+                  width: "100%",
+                  maxHeight: "220px",
+                  objectFit: "cover",
+                  borderRadius: "14px",
+                  display: "block",
+                }}
+              />
+            )}
             {redigerer && (
               <div className="tips-stripe">
                 <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>

@@ -42,6 +42,15 @@ export const organizations = pgTable("organizations", {
   hasEmployees: boolean("has_employees").notNull().default(false),
 
   /**
+   * Dashbordbanner — et bilde styret laster opp som vises øverst på dashbordet (v1-paritet).
+   * Lagres under orgs/<id>/org/ med uuid-navn; originalnavnet er kun visning. Kolonnene
+   * heter IKKE `file_size` med vilje: banneret er ett lite bilde og telles ikke mot kvoten,
+   * og `file_size`-navnet ville dratt tabellen inn i FILTABELLER-kravet i lagring.test.ts.
+   */
+  bannerFileName: varchar("banner_file_name"),
+  bannerOriginalName: varchar("banner_original_name"),
+
+  /**
    * Kontaktpunktene til laget SELV — styrets fellesadresse, ikke en person. Hentes fra
    * Brønnøysund ved opprettelse og vedlikeholdes av plattformadmin.
    */

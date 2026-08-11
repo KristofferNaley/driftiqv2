@@ -225,6 +225,13 @@
       "when": 1786349224717,
       "tag": "0031_dazzling_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786477171186,
+      "tag": "0032_rapid_war_machine",
+      "breakpoints": true
     }
   ]
 }

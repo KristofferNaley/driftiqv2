@@ -47,7 +47,10 @@ export type Dashborddata = Awaited<ReturnType<typeof hentDashbord>>;
 
 export async function hentDashbord(db: Db, orgId: string) {
   const rader = await db
-    .select({ enabledModules: organizations.enabledModules })
+    .select({
+      enabledModules: organizations.enabledModules,
+      bannerFileName: organizations.bannerFileName,
+    })
     .from(organizations)
     .where(eq(organizations.id, orgId))
     .limit(1);
@@ -107,6 +110,8 @@ export async function hentDashbord(db: Db, orgId: string) {
   const aaretsMal = mal?.find((m) => m.year === aar) ?? null;
 
   return {
+    /** Dashbordbanneret settes i Innstillinger → Generelt; forsiden viser det øverst. */
+    banner: Boolean(rader[0]?.bannerFileName),
     moduler: {
       tasks: pa("tasks"),
       avvik: pa("avvik"),

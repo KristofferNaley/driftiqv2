@@ -13,7 +13,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import {
   avvikSok,
-  apneAvvikPerEnhet,
+  avvikPerEnhet,
   endreAvvik,
   hentAvvik,
   hentEttAvvik,
@@ -290,8 +290,9 @@ describe("oversikter", () => {
     await i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, unitId }));
     await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
 
-    const kart = await i(org, (db) => apneAvvikPerEnhet(db, org));
-    expect(kart.get(unitId), "Lukkede avvik skal ikke telles").toBe(1);
+    const kart = await i(org, (db) => avvikPerEnhet(db, org));
+    expect(kart.get(unitId)?.apne, "Lukkede avvik skal ikke telles som åpne").toBe(1);
+    expect(kart.get(unitId)?.totalt, "…men de telles i totalen — den er historikken").toBe(2);
   });
 
   it("teller per status", async () => {

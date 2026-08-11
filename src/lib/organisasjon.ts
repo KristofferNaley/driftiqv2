@@ -19,6 +19,7 @@ import { lagVerdi, lesKategorier } from "./avvikkategorier";
 import type { Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet, ugyldig } from "./api";
+import { lagreFil, slettFil } from "./lagring";
 import { ALLE_MODULER, type ModulNokkel } from "./moduler";
 
 /** Felter `redigering` også kan endre. Alt annet krever `orgadmin`. */
@@ -58,6 +59,51 @@ export async function endreOrg(db: Db, orgId: string, data: z.infer<typeof orgEn
     .set(data)
     .where(eq(organizations.id, orgId))
     .returning();
+  return endret!;
+}
+
+// ---------------------------------------------------------------------------------------
+// Dashbordbanner (v1-paritet)
+// ---------------------------------------------------------------------------------------
+
+/** Bare bildeformater nettleseren kan vise i en <img>. */
+const BANNER_TYPER = ["image/jpeg", "image/png", "image/webp"] as const;
+const BANNER_MAKS = 5 * 1024 * 1024;
+
+/**
+ * Laster opp eller bytter banneret. Den gamle fila slettes ETTER at den nye er skrevet —
+ * ryker skrivingen, står den gamle igjen. Samme rekkefølge som kontraktdokumentene.
+ */
+export async function lastOppBanner(db: Db, orgId: string, fil: File) {
+  const org = await hentOrg(db, orgId);
+  const opplasting = await lagreFil(db, orgId, "org", fil, {
+    typer: BANNER_TYPER,
+    maksStorrelse: BANNER_MAKS,
+  });
+
+  const [endret] = await db
+    .update(organizations)
+    .set({ bannerFileName: opplasting.filnavn, bannerOriginalName: opplasting.originalnavn })
+    .where(eq(organizations.id, orgId))
+    .returning();
+
+  if (org.bannerFileName) await slettFil(orgId, "org", org.bannerFileName);
+  return endret!;
+}
+
+export async function fjernBanner(db: Db, orgId: string) {
+  const org = await hentOrg(db, orgId);
+  if (!org.bannerFileName) throw ikkeFunnet("Banner");
+
+  // Raden ryddes FØR disken — en rad som peker på en fil som ikke finnes gir 404 til
+  // brukeren, en fil uten rad bruker bare plass.
+  const [endret] = await db
+    .update(organizations)
+    .set({ bannerFileName: null, bannerOriginalName: null })
+    .where(eq(organizations.id, orgId))
+    .returning();
+
+  await slettFil(orgId, "org", org.bannerFileName);
   return endret!;
 }
 

@@ -608,16 +608,23 @@ export async function tellPerStatus(db: Db, orgId: string) {
   return Object.fromEntries(rader.map((r) => [r.status, r.antall]));
 }
 
-/** Antall åpne avvik per enhet. Feltet Enhetsregisteret har ventet på. */
-export async function apneAvvikPerEnhet(db: Db, orgId: string): Promise<Map<string, number>> {
+/**
+ * Avvik per enhet — totalt og åpne, i én grupperende spørring. Totalen er historikken som
+ * gjør registeret verdt å ha (gjentakende fukt i samme leilighet over år), de åpne er det
+ * som trenger noen nå.
+ */
+export async function avvikPerEnhet(
+  db: Db,
+  orgId: string,
+): Promise<Map<string, { totalt: number; apne: number }>> {
   const rader = await db
-    .select({ unitId: deviations.unitId, antall: sql<number>`count(*)::int` })
+    .select({
+      unitId: deviations.unitId,
+      totalt: sql<number>`count(*)::int`,
+      apne: sql<number>`count(*) filter (where ${deviations.status} <> 'lukket')::int`,
+    })
     .from(deviations)
-    .where(and(
-      eq(deviations.orgId, orgId),
-      isNotNull(deviations.unitId),
-      sql`${deviations.status} <> 'lukket'`,
-    ))
+    .where(and(eq(deviations.orgId, orgId), isNotNull(deviations.unitId)))
     .groupBy(deviations.unitId);
-  return new Map(rader.map((r) => [r.unitId!, r.antall]));
+  return new Map(rader.map((r) => [r.unitId!, { totalt: r.totalt, apne: r.apne }]));
 }
