@@ -181,7 +181,13 @@ export function orgRute<P extends Record<string, string> = Record<string, string
 }
 
 /** En handler som leverer en fil i stedet for JSON. */
-export type Filsvar = { innhold: Uint8Array; navn: string; contentType: string | null };
+export type Filsvar = {
+  innhold: Uint8Array;
+  navn: string;
+  contentType: string | null;
+  /** `inline` lar nettleseren VISE fila (PDF i iframe, bilde i img) i stedet for å laste ned. */
+  disposition?: "inline" | "attachment";
+};
 
 function erFilsvar(v: unknown): v is Filsvar {
   return (
@@ -211,8 +217,9 @@ function somSvar(resultat: unknown, status: number): Response {
     headers: {
       "Content-Type": resultat.contentType ?? "application/octet-stream",
       // Filnavnet kan inneholde æøå og komma. `filename*` med UTF-8 er den formen som
-      // faktisk overlever; `filename=` beholdes for eldre klienter.
-      "Content-Disposition": `attachment; filename="${resultat.navn.replace(/["\\]/g, "")}"; filename*=UTF-8''${encodeURIComponent(resultat.navn)}`,
+      // faktisk overlever; `filename=` beholdes for eldre klienter. Navnet følger med også
+      // ved `inline` — trykker brukeren «Last ned» i PDF-viseren, er det navnet som brukes.
+      "Content-Disposition": `${resultat.disposition ?? "attachment"}; filename="${resultat.navn.replace(/["\\]/g, "")}"; filename*=UTF-8''${encodeURIComponent(resultat.navn)}`,
     },
   });
 }

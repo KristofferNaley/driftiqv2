@@ -62,6 +62,19 @@ export const TILLATTE_TYPER: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Content-Type fra et LAGRET filnavn — endelsen er satt av `TILLATTE_TYPER` ved opplasting,
+ * så oppslaget er bare tabellen baklengs. Modulene som ikke lagrer typen i egen kolonne
+ * (kontrakter) trenger den når fila skal serveres: uten riktig type viser ikke nettleseren
+ * en PDF inline, den laster den ned uansett disposition.
+ */
+export function contentTypeForFilnavn(filnavn: string): string | null {
+  const endelse = path.extname(filnavn).toLowerCase();
+  if (endelse === ".jpeg") return "image/jpeg";
+  for (const [type, e] of Object.entries(TILLATTE_TYPER)) if (e === endelse) return type;
+  return null;
+}
+
+/**
  * Tabellene som teller mot kvoten. Hver må ha `org_id` og `file_size`.
  *
  * Legger du til en modul som lagrer filer, skal tabellen inn her. Glemmer du det, feiler

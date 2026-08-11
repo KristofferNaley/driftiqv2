@@ -2,11 +2,12 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Nedtrekk, Tekstfelt, useSending } from "@/components/skjema";
+import Dokumentviser, { kanForhandsvises } from "@/components/Dokumentviser";
 import { dokumenter } from "@/lib/klient";
 
 const MAPPER = [
@@ -29,6 +30,7 @@ export default function Dokumentdetalj({ params }: { params: Promise<{ id: strin
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => dokumenter.liste(o), [id]);
   const dok = data?.find((d) => d.id === id) ?? null;
   const [redigerer, setRedigerer] = useState(false);
+  const [viser, setViser] = useState(false);
 
   async function slett() {
     if (!orgId) return;
@@ -68,6 +70,12 @@ export default function Dokumentdetalj({ params }: { params: Promise<{ id: strin
         <>
           {/* Fila serveres gjennom API-et og ikke som en statisk lenke — tilgangen må
               gjennom de samme gatene som resten av modulen. */}
+          {kanForhandsvises(dok.contentType) && (
+            <button className="btn btn-ghost" onClick={() => setViser(true)}>
+              <Eye size={16} strokeWidth={2} aria-hidden />
+              Vis
+            </button>
+          )}
           <a className="btn btn-ghost" href={`/api/organizations/${orgId}/documents/${id}/file`}>
             <Download size={16} strokeWidth={2} aria-hidden />
             Last ned
@@ -103,6 +111,15 @@ export default function Dokumentdetalj({ params }: { params: Promise<{ id: strin
           />
         </Kort>
       </div>
+
+      {viser && (
+        <Dokumentviser
+          visningsnavn={dok.originalName}
+          contentType={dok.contentType}
+          url={`/api/organizations/${orgId}/documents/${id}/file`}
+          onLukk={() => setViser(false)}
+        />
+      )}
 
       {redigerer && (
         <Rediger dok={dok} orgId={orgId!} onLukk={() => setRedigerer(false)} onLagret={last} />

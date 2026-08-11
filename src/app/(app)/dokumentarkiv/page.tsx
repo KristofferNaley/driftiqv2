@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
+import Dokumentviser, { kanForhandsvises } from "@/components/Dokumentviser";
 import { dokumenter, type Arkivoversikt, type Dokument, type Mappe } from "@/lib/klient";
 
 /**
@@ -590,18 +591,29 @@ function Dokumentrad({
   onRediger?: () => void;
   onSlett?: () => void;
 }) {
+  const [viser, setViser] = useState(false);
+  const url = orgId ? `/api/organizations/${orgId}/documents/${dok.id}/file` : undefined;
+  const visbar = kanForhandsvises(dok.contentType);
+
   return (
     <div className="doc-rad">
       <span className="doc-ikon" aria-hidden>
         {filikon(dok.contentType)}
       </span>
       <span style={{ minWidth: 0 }}>
-        {/* Lenke, ikke knapp: da virker «åpne i ny fane» og høyreklikk → lagre som. */}
+        {/* Lenke, ikke knapp: da virker «åpne i ny fane» og høyreklikk → lagre som. Vanlig
+            klikk åpner dokumentviseren for typene nettleseren kan vise — og lenka peker på
+            `?inline`, så også en ny fane VISER fila i stedet for å laste den ned. */}
         <a
           className="doc-tittel"
-          href={orgId ? `/api/organizations/${orgId}/documents/${dok.id}/file` : undefined}
+          href={url ? (visbar ? `${url}?inline` : url) : undefined}
           target="_blank"
           rel="noreferrer"
+          onClick={(e) => {
+            if (!visbar || !url) return;
+            e.preventDefault();
+            setViser(true);
+          }}
         >
           {dok.title}
         </a>
@@ -626,6 +638,15 @@ function Dokumentrad({
         </span>
       ) : (
         <span />
+      )}
+
+      {viser && url && (
+        <Dokumentviser
+          visningsnavn={dok.originalName}
+          contentType={dok.contentType}
+          url={url}
+          onLukk={() => setViser(false)}
+        />
       )}
     </div>
   );

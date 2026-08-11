@@ -1,19 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { ApiFeil, orgRute } from "@/lib/api";
 import { hentKontrakt, lastOppDokument, slettDokument } from "@/lib/kontrakter";
-import { filSti } from "@/lib/lagring";
+import { contentTypeForFilnavn, filSti } from "@/lib/lagring";
 
 type P = { contractId: string };
 
 /**
- * Nedlasting. Fila serveres gjennom API-et og ikke som en statisk lenke, fordi tilgangen
- * må gjennom de samme gatene som resten av modulen — en direkte URL ville vært lesbar for
- * hvem som helst som fikk tak i den.
+ * Nedlasting — eller visning med `?inline`, som er det dokumentviseren bruker. Fila serveres
+ * gjennom API-et og ikke som en statisk lenke, fordi tilgangen må gjennom de samme gatene
+ * som resten av modulen — en direkte URL ville vært lesbar for hvem som helst som fikk tak
+ * i den. Innloggingen sitter i cookien, så en `<iframe>` mot ruta virker uten videre.
  */
 export const GET = orgRute<P>({
   nivaa: "lesing",
   modul: "kontrakter",
-  handler: async ({ db, orgId, params }) => {
+  handler: async ({ db, orgId, params, req }) => {
     const kontrakt = await hentKontrakt(db, orgId, params.contractId);
     if (!kontrakt.fileName) throw new ApiFeil(404, "Ingen fil lastet opp");
 
@@ -24,7 +25,13 @@ export const GET = orgRute<P>({
       // Raden finnes, fila gjør ikke. Si det ærlig i stedet for å svare 500.
       throw new ApiFeil(404, "Fil ikke funnet på disk");
     }
-    return { innhold, navn: kontrakt.fileOriginalName ?? kontrakt.fileName };
+    return {
+      innhold,
+      navn: kontrakt.fileOriginalName ?? kontrakt.fileName,
+      // Typen utledes av det LAGREDE navnet — endelsen er satt av opplastingen, ikke brukeren.
+      contentType: contentTypeForFilnavn(kontrakt.fileName),
+      disposition: new URL(req.url).searchParams.has("inline") ? ("inline" as const) : ("attachment" as const),
+    };
   },
 });
 
