@@ -173,6 +173,23 @@ function Organisasjonen() {
         </div>
       </Kort>
 
+      {erAdmin && (
+        <Kort
+          tittel="Eksport og backup"
+          handling={
+            <a className="btn btn-ghost" href={`/api/organizations/${orgId}/eksport`}>
+              ⬇ Last ned komplett arkiv (ZIP)
+            </a>
+          }
+        >
+          <div style={{ padding: "0 20px 16px", fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--muted)" }}>
+            Alle lagets data i én fil: registrene som <code>data.json</code>, og hvert eneste
+            dokument og bilde med lesbare navn i mapper — for backup, revisjon, meglerpakke
+            eller flytting ut av DriftIQ. Dataene er deres; dere skal alltid kunne ta dem med.
+          </div>
+        </Kort>
+      )}
+
       {!erAdmin && (
         <div className="field-note">
           Uten administratortilgang kan du bare endre «Om bygget» og «Har ansatte» — resten er
