@@ -8,6 +8,7 @@ import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/componen
 import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
 import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
 import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
+import { useOkt } from "@/components/OktProvider";
 
 const ALVORLIGHET = [
   { verdi: "", etikett: "Ikke vurdert" },
@@ -279,14 +280,16 @@ function Detaljer({
   onFeil: (m: string) => void;
 }) {
   const [kategorier, setKategorier] = useState(lesKategorier(null));
+  const [steder, setSteder] = useState<VelgbarEnhet[]>([]);
   useEffect(() => {
     avvik
       .liste(orgId, { side: 1 })
       .then((r) => setKategorier(lesKategorier(r.kategorier)))
       .catch(() => {});
+    void enheter.liste(orgId).then(setSteder).catch(() => {});
   }, [orgId]);
 
-  async function settFelt(felt: "category" | "severity", verdi: string) {
+  async function settFelt(felt: "category" | "severity" | "unitId", verdi: string) {
     try {
       await avvik.endre(orgId, a.id, { [felt]: verdi || null });
       await onEndret();
@@ -339,19 +342,36 @@ function Detaljer({
               </option>
             ))}
           </select>
-          {lukket && (
-            <div className="field-note">
-              Kan endres også etter lukking — endringen føres i historikken. Ellers ville
-              statistikken arvet en hastig førstekategorisering for alltid.
-            </div>
-          )}
         </div>
+
+        {/* Sted er en merkelapp som kategori og alvorlighet: velgbar HER, lagres straks, og
+            kan settes også på et lukket avvik — det er slik gamle avvik får enheten sin, og
+            enhetshistorikken («gjentakende fukt i H0304») blir komplett. */}
+        {steder.length > 0 && (
+          <div className="field">
+            <label className="field-label">Sted</label>
+            <EnhetVelger
+              verdi={a.unitId ?? ""}
+              onEndre={(v) => void settFelt("unitId", v)}
+              enheter={steder}
+              tomEtikett="Ingen bestemt enhet"
+              ariaEtikett="Sted"
+            />
+          </div>
+        )}
+
+        {lukket && (
+          <div className="field-note">
+            Kategori, alvorlighet og sted kan endres også etter lukking — endringene føres i
+            historikken. Ellers ville statistikken arvet en hastig førstekategorisering for
+            alltid.
+          </div>
+        )}
 
         <Meta etikett="Meldt av">{a.reportedBy}</Meta>
         <Meta etikett="Meldt dato">{dato(a.reportedAt)}</Meta>
         <Meta etikett="Ansvarlig">{a.assignedTo ?? "Ikke tildelt"}</Meta>
         <Meta etikett="Leverandør">{a.vendorNavn ?? "—"}</Meta>
-        <Meta etikett="Sted">{a.unitNavn ?? "—"}</Meta>
         <Meta etikett="Frist">{a.dueDate ? dato(a.dueDate) : "—"}</Meta>
         {a.taskTittel && <Meta etikett="Knyttet oppgave">{a.taskTittel}</Meta>}
       </div>
@@ -636,7 +656,9 @@ function LukkAvvik({
   onLukk: () => void;
   onLagret: () => Promise<void>;
 }) {
-  const [av, setAv] = useState("");
+  // «Lukket av» er ikke et felt lenger: protokollen får navnet på den INNLOGGEDE. Et navn
+  // man skriver selv er et navn man kan skrive feil — hvem som lukket skal være et faktum.
+  const { bruker } = useOkt();
   const [losning, setLosning] = useState("");
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
@@ -648,9 +670,7 @@ function LukkAvvik({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() =>
-            avvik.lukk(orgId, devId, { resolvedBy: av.trim(), resolutionNotes: losning.trim() }),
-          );
+          void send(() => avvik.lukk(orgId, devId, { resolutionNotes: losning.trim() }));
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
@@ -661,16 +681,16 @@ function LukkAvvik({
           onEndre={setLosning}
           notat="Påkrevd. Et avvik uten løsningsbeskrivelse dokumenterer ingenting — det er hele grunnen til at lukking er en egen handling og ikke bare en statusendring."
         />
-        <Tekstfelt etikett="Lukket av" verdi={av} onEndre={setAv} />
         <div className="field-note">
-          Et lukket avvik kan ikke behandles videre. Kategori og alvorlighet kan fortsatt
-          rettes.
+          Avviket lukkes i {bruker ? <b>{bruker.name}</b> : "ditt"} sitt navn og kan ikke
+          behandles videre. Kategori, alvorlighet og sted kan fortsatt rettes. Er det en
+          leverandør som har utført jobben, skriv det i løsningen.
         </div>
         <Knapperad
           onAvbryt={onLukk}
           sendEtikett="Lukk avvik"
           sender={sender}
-          deaktivert={!av.trim() || !losning.trim()}
+          deaktivert={!losning.trim()}
         />
       </form>
     </Modal>

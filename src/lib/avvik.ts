@@ -52,7 +52,6 @@ export const avvikEndring = avvikInn.partial().extend({
 });
 
 export const lukkInn = z.object({
-  resolvedBy: z.string().trim().min(1, "Navn må fylles ut"),
   resolutionNotes: z.string().trim().min(1, "Avviket kan ikke lukkes uten en løsningsbeskrivelse."),
 });
 
@@ -494,9 +493,16 @@ export async function endreAvvik(
   data: z.infer<typeof avvikEndring>,
 ) {
   const avvik = await hentEttAvvik(db, orgId, devId);
-  // Et lukket avvik er dokumentasjon. Skal det åpnes igjen, er det en egen handling.
-  if (avvik.status === "lukket") {
-    throw ugyldig("Avviket er lukket og kan ikke endres.");
+  /**
+   * Et lukket avvik er dokumentasjon og kan ikke endres — MED UNNTAK av merkelappene:
+   * kategori, alvorlighet og sted er statistikk-koblinger, ikke del av den låste
+   * historikken. Uten unntaket ville statistikken arvet en hastig førstekategorisering
+   * for alltid, og gamle avvik kunne aldri fått enheten sin i etterkant. Endringene
+   * føres i historikken, så unntaket er sporbart.
+   */
+  const MERKELAPPFELT = new Set(["category", "severity", "unitId"]);
+  if (avvik.status === "lukket" && Object.keys(data).some((k) => !MERKELAPPFELT.has(k))) {
+    throw ugyldig("Avviket er lukket — bare kategori, alvorlighet og sted kan endres i etterkant.");
   }
   await validerKoblinger(db, orgId, data);
 
@@ -517,6 +523,24 @@ export async function endreAvvik(
   if (data.status && data.status !== avvik.status) {
     await skrivLogg(db, devId, endretAv, `Status endret til ${data.status} av ${endretAv.navn}`);
   }
+  // Merkelappene logges — de kan endres også ETTER lukking, og da er sporet alt man har.
+  if (data.category !== undefined && (data.category ?? null) !== avvik.category) {
+    await skrivLogg(db, devId, endretAv,
+      data.category ? `Kategori endret til «${data.category}» av ${endretAv.navn}` : `Kategori fjernet av ${endretAv.navn}`);
+  }
+  if (data.severity !== undefined && (data.severity ?? null) !== avvik.severity) {
+    await skrivLogg(db, devId, endretAv,
+      data.severity ? `Alvorlighet satt til ${data.severity} av ${endretAv.navn}` : `Alvorlighet fjernet av ${endretAv.navn}`);
+  }
+  if (data.unitId !== undefined && (data.unitId ?? null) !== avvik.unitId) {
+    const enhet = data.unitId
+      ? (await db.select({ navn: units.navn, leilighetsnr: units.leilighetsnr, andelsnr: units.andelsnr })
+          .from(units).where(eq(units.id, data.unitId)).limit(1))[0]
+      : null;
+    const stedNavn = enhet ? (enhet.navn ?? enhet.leilighetsnr ?? `andel ${enhet.andelsnr ?? "?"}`) : null;
+    await skrivLogg(db, devId, endretAv,
+      stedNavn ? `Sted satt til «${stedNavn}» av ${endretAv.navn}` : `Sted fjernet av ${endretAv.navn}`);
+  }
   return endret!;
 }
 
@@ -532,10 +556,11 @@ export async function lukkAvvik(
   orgId: string,
   devId: string,
   /**
-   * Den som utfører lukkingen — altså den innloggede. Navnet i `data.resolvedBy` er et eget
-   * felt brukeren fyller ut selv og kan være en annen enn den som trykker, f.eks. når styret
-   * lukker på vegne av en leverandør. Protokollen beholder DET navnet; id-en her sier hvem som
-   * gjorde det i systemet, og er det «min aktivitet» skal finne igjen.
+   * Den som utfører lukkingen — altså den innloggede, og det er DET navnet protokollen
+   * får. v1 lot brukeren skrive et fritt «lukket av»-navn (for lukking på vegne av en
+   * leverandør), men et felt man fyller ut selv er også et felt man kan skrive feil i —
+   * og «hvem lukket» skal være et faktum, ikke en påstand. Lukkes det på vegne av noen,
+   * hører det hjemme i løsningsbeskrivelsen.
    */
   utfortAv: Aktor,
   data: z.infer<typeof lukkInn>,
@@ -548,7 +573,7 @@ export async function lukkAvvik(
     .set({
       status: "lukket",
       resolvedAt: sql`now()`,
-      resolvedBy: data.resolvedBy,
+      resolvedBy: utfortAv.navn,
       resolvedByUserId: utfortAv.brukerId,
       resolutionNotes: data.resolutionNotes,
     })
@@ -558,8 +583,8 @@ export async function lukkAvvik(
   await skrivLogg(
     db,
     devId,
-    { navn: data.resolvedBy, brukerId: utfortAv.brukerId },
-    `Avvik lukket av ${data.resolvedBy}. Løsning: ${data.resolutionNotes}`,
+    utfortAv,
+    `Avvik lukket av ${utfortAv.navn}. Løsning: ${data.resolutionNotes}`,
   );
   return lukket!;
 }

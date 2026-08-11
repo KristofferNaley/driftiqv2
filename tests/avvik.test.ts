@@ -160,7 +160,7 @@ describe("lukking", () => {
 
   it("krever en løsningsbeskrivelse", async () => {
     const { lukkInn } = await import("../src/lib/avvik");
-    const resultat = lukkInn.safeParse({ resolvedBy: "Kari", resolutionNotes: "   " });
+    const resultat = lukkInn.safeParse({ resolutionNotes: "   " });
     expect(resultat.success).toBe(false);
   });
 
@@ -168,7 +168,7 @@ describe("lukking", () => {
     const org = await nyOrg();
     const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
     await i(org, (db) =>
-      lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Drenert og tørket" }),
+      lukkAvvik(db, org, avvik.id, KARI, { resolutionNotes: "Drenert og tørket" }),
     );
 
     const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
@@ -177,22 +177,46 @@ describe("lukking", () => {
     expect(etter.logg.at(-1)!.event).toMatch(/lukket av Kari.*Drenert/i);
   });
 
-  it("hindrer endring av et lukket avvik", async () => {
+  it("registrerer den innloggede som lukket-av", async () => {
     const org = await nyOrg();
     const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
-    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolutionNotes: "Fikset" }));
+
+    const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
+    // Ikke et fritekstfelt lenger: hvem som lukket er et faktum, ikke en påstand.
+    expect(etter.resolvedBy).toBe("Kari");
+  });
+
+  it("hindrer endring av et lukket avvik — unntatt merkelappene", async () => {
+    const org = await nyOrg();
+    const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
+    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolutionNotes: "Fikset" }));
 
     const feil = await feilFra(() =>
       i(org, (db) => endreAvvik(db, org, avvik.id, anonymAktor("Kari"), { title: "Omskrevet i ettertid" })),
     );
     expect(feil.status).toBe(400);
-    expect(feil.message).toMatch(/lukket og kan ikke endres/i);
+    expect(feil.message).toMatch(/lukket/i);
+
+    // Kategori, alvorlighet og sted er statistikk-merkelapper og skal kunne rettes i
+    // etterkant — og endringen skal stå i historikken.
+    const unitId = randomUUID();
+    await eier.query("INSERT INTO units (id, org_id, type, leilighetsnr) VALUES ($1,$2,'bolig','H0304')", [unitId, org]);
+    await i(org, (db) => endreAvvik(db, org, avvik.id, KARI, { category: "hms", severity: "akutt", unitId }));
+
+    const etter = await i(org, (db) => hentEttAvvik(db, org, avvik.id));
+    expect(etter.category).toBe("hms");
+    expect(etter.severity).toBe("akutt");
+    expect(etter.unitId).toBe(unitId);
+    const hendelser = etter.logg.map((l) => l.event).join(" | ");
+    expect(hendelser).toMatch(/Kategori endret til «hms» av Kari/);
+    expect(hendelser).toMatch(/Sted satt til «H0304» av Kari/);
   });
 
   it("hindrer at behandlingen fortsetter etter lukking", async () => {
     const org = await nyOrg();
     const avvik = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
-    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    await i(org, (db) => lukkAvvik(db, org, avvik.id, KARI, { resolutionNotes: "Fikset" }));
 
     const feil = await feilFra(() =>
       i(org, (db) => leggTilBehandling(db, org, avvik.id, KARI, { text: "Etterpåklokskap" })),
@@ -229,7 +253,7 @@ describe("oversikter", () => {
     const org = await nyOrg();
     const a = await i(org, (db) => opprettAvvik(db, org, KARI, grunn));
     await i(org, (db) => opprettAvvik(db, org, KARI, { title: "Åpent" }));
-    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolutionNotes: "Fikset" }));
 
     expect((await i(org, (db) => hentAvvik(db, org, { lukkede: false }))).total).toBe(1);
     expect((await i(org, (db) => hentAvvik(db, org, { lukkede: true }))).total).toBe(1);
@@ -288,7 +312,7 @@ describe("oversikter", () => {
     ]);
     const a = await i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, unitId }));
     await i(org, (db) => opprettAvvik(db, org, KARI, { ...grunn, unitId }));
-    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolvedBy: "Kari", resolutionNotes: "Fikset" }));
+    await i(org, (db) => lukkAvvik(db, org, a.id, KARI, { resolutionNotes: "Fikset" }));
 
     const kart = await i(org, (db) => avvikPerEnhet(db, org));
     expect(kart.get(unitId)?.apne, "Lukkede avvik skal ikke telles som åpne").toBe(1);
