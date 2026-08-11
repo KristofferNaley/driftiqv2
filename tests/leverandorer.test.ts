@@ -12,6 +12,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import {
   endreKontakt,
+  endreLeverandor,
   hentLeverandor,
   hentLeverandorer,
   leggTilAdgang,
@@ -88,6 +89,54 @@ describe("leverandøren", () => {
     const b = await nyOrg();
     await i(b, (db) => opprettLeverandor(db, b, grunn));
     expect(await i(a, (db) => hentLeverandorer(db, a))).toEqual([]);
+  });
+});
+
+describe("duplikatvern på org.nr.", () => {
+  it("avviser samme org.nr. to ganger i samme org, og navngir den eksisterende", async () => {
+    const org = await nyOrg();
+    await i(org, (db) => opprettLeverandor(db, org, { ...grunn, orgNumber: "962109535" }));
+
+    const feil = await feilFra(() =>
+      i(org, (db) => opprettLeverandor(db, org, { ...grunn, name: "Samme firma igjen", orgNumber: "962109535" })),
+    );
+    expect(feil.status).toBe(409);
+    expect(feil.message).toContain("Heisfirma AS");
+  });
+
+  it("tillater samme org.nr. i en annen org", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    await i(a, (db) => opprettLeverandor(db, a, { ...grunn, orgNumber: "962109535" }));
+    await expect(
+      i(b, (db) => opprettLeverandor(db, b, { ...grunn, orgNumber: "962109535" })),
+    ).resolves.toBeTruthy();
+  });
+
+  it("stopper også endring til et opptatt org.nr. — men ikke lagring av eget", async () => {
+    const org = await nyOrg();
+    await i(org, (db) => opprettLeverandor(db, org, { ...grunn, orgNumber: "962109535" }));
+    const annen = await i(org, (db) => opprettLeverandor(db, org, { ...grunn, name: "Rørlegger AS" }));
+
+    const feil = await feilFra(() =>
+      i(org, (db) => endreLeverandor(db, org, annen.id, { orgNumber: "962109535" })),
+    );
+    expect(feil.status).toBe(409);
+
+    // Å lagre leverandøren på nytt med sitt EGET nummer skal selvsagt gå bra.
+    const forste = await i(org, (db) => hentLeverandorer(db, org));
+    const heis = forste.find((l) => l.name === "Heisfirma AS")!;
+    await expect(
+      i(org, (db) => endreLeverandor(db, org, heis.id, { orgNumber: "962109535", notes: "oppdatert" })),
+    ).resolves.toBeTruthy();
+  });
+
+  it("bryr seg ikke om leverandører uten org.nr.", async () => {
+    const org = await nyOrg();
+    await i(org, (db) => opprettLeverandor(db, org, grunn));
+    await expect(
+      i(org, (db) => opprettLeverandor(db, org, { ...grunn, name: "Enda en uten nummer" })),
+    ).resolves.toBeTruthy();
   });
 });
 

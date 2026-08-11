@@ -259,15 +259,33 @@ export type Leverandor = {
   customerNumber: string | null; ehf: boolean; orgNumber: string | null; notes: string | null;
 };
 
+/** Lista bærer oversiktsfeltene — detaljhentingen (`hent`) har dem ikke. */
+export type LeverandorIListe = Leverandor & {
+  primaryContactName: string | null;
+  antallKontrakter: number;
+  antallOppgaver: number;
+};
+
 export const leverandorer = {
-  liste: (o: string) => api.hent<Leverandor[]>(org(o, "/vendors")),
+  liste: (o: string) => api.hent<LeverandorIListe[]>(org(o, "/vendors")),
   hent: (o: string, id: string) =>
-    api.hent<Leverandor & { kontakter: Array<{ id: string; name: string; role: string | null; email: string | null; phone: string | null; isPrimary: boolean }>; adgang: Array<{ id: string; title: string; status: string; issuedTo: string | null }>; notater: Array<{ id: string; text: string; authorName: string | null; createdAt: string }> }>(org(o, `/vendors/${id}`)),
+    api.hent<Leverandor & { kontakter: Array<{ id: string; name: string; role: string | null; email: string | null; phone: string | null; isPrimary: boolean }>; adgang: Array<{ id: string; title: string; status: string; issuedTo: string | null; areas: string | null; issuedAt: string | null }>; notater: Array<{ id: string; text: string; authorName: string | null; createdAt: string }> }>(org(o, `/vendors/${id}`)),
   ny: (o: string, d: unknown) => api.send<Leverandor>(org(o, "/vendors"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Leverandor>(org(o, `/vendors/${id}`), d),
   slett: (o: string, id: string) => api.slett(org(o, `/vendors/${id}`)),
   nyKontakt: (o: string, id: string, d: unknown) => api.send(org(o, `/vendors/${id}/contacts`), d),
+  endreKontakt: (o: string, id: string, kontaktId: string, d: unknown) =>
+    api.endre(org(o, `/vendors/${id}/contacts/${kontaktId}`), d),
+  slettKontakt: (o: string, id: string, kontaktId: string) =>
+    api.slett(org(o, `/vendors/${id}/contacts/${kontaktId}`)),
+  nyAdgang: (o: string, id: string, d: unknown) => api.send(org(o, `/vendors/${id}/access-items`), d),
+  endreAdgang: (o: string, id: string, itemId: string, d: unknown) =>
+    api.endre(org(o, `/vendors/${id}/access-items/${itemId}`), d),
+  slettAdgang: (o: string, id: string, itemId: string) =>
+    api.slett(org(o, `/vendors/${id}/access-items/${itemId}`)),
   nyttNotat: (o: string, id: string, d: unknown) => api.send(org(o, `/vendors/${id}/notes`), d),
+  slettNotat: (o: string, id: string, notatId: string) =>
+    api.slett(org(o, `/vendors/${id}/notes/${notatId}`)),
   /**
    * Sender QR-informasjonen til leverandøren. Mottakeren valideres SERVERSIDE mot
    * kontaktpersonene — se `sendQrInfo`. Svaret bekrefter hvilken adresse som fikk den.

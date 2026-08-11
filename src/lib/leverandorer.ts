@@ -9,7 +9,7 @@
  *   krypterte hemmeligheter; egen runde.
  */
 
-import { and, asc, count, desc, eq, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -21,7 +21,7 @@ import {
   vendorNotes,
   vendors,
 } from "../db/schema/vendors";
-import { ikkeFunnet, ugyldig } from "./api";
+import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 
 export const RELASJONSTYPER = ["avtale", "handelskonto", "adhoc"] as const;
 export const ADGANGSSTATUSER = ["utlevert", "bør_sjekkes", "innlevert"] as const;
@@ -68,14 +68,49 @@ export const notatInn = z.object({
 // Leverandøren
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Lista bærer det oversikten trenger for å være en OVERSIKT: primærkontakten (hvem ringer
+ * man), antall aktive avtaler og åpne oppgaver per leverandør. Tellingene hentes samlet —
+ * én grupperende spørring per kilde, ikke én spørring per leverandør.
+ */
 export async function hentLeverandorer(db: Db, orgId: string, opts: { aktive?: boolean } = {}) {
   const betingelser = [eq(vendors.orgId, orgId)];
   if (opts.aktive !== undefined) betingelser.push(eq(vendors.active, opts.aktive));
-  return db
+  const rader = await db
     .select()
     .from(vendors)
     .where(and(...betingelser))
     .orderBy(asc(vendors.name));
+
+  const [avtaler, oppgaver, primaerkontakter] = await Promise.all([
+    db
+      .select({ vendorId: contracts.vendorId, antall: count() })
+      .from(contracts)
+      .where(and(eq(contracts.orgId, orgId), isNull(contracts.archivedAt)))
+      .groupBy(contracts.vendorId),
+    db
+      .select({ vendorId: tasks.vendorId, antall: count() })
+      .from(tasks)
+      .where(and(eq(tasks.orgId, orgId), eq(tasks.active, true), isNotNull(tasks.vendorId)))
+      .groupBy(tasks.vendorId),
+    // Kontakttabellen har ingen org-kolonne — org-avgrensningen går via leverandøren.
+    db
+      .select({ vendorId: vendorContacts.vendorId, name: vendorContacts.name })
+      .from(vendorContacts)
+      .innerJoin(vendors, eq(vendors.id, vendorContacts.vendorId))
+      .where(and(eq(vendors.orgId, orgId), eq(vendorContacts.isPrimary, true))),
+  ]);
+
+  const antallAvtaler = new Map(avtaler.map((r) => [r.vendorId, r.antall]));
+  const antallOppgaver = new Map(oppgaver.map((r) => [r.vendorId, r.antall]));
+  const primaerkontakt = new Map(primaerkontakter.map((r) => [r.vendorId, r.name]));
+
+  return rader.map((v) => ({
+    ...v,
+    primaryContactName: primaerkontakt.get(v.id) ?? null,
+    antallKontrakter: antallAvtaler.get(v.id) ?? 0,
+    antallOppgaver: antallOppgaver.get(v.id) ?? 0,
+  }));
 }
 
 export async function hentLeverandor(db: Db, orgId: string, vendorId: string) {
@@ -108,7 +143,28 @@ export async function hentLeverandor(db: Db, orgId: string, vendorId: string) {
   return { ...lev, kontakter, adgang, notater };
 }
 
+/**
+ * Samme org.nr. to ganger i samme organisasjon er nesten alltid et dobbeltklikk eller en
+ * glemt registrering — ikke to reelle forhold. Brreg-søket i «Ny leverandør» gjør det lett
+ * å treffe samme selskap igjen, så vernet ligger her og gjelder BEGGE skriveveiene.
+ * Meldingen navngir den eksisterende, så man finner den i stedet for å prøve på nytt.
+ */
+async function krevLedigOrgnr(db: Db, orgId: string, orgNumber?: string | null, unntattId?: string) {
+  if (!orgNumber) return;
+  const betingelser = [eq(vendors.orgId, orgId), eq(vendors.orgNumber, orgNumber)];
+  if (unntattId) betingelser.push(ne(vendors.id, unntattId));
+  const rader = await db
+    .select({ name: vendors.name })
+    .from(vendors)
+    .where(and(...betingelser))
+    .limit(1);
+  if (rader[0]) {
+    throw new ApiFeil(409, `«${rader[0].name}» er allerede registrert med organisasjonsnummer ${orgNumber}`);
+  }
+}
+
 export async function opprettLeverandor(db: Db, orgId: string, data: z.infer<typeof leverandorInn>) {
+  await krevLedigOrgnr(db, orgId, data.orgNumber);
   const [ny] = await db
     .insert(vendors)
     .values({ id: randomUUID(), orgId, ...data })
@@ -123,6 +179,7 @@ export async function endreLeverandor(
   data: z.infer<typeof leverandorEndring>,
 ) {
   await hentLeverandor(db, orgId, vendorId);
+  await krevLedigOrgnr(db, orgId, data.orgNumber, vendorId);
   const [endret] = await db
     .update(vendors)
     .set(data)
