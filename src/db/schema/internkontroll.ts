@@ -108,6 +108,8 @@ export const safetyRounds = pgTable("safety_rounds", {
     .references(() => organizations.id, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
   roundDate: date("round_date"),
+  /** Fristen — bransjepraksis er vernerunde innen 1. juni og 1. desember. Driver banneret. */
+  dueDate: date("due_date"),
   /** `planned` | `completed`. */
   status: varchar("status").notNull().default("planned"),
   notes: text("notes"),
@@ -121,6 +123,12 @@ export const safetyRoundItems = pgTable("safety_round_items", {
     .references(() => safetyRounds.id, { onDelete: "cascade" }),
   text: varchar("text").notNull(),
   section: varchar("section"),
+  /**
+   * `ok` | `avvik` | `ikke_aktuelt` | NULL = ubesvart. En avkryssing kunne ikke skille
+   * «i orden» fra «ikke sjekket» fra «finnes ikke hos oss» — og det er forskjellen som
+   * er dokumentasjonen. `checked` holdes i takt (status = ok) for eldre lesere.
+   */
+  status: varchar("status"),
   checked: boolean("checked").notNull().default(false),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

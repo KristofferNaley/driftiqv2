@@ -415,9 +415,30 @@ export type IkStatus = {
   vernerundeGjennomfort: boolean; evaluert: boolean;
 };
 export type Fare = {
-  id: string; title: string; category: string | null; probability: number; consequence: number;
+  id: string; title: string; category: string | null; description: string | null;
+  probability: number; consequence: number;
   status: string; owner: string | null; risiko: number; niva: "lav" | "middels" | "hoy";
-  tiltak: Array<{ id: string; title: string; status: string; dueDate: string | null }>;
+  tiltak: Array<{ id: string; title: string; status: string; dueDate: string | null; owner: string | null }>;
+};
+
+export type HmsMal = {
+  id: string; templateType: string; name: string; description: string | null; isDefault: boolean;
+};
+
+export type Rundepunkt = {
+  id: string; text: string; section: string | null;
+  /** ok | avvik | ikke_aktuelt | null = ubesvart. */
+  status: string | null;
+  checked: boolean; notes: string | null;
+};
+
+export type Runde = {
+  id: string; title: string; status: string; roundDate: string | null; dueDate: string | null;
+  notes: string | null;
+  punkter: Rundepunkt[];
+  deltakere: Array<{ id: string; name: string; role: string | null }>;
+  /** Runde-endepunktet leverer hele avviksraden — koblingen til punktet er med. */
+  avvik: Array<Avvik & { roundItemId: string | null }>;
 };
 
 export const internkontroll = {
@@ -427,14 +448,26 @@ export const internkontroll = {
   signer: (o: string, id: string) => api.send(org(o, `/hms/goals/${id}/sign`), {}),
   ansvar: (o: string) => api.hent<Array<{ area: string; personName: string | null; note: string | null }>>(org(o, "/hms/responsibilities")),
   settAnsvar: (o: string, d: unknown) => api.endre(org(o, "/hms/responsibilities"), d),
+  maler: (o: string, type: string) => api.hent<HmsMal[]>(org(o, `/hms/maler?type=${encodeURIComponent(type)}`)),
   farer: (o: string) => api.hent<Fare[]>(org(o, "/hms/hazards")),
   nyFare: (o: string, d: unknown) => api.send<Fare>(org(o, "/hms/hazards"), d),
+  endreFare: (o: string, id: string, d: unknown) => api.endre<Fare>(org(o, `/hms/hazards/${id}`), d),
+  slettFare: (o: string, id: string) => api.slett(org(o, `/hms/hazards/${id}`)),
+  seedFarer: (o: string, templateId: string) =>
+    api.send<{ opprettet: number; hoppetOver: number }>(org(o, "/hms/hazards/seed"), { templateId }),
   nyttTiltak: (o: string, d: unknown) => api.send(org(o, "/hms/actions"), d),
-  runder: (o: string) => api.hent<Array<{ id: string; title: string; roundDate: string | null; status: string }>>(org(o, "/hms/rounds")),
-  hentRunde: (o: string, id: string) =>
-    api.hent<{ id: string; title: string; status: string; punkter: Array<{ id: string; text: string; section: string | null; checked: boolean; notes: string | null }>; deltakere: Array<{ id: string; name: string; role: string | null }>; avvik: Avvik[] }>(org(o, `/hms/rounds/${id}`)),
+  endreTiltak: (o: string, id: string, d: unknown) => api.endre(org(o, `/hms/actions/${id}`), d),
+  slettTiltak: (o: string, id: string) => api.slett(org(o, `/hms/actions/${id}`)),
+  runder: (o: string) =>
+    api.hent<Array<{ id: string; title: string; roundDate: string | null; dueDate: string | null; status: string }>>(org(o, "/hms/rounds")),
+  hentRunde: (o: string, id: string) => api.hent<Runde>(org(o, `/hms/rounds/${id}`)),
   nyRunde: (o: string, d: unknown) => api.send<{ id: string }>(org(o, "/hms/rounds"), d),
+  slettRunde: (o: string, id: string) => api.slett(org(o, `/hms/rounds/${id}`)),
   kryssAv: (o: string, rid: string, pid: string, d: unknown) => api.endre(org(o, `/hms/rounds/${rid}/items/${pid}`), d),
+  nyttPunkt: (o: string, rid: string, d: unknown) => api.send<Rundepunkt>(org(o, `/hms/rounds/${rid}/items`), d),
+  slettPunkt: (o: string, rid: string, pid: string) => api.slett(org(o, `/hms/rounds/${rid}/items/${pid}`)),
+  nyDeltaker: (o: string, rid: string, d: unknown) => api.send(org(o, `/hms/rounds/${rid}/participants`), d),
+  slettDeltaker: (o: string, rid: string, did: string) => api.slett(org(o, `/hms/rounds/${rid}/participants/${did}`)),
   fullfor: (o: string, id: string) => api.send(org(o, `/hms/rounds/${id}/complete`), {}),
   evalueringer: (o: string) => api.hent<Array<{ id: string; year: number; conclusion: string | null; evaluatedDate: string | null }>>(org(o, "/hms/evaluations")),
   nyEvaluering: (o: string, d: unknown) => api.send(org(o, "/hms/evaluations"), d),

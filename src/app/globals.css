@@ -2611,3 +2611,51 @@ textarea.qr-input { resize: vertical; }
   .enhet-hode, .enhet-rad { grid-template-columns: minmax(120px, 2fr) 70px 70px minmax(120px, auto); }
   .enhet-oppgang, .enhet-etasje { display: none; }
 }
+
+/* ── Vernerunde: sjekkpunkter med trestatus ───────────────────────────────────────────────
+   OK/Avvik/Ikke aktuelt som knapper — valget skal tas med tommelen på en telefon i en
+   kald kjeller, derfor store treff-flater og farge først når noe er VALGT. */
+.sjekkpunkt { padding: 11px 20px; border-bottom: 1px solid var(--border); }
+.sjekkpunkt:last-child { border-bottom: none; }
+.sjekkpunkt-hode { display: flex; align-items: flex-start; gap: 12px; }
+.sjekkpunkt-valg { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+.sp-knapp {
+  padding: 6px 12px; border-radius: 8px; font-size: var(--fs-label); font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  cursor: pointer; font-family: var(--font-sans); white-space: nowrap;
+}
+.sp-knapp.ok.valgt { background: rgba(15, 186, 129, 0.16); border-color: var(--ok); color: var(--ok); }
+.sp-knapp.avvik.valgt { background: rgba(240, 64, 64, 0.14); border-color: var(--danger); color: var(--danger); }
+.sp-knapp.ia.valgt { background: var(--surface2); border-color: var(--muted); color: var(--text); }
+.sp-fjern { padding: 4px 8px; color: var(--muted); }
+.sjekkpunkt-handlinger { display: flex; gap: 16px; margin-top: 6px; align-items: center; }
+.sp-lenke {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-label); color: var(--accent);
+}
+.sp-lenke.avvik { color: var(--danger); }
+.sjekkpunkt-avvik {
+  display: inline-block; margin-top: 4px; font-size: var(--fs-label);
+  color: var(--danger); text-decoration: none;
+}
+.sjekkpunkt-avvik:hover { text-decoration: underline; }
+
+/* Fristbanneret — gult og vennlig til det nærmer seg, tydeligere de siste to ukene. */
+.runde-frist {
+  display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 13px 18px; border-radius: 12px;
+  background: rgba(245, 166, 35, 0.10); border: 1px solid rgba(245, 166, 35, 0.35);
+  font-size: var(--fs-sm); line-height: 1.5;
+}
+.runde-frist.snart { background: rgba(245, 166, 35, 0.18); }
+.runde-frist-dager { flex-shrink: 0; text-align: right; font-size: var(--fs-sm); }
+.runde-frist-dager b { font-size: var(--fs-lg); }
+
+@media (max-width: 640px) {
+  .sjekkpunkt-hode { flex-direction: column; }
+}
+
+/* Tiltaksradene i faremodalen — tittel eier bredden, felter faste til høyre. */
+.tiltak-rad { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.tiltak-rad:last-of-type { border-bottom: none; }
+.tiltak-felt { width: 140px; flex-shrink: 0; padding: 6px 8px; font-size: var(--fs-label); }

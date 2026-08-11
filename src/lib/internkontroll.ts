@@ -11,7 +11,7 @@
  *   for JS — egen runde, sammen med resten av rapportgenereringen.
  */
 
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -28,7 +28,7 @@ import {
   safetyRoundParticipants,
   safetyRounds,
 } from "../db/schema/internkontroll";
-import { hmsTemplateCategories, hmsTemplateItems } from "../db/schema/maler";
+import { hmsTemplateCategories, hmsTemplateItems, hmsTemplates } from "../db/schema/maler";
 import { users } from "../db/schema/users";
 import { ikkeFunnet, ugyldig } from "./api";
 
@@ -84,15 +84,28 @@ export const tiltakInn = z.object({
 });
 export const tiltakEndring = tiltakInn.partial().omit({ hazardId: true });
 
+export const PUNKTSTATUSER = ["ok", "avvik", "ikke_aktuelt"] as const;
+
 export const rundeInn = z.object({
   title: z.string().trim().min(1, "Tittel må fylles ut"),
   roundDate: z.string().date().nullish(),
+  dueDate: z.string().date().nullish(),
   notes: z.string().nullish(),
-  /** Fyller runden med punktene fra en HMS-mal. */
+  /**
+   * Fyller runden med punktene fra en HMS-mal. Uten den kopieres punktene fra lagets
+   * FORRIGE runde — det er slik lagets egne tilpasninger følger med videre.
+   */
   templateId: z.string().nullish(),
 });
 
+export const punktInn = z.object({
+  text: z.string().trim().min(1, "Punktet kan ikke være tomt"),
+  section: tekst,
+});
+
 export const punktEndring = z.object({
+  /** null nullstiller til ubesvart. */
+  status: z.enum(PUNKTSTATUSER).nullish(),
   checked: z.boolean().optional(),
   notes: z.string().nullish(),
   text: z.string().trim().min(1).optional(),
@@ -370,6 +383,73 @@ function krevUlast(runde: { status: string }) {
   }
 }
 
+/**
+ * De aktive HMS-malene, til malvelgerne i kunde-appen. Malene er plattformdata uten RLS
+ * (se maler.ts) — kunden LESER dem her, endre kan bare plattformadmin.
+ */
+export async function hentHmsMaler(db: Db, type?: string) {
+  const betingelser = [eq(hmsTemplates.active, true)];
+  if (type) betingelser.push(eq(hmsTemplates.templateType, type));
+  return db
+    .select({
+      id: hmsTemplates.id,
+      templateType: hmsTemplates.templateType,
+      name: hmsTemplates.name,
+      description: hmsTemplates.description,
+      isDefault: hmsTemplates.isDefault,
+    })
+    .from(hmsTemplates)
+    .where(and(...betingelser))
+    .orderBy(desc(hmsTemplates.isDefault), asc(hmsTemplates.name));
+}
+
+/**
+ * Kopierer risikovurderingsmalen inn som LAGETS farer — malens punkter blir rader i
+ * `hazards` som laget redigerer fritt etterpå. Samme prinsipp som vernerundene: malen er
+ * utgangspunktet, laget eier kopien.
+ *
+ * Sannsynlighet og konsekvens settes til 3/3 («middels») med vilje: et startpunkt som
+ * tvinger fram en vurdering, ikke en fasit. Farer som alt finnes (samme tittel) hoppes
+ * over, så seeding er trygt å kjøre igjen når malen har fått nye områder.
+ */
+export async function seedFarer(db: Db, orgId: string, templateId: string) {
+  const kategorier = await db
+    .select()
+    .from(hmsTemplateCategories)
+    .where(eq(hmsTemplateCategories.templateId, templateId))
+    .orderBy(asc(hmsTemplateCategories.order));
+  const punkter = await db.select().from(hmsTemplateItems).orderBy(asc(hmsTemplateItems.order));
+
+  const eksisterende = new Set(
+    (await db.select({ title: hazards.title }).from(hazards).where(eq(hazards.orgId, orgId))).map(
+      (h) => h.title.trim().toLowerCase(),
+    ),
+  );
+
+  let opprettet = 0;
+  let hoppetOver = 0;
+  for (const k of kategorier) {
+    for (const p of punkter.filter((x) => x.categoryId === k.id)) {
+      if (eksisterende.has(p.text.trim().toLowerCase())) {
+        hoppetOver++;
+        continue;
+      }
+      eksisterende.add(p.text.trim().toLowerCase());
+      await db.insert(hazards).values({
+        id: randomUUID(),
+        orgId,
+        title: p.text,
+        category: k.label,
+        probability: 3,
+        consequence: 3,
+        status: "open",
+      });
+      opprettet++;
+    }
+  }
+  return { opprettet, hoppetOver };
+}
+
 export async function hentRunder(db: Db, orgId: string) {
   return db
     .select()
@@ -430,8 +510,57 @@ export async function opprettRunde(db: Db, orgId: string, data: z.infer<typeof r
       );
       if (rader.length > 0) await db.insert(safetyRoundItems).values(rader);
     }
+  } else {
+    /**
+     * Uten mal kopieres punktene fra lagets FORRIGE runde — tekst og seksjon, aldri svar.
+     * Det er slik lagets egne tilpasninger (punkter lagt til eller fjernet) blir varige:
+     * malen er utgangspunktet for den FØRSTE runden, deretter eier laget sin egen liste.
+     */
+    const forrige = await db
+      .select({ id: safetyRounds.id })
+      .from(safetyRounds)
+      .where(and(eq(safetyRounds.orgId, orgId), ne(safetyRounds.id, ny!.id)))
+      .orderBy(desc(safetyRounds.createdAt))
+      .limit(1);
+    if (forrige[0]) {
+      const punkter = await db
+        .select()
+        .from(safetyRoundItems)
+        .where(eq(safetyRoundItems.roundId, forrige[0].id))
+        .orderBy(asc(safetyRoundItems.createdAt));
+      if (punkter.length > 0) {
+        await db.insert(safetyRoundItems).values(
+          punkter.map((p) => ({ id: randomUUID(), roundId: ny!.id, text: p.text, section: p.section })),
+        );
+      }
+    }
   }
   return hentRunde(db, orgId, ny!.id);
+}
+
+export async function leggTilPunkt(
+  db: Db,
+  orgId: string,
+  roundId: string,
+  data: z.infer<typeof punktInn>,
+) {
+  const runde = await hentRunde(db, orgId, roundId);
+  krevUlast(runde);
+  const [ny] = await db
+    .insert(safetyRoundItems)
+    .values({ id: randomUUID(), roundId, ...data })
+    .returning();
+  return ny!;
+}
+
+export async function slettPunkt(db: Db, orgId: string, roundId: string, itemId: string) {
+  const runde = await hentRunde(db, orgId, roundId);
+  krevUlast(runde);
+  const slettet = await db
+    .delete(safetyRoundItems)
+    .where(and(eq(safetyRoundItems.id, itemId), eq(safetyRoundItems.roundId, roundId)))
+    .returning({ id: safetyRoundItems.id });
+  if (slettet.length === 0) throw ikkeFunnet("Sjekkpunkt");
 }
 
 export async function endrePunkt(
@@ -444,9 +573,14 @@ export async function endrePunkt(
   const runde = await hentRunde(db, orgId, roundId);
   krevUlast(runde);
 
+  // `checked` holdes i takt med statusen — eldre lesere av kolonnen skal ikke se en
+  // annen sannhet enn den nye trestatusen forteller.
+  const patch: Record<string, unknown> = { ...data };
+  if (data.status !== undefined) patch.checked = data.status === "ok";
+
   const [endret] = await db
     .update(safetyRoundItems)
-    .set(data)
+    .set(patch)
     .where(and(eq(safetyRoundItems.id, itemId), eq(safetyRoundItems.roundId, roundId)))
     .returning();
   if (!endret) throw ikkeFunnet("Sjekkpunkt");

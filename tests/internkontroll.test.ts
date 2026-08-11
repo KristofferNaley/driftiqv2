@@ -22,6 +22,7 @@ import {
   hentFarer,
   hentRunde,
   leggTilDeltaker,
+  leggTilPunkt as leggTilRundepunkt,
   opprettEvaluering,
   opprettFare,
   opprettMal,
@@ -29,8 +30,10 @@ import {
   opprettTiltak,
   risiko,
   risikoniva,
+  seedFarer,
   settAnsvar,
   signerMal,
+  slettPunkt,
   slettRunde,
   status,
 } from "../src/lib/internkontroll";
@@ -297,6 +300,64 @@ describe("vernerunde", () => {
 
     const etter = await i(org, (db) => hentRunde(db, org, runde.id));
     expect(etter.avvik.map((a) => a.title)).toEqual(["Skadet rekkverk"]);
+  });
+
+  it("kopierer punktene fra FORRIGE runde når ingen mal er valgt", async () => {
+    // Slik blir lagets tilpasninger varige: malen starter første runde, deretter eier
+    // laget sin egen liste — inkludert punkter de selv har lagt til.
+    const org = await oppsett();
+    const mal = await malMedPunkter();
+    const forste = await i(org, (db) => opprettRunde(db, org, { title: "Vår", templateId: mal.id }));
+    await i(org, (db) => leggTilRundepunkt(db, org, forste.id, { text: "Sjekk lekeplassen", section: "Uteareal" }));
+    // Svar og kommentarer skal IKKE kopieres — bare hva som sjekkes.
+    await i(org, (db) => endrePunkt(db, org, forste.id, forste.punkter[0]!.id, { status: "avvik", notes: "Rust" }));
+
+    const neste = await i(org, (db) => opprettRunde(db, org, { title: "Høst" }));
+    expect(neste.punkter.map((p) => p.text).sort()).toEqual(["Sjekk lekeplassen", "Sjekk slokkeapparat"]);
+    expect(neste.punkter.every((p) => p.status === null && p.notes === null)).toBe(true);
+  });
+
+  it("holder checked i takt med trestatusen", async () => {
+    const org = await oppsett();
+    const mal = await malMedPunkter();
+    const runde = await i(org, (db) => opprettRunde(db, org, { title: "Vår", templateId: mal.id }));
+    const punktId = runde.punkter[0]!.id;
+
+    expect((await i(org, (db) => endrePunkt(db, org, runde.id, punktId, { status: "ok" }))).checked).toBe(true);
+    expect((await i(org, (db) => endrePunkt(db, org, runde.id, punktId, { status: "avvik" }))).checked).toBe(false);
+    expect((await i(org, (db) => endrePunkt(db, org, runde.id, punktId, { status: null }))).status).toBeNull();
+  });
+
+  it("nekter å legge til eller fjerne punkter på en låst runde", async () => {
+    const org = await oppsett();
+    const mal = await malMedPunkter();
+    const runde = await i(org, (db) => opprettRunde(db, org, { title: "Vår", templateId: mal.id }));
+    await i(org, (db) => fullforRunde(db, org, runde.id));
+
+    expect((await feilFra(() => i(org, (db) => leggTilRundepunkt(db, org, runde.id, { text: "Nytt" })))).status).toBe(400);
+    expect((await feilFra(() => i(org, (db) => slettPunkt(db, org, runde.id, runde.punkter[0]!.id)))).status).toBe(400);
+  });
+
+  it("seeder lagets farer fra risikovurderingsmalen — idempotent", async () => {
+    const org = await oppsett();
+    const mal = await p((db) =>
+      opprettHmsMal(db, { templateType: "risikovurdering", name: `Risiko ${randomUUID().slice(0, 8)}`, isDefault: false, active: true }),
+    );
+    ryddMal.push(mal.id);
+    const kat = await p((db) => leggTilKategori(db, mal.id, { key: "brann", label: "Brannvern", order: 0 }));
+    await p((db) => leggTilPunkt(db, kat.id, { text: "Brann i søppelrom", order: 0 }));
+    await p((db) => leggTilPunkt(db, kat.id, { text: "Blokkert rømningsvei", order: 1 }));
+
+    const forste = await i(org, (db) => seedFarer(db, org, mal.id));
+    expect(forste).toEqual({ opprettet: 2, hoppetOver: 0 });
+
+    const farer = await i(org, (db) => hentFarer(db, org));
+    expect(farer.map((f) => f.category)).toEqual(["Brannvern", "Brannvern"]);
+    // 3/3 er et STARTPUNKT som tvinger fram en vurdering, ikke en fasit.
+    expect(farer.every((f) => f.probability === 3 && f.consequence === 3)).toBe(true);
+
+    const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
+    expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });
   });
 });
 

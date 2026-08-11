@@ -232,6 +232,13 @@
       "when": 1786477171186,
       "tag": "0032_rapid_war_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786483010957,
+      "tag": "0033_soft_stature",
+      "breakpoints": true
     }
   ]
 }
