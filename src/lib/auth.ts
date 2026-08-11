@@ -117,9 +117,17 @@ export const auth = betterAuth({
   },
 
   session: {
-    // v1 hadde 8 timers JWT uten fornyelse. Her er sesjonen 7 dager, men fornyes bare når den
-    // er brukt siste døgn — en styreleder som logger inn én gang i uka slipper å gjøre det på
-    // nytt hver gang, uten at en glemt økt står åpen i månedsvis.
+    /**
+     * To spor, valgt med «Husk meg» på innloggingssiden:
+     *
+     *  - MED husk meg: 7 dager glidende — fornyes ved bruk (maks én gang i døgnet), så den
+     *    som er innom ukentlig forblir innlogget, mens en forlatt økt dør etter en uke.
+     *  - UTEN: Better Auth setter cookien som NETTLESERØKT — du er ute idet nettleseren
+     *    lukkes. Det er strengere enn en timer på en delt maskin, som er der det gjelder:
+     *    en fast 4-timersgrense ville latt økta stå åpen resten av arbeidsdagen.
+     *
+     * v1 hadde 8 timers JWT uten fornyelse for alle.
+     */
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
   },

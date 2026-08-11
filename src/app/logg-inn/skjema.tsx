@@ -42,6 +42,9 @@ export default function LoggInnSkjema({ adminVert }: { adminVert: string | null 
   const [epost, setEpost] = useState("");
   const [passord, setPassord] = useState("");
   const [kode, setKode] = useState("");
+  // AV som standard: den som logger inn fra en delt maskin skal ikke måtte huske å velge
+  // bort noe for å være trygg. Uten haken dør økta når nettleseren lukkes.
+  const [huskMeg, setHuskMeg] = useState(false);
   // Etter at 2FA er slått på, tar passordet deg bare til trinn to.
   const [trengerKode, setTrengerKode] = useState(false);
   const [feil, setFeil] = useState<string | null>(null);
@@ -59,7 +62,7 @@ export default function LoggInnSkjema({ adminVert }: { adminVert: string | null 
         return;
       }
 
-      const { data, error } = await signIn.email({ email: epost, password: passord });
+      const { data, error } = await signIn.email({ email: epost, password: passord, rememberMe: huskMeg });
       if (error) throw new Error(error.message ?? "Feil e-post eller passord");
       if ((data as { twoFactorRedirect?: boolean })?.twoFactorRedirect) {
         setTrengerKode(true);
@@ -110,6 +113,10 @@ export default function LoggInnSkjema({ adminVert }: { adminVert: string | null 
               value={passord} onChange={(e) => setPassord(e.target.value)}
             />
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }}>
+            <input type="checkbox" checked={huskMeg} onChange={(e) => setHuskMeg(e.target.checked)} />
+            <span style={{ fontSize: "var(--fs-sm)" }}>Husk meg i én uke</span>
+          </label>
         </>
       )}
 
