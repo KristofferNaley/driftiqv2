@@ -1,5 +1,6 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { feilmeldingInn, hentEgneSaker, meldFeil } from "@/lib/feilmelding";
+import { plattformVarslingsadresser } from "@/lib/prismodell";
 import { sendNyFeilmelding } from "@/lib/epost";
 
 /** Kunden ser bare SINE saker. Gaten er her — tabellen har ingen RLS-policy. */
@@ -24,7 +25,10 @@ export const POST = orgRute({
       data,
       req.headers.get("user-agent"),
     );
-    etterCommit(() => sendNyFeilmelding(sak));
+    // Mottakerne slås opp FØR etterCommit: callbacken kjører etter at db-håndtaket er
+    // levert tilbake. `pricing_config` står i UNNTATT, så oppslaget går også i org-kontekst.
+    const mottakere = await plattformVarslingsadresser(db);
+    etterCommit(() => sendNyFeilmelding(sak, mottakere));
     return sak;
   },
 });

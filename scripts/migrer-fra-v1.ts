@@ -85,6 +85,23 @@ const TABELLER: Tabell[] = [
     oppdater: ["role", "title", "notification_prefs"],
   },
   {
+    navn: "leads",
+    // Innboksen skal ikke starte tom ved overgangen: en halvt bearbeidet lead i v1 er
+    // fortsatt en mulig kunde. Statusløpet er det samme i begge (ny/kontaktet/kvalifisert/
+    // avslatt/konvertert). `source` og `unit_count` har ingen kolonne i v2 og droppes —
+    // v2-skjemaet samler dem ikke inn, og Brreg-feltene har tatt over rollen deres.
+    // Etter organizations pga. converted_org_id-fremmednøkkelen.
+    kilde: `SELECT id, name, lower(email) AS email, phone, company, message,
+                   org_nr, org_form, municipality AS kommune,
+                   COALESCE(status, 'ny') AS status, converted_org_id,
+                   COALESCE(created_at, now()) AS created_at
+            FROM leads`,
+    kolonner: ["id", "name", "email", "phone", "company", "message", "org_nr", "org_form", "kommune", "status", "converted_org_id", "created_at"],
+    // Status og konvertering følger med ved re-kjøring: behandles leaden videre i v1 etter
+    // forrige migrering, skal ikke v2 vise den som ubehandlet.
+    oppdater: ["status", "converted_org_id"],
+  },
+  {
     navn: "platform_contracts",
     kilde: `SELECT id, org_id, annual_fee, base_fee, modules,
                    COALESCE(discount_percent, 0) AS discount_percent,

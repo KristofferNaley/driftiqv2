@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { organizations } from "./organizations";
 
 /**
  * Henvendelser fra landingssiden.
@@ -40,8 +41,18 @@ export const leads = pgTable("leads", {
    * kan ha endret seg innen noen spør. Kaster vi dem her, er de borte for godt.
    */
   brregRaa: text("brreg_raa"),
-  /** ny | i_dialog | tilbud_sendt | konvertert | tapt */
+  /**
+   * ny | kontaktet | kvalifisert | avslatt | konvertert — samme løp som v1, så migrerte
+   * leads beholder statusen sin. `konvertert` settes KUN av «Lag kunde», aldri for hånd.
+   */
   status: varchar("status").notNull().default("ny"),
+  /**
+   * Kunden leaden ble til. SET NULL som i v1: slettes kunden, blir leaden liggende som
+   * historikk — men konvertert-statusen beholdes, så den ikke ser ubehandlet ut.
+   */
+  convertedOrgId: varchar("converted_org_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

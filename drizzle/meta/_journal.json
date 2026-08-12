@@ -239,6 +239,13 @@
       "when": 1786483010957,
       "tag": "0033_soft_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786575195618,
+      "tag": "0034_chubby_dracula",
+      "breakpoints": true
     }
   ]
 }

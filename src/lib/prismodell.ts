@@ -103,6 +103,18 @@ export const varselmottakereInn = z.object({
  * Tom liste = fall tilbake på miljøvariabelen, slik det var før lista fantes. Kallstedet
  * håndterer det; her lagres tomt som tomt.
  */
+/**
+ * Adressene et lead- eller feilmeldingsvarsel faktisk skal til: lista fra panelet, eller
+ * `LEADS_NOTIFY_EMAIL` når lista er tom — slik det var før lista fantes. Fallbacken ligger
+ * her og ikke i epost.ts, så e-postlaget slipper å kjenne miljøvariabelen.
+ */
+export async function plattformVarslingsadresser(db: Db): Promise<string[]> {
+  const lagret = (await hentPrismodell(db)).varselmottakere;
+  if (lagret.length > 0) return lagret;
+  const env = process.env.LEADS_NOTIFY_EMAIL?.trim();
+  return env ? [env] : [];
+}
+
 export async function settVarselmottakere(db: Db, epostadresser: string[]) {
   await hentPrismodell(db);
   // Duplikater ville gitt samme person to like e-poster.

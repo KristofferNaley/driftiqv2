@@ -327,20 +327,23 @@ export async function sendKontrakterUtloper(
 /**
  * Varsel til DriftIQ om en ny henvendelse.
  *
- * Går til `LEADS_NOTIFY_EMAIL`. Er den ikke satt, logges det HØYT — en lead som ligger i
- * databasen uten at noen vet om den, er en tapt kunde, og stillhet er verste utfall.
+ * Går til varselmottakerne fra panelet (se `plattformVarslingsadresser`). Er lista tom,
+ * logges det HØYT — en lead som ligger i databasen uten at noen vet om den, er en tapt
+ * kunde, og stillhet er verste utfall.
  */
-export async function sendNyLead(lead: {
-  name: string;
-  email: string;
-  phone: string | null;
-  company: string | null;
-  message: string | null;
-}): Promise<void> {
-  const til = process.env.LEADS_NOTIFY_EMAIL;
-  if (!til) {
+export async function sendNyLead(
+  lead: {
+    name: string;
+    email: string;
+    phone: string | null;
+    company: string | null;
+    message: string | null;
+  },
+  til: string[],
+): Promise<void> {
+  if (til.length === 0) {
     console.warn(
-      `[leads] LEADS_NOTIFY_EMAIL er ikke satt — ingen varslet om «${lead.name}». ` +
+      `[leads] Ingen varselmottakere satt — ingen varslet om «${lead.name}». ` +
         "Henvendelsen ligger i plattformpanelet.",
     );
     return;
@@ -350,37 +353,36 @@ export async function sendNyLead(lead: {
     `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${etikett}</td>` +
     `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(verdi)}</td></tr>`;
 
-  await send(
-    til,
-    `Ny henvendelse: ${lead.name}`,
-    ramme(
-      h("Ny interessent fra landingssiden") +
-        '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
-        felt("Navn", lead.name) +
-        felt("E-post", lead.email) +
-        felt("Telefon", lead.phone ?? "—") +
-        felt("Borettslag/sameie", lead.company ?? "—") +
-        felt("Melding", lead.message ?? "—") +
-        "</table>" +
-        knapp("Åpne plattformpanelet", `${APP_URL}/plattform/leads`),
-    ),
+  const html = ramme(
+    h("Ny interessent fra landingssiden") +
+      '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
+      felt("Navn", lead.name) +
+      felt("E-post", lead.email) +
+      felt("Telefon", lead.phone ?? "—") +
+      felt("Borettslag/sameie", lead.company ?? "—") +
+      felt("Melding", lead.message ?? "—") +
+      "</table>" +
+      knapp("Åpne plattformpanelet", `${APP_URL}/plattform/leads`),
   );
+  await Promise.all(til.map((adresse) => send(adresse, `Ny henvendelse: ${lead.name}`, html)));
 }
 
-/** Varsel til DriftIQ om en ny innmelding. Samme innboks som leads. */
-export async function sendNyFeilmelding(sak: {
-  number: number | null;
-  kind: string;
-  module: string | null;
-  description: string;
-  reportedByName: string;
-  reportedByEmail: string | null;
-  appVersion: string | null;
-}): Promise<void> {
-  const til = process.env.LEADS_NOTIFY_EMAIL;
-  if (!til) {
+/** Varsel til DriftIQ om en ny innmelding. Samme mottakerliste som leads. */
+export async function sendNyFeilmelding(
+  sak: {
+    number: number | null;
+    kind: string;
+    module: string | null;
+    description: string;
+    reportedByName: string;
+    reportedByEmail: string | null;
+    appVersion: string | null;
+  },
+  til: string[],
+): Promise<void> {
+  if (til.length === 0) {
     console.warn(
-      `[feilmelding] LEADS_NOTIFY_EMAIL er ikke satt — ingen varslet om FM-${String(sak.number ?? 0).padStart(4, "0")}. ` +
+      `[feilmelding] Ingen varselmottakere satt — ingen varslet om FM-${String(sak.number ?? 0).padStart(4, "0")}. ` +
         "Saken ligger i plattformpanelet.",
     );
     return;
@@ -392,20 +394,19 @@ export async function sendNyFeilmelding(sak: {
     `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${e}</td>` +
     `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(v)}</td></tr>`;
 
-  await send(
-    til,
-    `${nr}: ${etikett} fra ${sak.reportedByName}`,
-    ramme(
-      h(`${etikett} meldt inn`) +
-        '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
-        felt("Sak", nr) +
-        felt("Modul", sak.module ?? "Ikke oppgitt") +
-        felt("Meldt av", `${sak.reportedByName} (${sak.reportedByEmail ?? "ingen e-post"})`) +
-        felt("Versjon", sak.appVersion ?? "—") +
-        felt("Beskrivelse", sak.description) +
-        "</table>" +
-        knapp("Åpne i plattformpanelet", `${APP_URL}/plattform/saker`),
-    ),
+  const html = ramme(
+    h(`${etikett} meldt inn`) +
+      '<table style="margin:16px 0;border-collapse:collapse;width:100%;">' +
+      felt("Sak", nr) +
+      felt("Modul", sak.module ?? "Ikke oppgitt") +
+      felt("Meldt av", `${sak.reportedByName} (${sak.reportedByEmail ?? "ingen e-post"})`) +
+      felt("Versjon", sak.appVersion ?? "—") +
+      felt("Beskrivelse", sak.description) +
+      "</table>" +
+      knapp("Åpne i plattformpanelet", `${APP_URL}/plattform/saker`),
+  );
+  await Promise.all(
+    til.map((adresse) => send(adresse, `${nr}: ${etikett} fra ${sak.reportedByName}`, html)),
   );
 }
 

@@ -1,6 +1,7 @@
 import { withoutRls } from "@/db/client";
 import { lesKropp, tilSvar } from "@/lib/api";
 import { leadInn, registrerLead } from "@/lib/leads";
+import { plattformVarslingsadresser } from "@/lib/prismodell";
 import { sendNyLead } from "@/lib/epost";
 
 /**
@@ -15,13 +16,21 @@ import { sendNyLead } from "@/lib/epost";
 export async function POST(req: Request) {
   try {
     const data = await lesKropp(req, leadInn);
-    const resultat = await withoutRls("plattformpanel", (db) => registrerLead(db, data));
+    const resultat = await withoutRls("plattformpanel", async (db) => {
+      const utfall = await registrerLead(db, data);
+      // Mottakerne slås opp i samme runde: honningkrukke-treff skal ikke koste et ekstra
+      // databasekall, og etter callbacken finnes ikke db-håndtaket lenger.
+      const mottakere = utfall.lagret ? await plattformVarslingsadresser(db) : [];
+      return { ...utfall, mottakere };
+    });
 
     // Varselet må ikke kunne velte innsendingen: leaden ER lagret, og at e-posten ikke kom
     // fram er en driftssak. Uten dette ville en nede Resend gitt besøkende en feilmelding
     // på noe som faktisk gikk bra.
     if (resultat.lagret) {
-      await sendNyLead(resultat.lead).catch((e) => console.error("[leads] Varsel feilet:", e));
+      await sendNyLead(resultat.lead, resultat.mottakere).catch((e) =>
+        console.error("[leads] Varsel feilet:", e),
+      );
     }
     return Response.json({ mottatt: true });
   } catch (e) {
