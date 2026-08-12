@@ -196,17 +196,18 @@ describe("ansvarsfordeling (§ 5 pkt. 5)", () => {
 
 describe("risikovurdering (§ 5 pkt. 6)", () => {
   it("regner risiko som sannsynlighet × konsekvens", () => {
-    expect(risiko({ probability: 3, consequence: 4 })).toBe(12);
-    expect(risikoniva(4)).toBe("lav");
-    expect(risikoniva(12)).toBe("middels");
-    expect(risikoniva(13)).toBe("hoy");
+    expect(risiko({ probability: 2, consequence: 3 })).toBe(6);
+    // 1–3-skalaen gir produktene 1, 2, 3, 4, 6 og 9.
+    expect(risikoniva(2)).toBe("lav");
+    expect(risikoniva(4)).toBe("middels");
+    expect(risikoniva(6)).toBe("hoy");
   });
 
   it("sorterer høyest risiko først", async () => {
     // Lista skal kunne leses ovenfra og ned.
     const org = await oppsett();
     await i(org, (db) => opprettFare(db, org, { title: "Lav", probability: 1, consequence: 2, status: "open" }));
-    await i(org, (db) => opprettFare(db, org, { title: "Høy", probability: 5, consequence: 5, status: "open" }));
+    await i(org, (db) => opprettFare(db, org, { title: "Høy", probability: 3, consequence: 3, status: "open" }));
 
     const farer = await i(org, (db) => hentFarer(db, org));
     expect(farer.map((f) => f.title)).toEqual(["Høy", "Lav"]);
@@ -353,8 +354,8 @@ describe("vernerunde", () => {
 
     const farer = await i(org, (db) => hentFarer(db, org));
     expect(farer.map((f) => f.category)).toEqual(["Brannvern", "Brannvern"]);
-    // 3/3 er et STARTPUNKT som tvinger fram en vurdering, ikke en fasit.
-    expect(farer.every((f) => f.probability === 3 && f.consequence === 3)).toBe(true);
+    // 2/2 («middels» på 1–3-skalaen) er et STARTPUNKT som tvinger fram en vurdering, ikke en fasit.
+    expect(farer.every((f) => f.probability === 2 && f.consequence === 2)).toBe(true);
 
     const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
     expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });

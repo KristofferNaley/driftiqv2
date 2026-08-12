@@ -106,7 +106,7 @@ async function orgMedData(merke: string) {
     [randomUUID(), orgId, `Bygningsdel ${merke}`],
   );
   await eier.query(
-    "INSERT INTO hazards (id, org_id, title, probability, consequence, status) VALUES ($1,$2,$3,5,5,'open')",
+    "INSERT INTO hazards (id, org_id, title, probability, consequence, status) VALUES ($1,$2,$3,3,3,'open')",
     [randomUUID(), orgId, `Fare ${merke}`],
   );
   const roundId = randomUUID();

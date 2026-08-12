@@ -2085,7 +2085,8 @@ textarea.qr-input { resize: vertical; }
   color: inherit; cursor: pointer;
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600; text-align: left;
 }
-.org-blokk.statisk { margin: 12px 10px 10px; cursor: default; }
+/* width: auto, ikke 100%: med sidemarger utenpå ville 100 % stukket 20px ut av sidemenyen. */
+.org-blokk.statisk { width: auto; margin: 12px 10px 10px; cursor: default; }
 .org-blokk:not(.statisk):hover { border-color: var(--accent); }
 .org-blokk-navn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -2655,10 +2656,159 @@ textarea.qr-input { resize: vertical; }
   .sjekkpunkt-hode { flex-direction: column; }
 }
 
-/* Tiltaksradene i faremodalen — tittel eier bredden, felter faste til høyre. */
-.tiltak-rad { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
-.tiltak-rad:last-of-type { border-bottom: none; }
-.tiltak-felt { width: 140px; flex-shrink: 0; padding: 6px 8px; font-size: var(--fs-label); }
+/* ══ RISIKOVURDERINGEN ══
+   Etter mockups/risikovurdering-mockup.html: matrisen til venstre er navigasjon (hver rute
+   filtrerer lista), redigering skjer i en skuff fra høyre så oversikten står bak. */
+
+.rv-kolonner { display: grid; grid-template-columns: 390px 1fr; gap: 16px; align-items: start; }
+.rv-hint { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+.rv-matrise-kropp { padding: 16px 18px 14px; }
+
+/* Matrisen: aksekolonne + 3×3 ruter. Konsekvens vokser OPPOVER — rad 1 i grid er k=3. */
+.rv-matrise { display: grid; grid-template-columns: 22px repeat(3, 1fr); gap: 6px; }
+.rv-akse-y {
+  grid-row: 1 / span 3; writing-mode: vertical-rl; transform: rotate(180deg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-label); color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase;
+}
+.rv-akse-x {
+  grid-column: 2 / span 3; display: flex; align-items: center; justify-content: center;
+  padding-top: 2px;
+  font-size: var(--fs-label); color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase;
+}
+.rv-celle {
+  min-height: 76px; padding: 9px 10px; border-radius: 10px; border: 1px solid transparent;
+  display: flex; flex-direction: column; justify-content: space-between; text-align: left;
+  color: var(--text); font-family: var(--font-sans); cursor: pointer; transition: filter 0.15s;
+}
+/* color-mix i stedet for håndkodede rgba-er: fargene følger temaet uten egne *-rgb-tokens. */
+.rv-celle.lav { background: color-mix(in srgb, var(--accent2) 12%, transparent); border-color: color-mix(in srgb, var(--accent2) 30%, transparent); }
+.rv-celle.middels { background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+.rv-celle.hoy { background: color-mix(in srgb, var(--danger) 13%, transparent); border-color: color-mix(in srgb, var(--danger) 34%, transparent); }
+.rv-celle:hover { filter: brightness(1.2); }
+.rv-celle.aktiv { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rv-celle.tom .rv-celle-antall { opacity: 0.3; }
+.rv-celle-antall { font-size: var(--fs-xl); font-weight: 700; line-height: 1; }
+.rv-celle-bunn {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  font-size: var(--fs-label); opacity: 0.8;
+}
+.rv-skala { display: flex; gap: 6px; margin: 8px 0 0 28px; }
+.rv-skala span { flex: 1; text-align: center; font-size: var(--fs-label); color: var(--muted); }
+.rv-legende {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--border); font-size: var(--fs-label); color: var(--muted);
+}
+.rv-legende div { display: flex; align-items: center; gap: 6px; }
+.rv-prikk { width: 9px; height: 9px; border-radius: 3px; }
+.rv-prikk.lav { background: var(--accent2); }
+.rv-prikk.middels { background: var(--warn); }
+.rv-prikk.hoy { background: var(--danger); }
+
+/* Områdefiltrene — samme chip-mønster som driftsloggen og årshjulet. */
+.rv-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+.rv-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: var(--fs-label); font-weight: 500;
+  border: 1px solid var(--border); background: none; color: var(--muted);
+  cursor: pointer; font-family: var(--font-sans);
+}
+.rv-chip:hover { color: var(--text); }
+.rv-chip.valgt { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Stripen som viser at en matriserute filtrerer lista. */
+.rv-filterbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 20px; border-bottom: 1px solid var(--border);
+  background: rgba(var(--accent-rgb), 0.08); font-size: var(--fs-label); color: var(--text);
+}
+.rv-filterbar button {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-label); color: var(--accent); text-decoration: underline;
+}
+
+/* Risikoradene — kolonnetabell som kontraktlista: tittel eier bredden. */
+.rv-rad {
+  display: grid; grid-template-columns: 1fr 120px 90px auto; gap: 12px; align-items: center;
+  width: 100%; padding: 12px 20px; border: none; border-bottom: 1px solid var(--border);
+  background: none; text-align: left; cursor: pointer; font-family: var(--font-sans); color: var(--text);
+}
+.rv-rad:hover { background: var(--surface2); }
+.rv-rad:last-child { border-bottom: none; }
+.rv-rad-omrade { font-size: var(--fs-label); color: var(--muted); }
+.rv-rad-frist { font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; }
+.rv-rad-frist.over { color: var(--warn); font-weight: 600; }
+
+/* Skuffen. Mounts ferdig åpen, derfor animation og ikke transition — den spilles ved mount. */
+.rv-scrim {
+  position: fixed; inset: 0; z-index: 90; background: var(--shadow);
+  animation: rv-tone 0.2s ease;
+}
+.rv-skuff {
+  position: fixed; top: 0; right: 0; height: 100dvh; width: 460px; max-width: 100%;
+  z-index: 91; display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--border);
+  animation: rv-inn 0.22s ease;
+}
+@keyframes rv-tone { from { opacity: 0; } }
+@keyframes rv-inn { from { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .rv-scrim, .rv-skuff { animation: none; }
+}
+.rv-skuff-hode {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.rv-skuff-hode h2 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.rv-skuff-lukk {
+  border: none; background: none; padding: 2px 8px; border-radius: 7px;
+  color: var(--muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
+}
+.rv-skuff-lukk:hover { color: var(--text); background: var(--surface2); }
+.rv-skuff-kropp { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 15px; }
+.rv-skuff-fot {
+  display: flex; gap: 10px; align-items: center;
+  padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+/* Nivåvelgeren — tre utsagn, ikke et nedtrekk med tall. */
+.rv-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rv-seg button {
+  padding: 9px 6px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-label); line-height: 1.3; text-align: center;
+}
+.rv-seg button:hover { color: var(--text); }
+.rv-seg button.valgt {
+  background: rgba(var(--accent-rgb), 0.16); border-color: var(--accent); color: var(--text);
+}
+.rv-seg-tall { display: block; font-weight: 700; opacity: 0.6; margin-bottom: 2px; }
+
+/* Regnestykket — alltid synlig, oppdateres mens man velger. */
+.rv-resultat {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 15px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.rv-resultat-txt { font-size: var(--fs-label); color: var(--muted); }
+.rv-resultat-val { font-size: var(--fs-sm); font-weight: 600; margin-top: 1px; }
+.rv-resultat-tall { font-size: var(--fs-xl); font-weight: 700; color: var(--muted); }
+.rv-resultat-tall.lav { color: var(--accent2); }
+.rv-resultat-tall.middels { color: var(--warn); }
+.rv-resultat-tall.hoy { color: var(--danger); }
+
+/* Tiltak i skuffen — smalere enn den gamle modalen, så feltene står under tittelen. */
+.rv-tiltak { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.rv-tiltak:last-of-type { border-bottom: none; }
+.rv-tiltak-felter { display: flex; gap: 8px; margin-top: 6px; }
+.rv-tiltak-felter .select, .rv-tiltak-felter .input { flex: 1; min-width: 0; padding: 6px 8px; font-size: var(--fs-label); }
+
+@media (max-width: 1100px) {
+  .rv-kolonner { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .rv-rad { grid-template-columns: 1fr auto; }
+  .rv-rad-omrade, .rv-rad-frist { display: none; }
+}
 
 /* ── Utskrift av appsider (vernerunderapporten er første bruker) ─────────────────────────
    Papiret får innholdet: meny, faner og knapper hører til skjermen. Kortene beholder

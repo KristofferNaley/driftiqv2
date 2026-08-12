@@ -72,9 +72,9 @@ export const hazards = pgTable("hazards", {
   title: varchar("title").notNull(),
   category: varchar("category"),
   description: text("description"),
-  /** 1–5. */
+  /** 1–3 — se `skala` i lib/internkontroll.ts for hvorfor ikke v1s 1–5. */
   probability: integer("probability").notNull(),
-  /** 1–5. */
+  /** 1–3. */
   consequence: integer("consequence").notNull(),
   owner: varchar("owner"),
   status: varchar("status").notNull().default("open"),

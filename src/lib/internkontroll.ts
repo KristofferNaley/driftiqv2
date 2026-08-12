@@ -44,7 +44,12 @@ export const TILTAKSSTATUSER = ["not_started", "in_progress", "done"] as const;
 export const RUNDESTATUSER = ["planned", "completed"] as const;
 
 const tekst = z.string().trim().nullish();
-const skala = z.number().int().min(1).max(5);
+/**
+ * 1–3, ikke v1s 1–5. Risikovurderingene styrene faktisk gjør (jf. Håsteinsgate 9s gamle
+ * skjema) skiller bare tre nivåer, og fem trinn ga falsk presisjon: ingen rader i basen
+ * brukte 4 eller 5 da skalaen ble strammet inn.
+ */
+const skala = z.number().int().min(1).max(3);
 
 export const malInn = z.object({
   year: z.number().int().min(2000).max(2100),
@@ -284,10 +289,13 @@ export function risiko(h: { probability: number; consequence: number }): number 
   return h.probability * h.consequence;
 }
 
-/** Fargekoden matrisen bruker. Grensene følger v1s visning. */
+/**
+ * Fargekoden matrisen bruker. Med 1–3-skala er produktene 1, 2, 3, 4, 6 og 9:
+ * 1–2 lav, 3–4 middels, 6+ høy — samme inndeling som mockupen og kundens gamle skjema.
+ */
 export function risikoniva(tall: number): "lav" | "middels" | "hoy" {
-  if (tall <= 4) return "lav";
-  if (tall <= 12) return "middels";
+  if (tall <= 2) return "lav";
+  if (tall <= 4) return "middels";
   return "hoy";
 }
 
@@ -408,9 +416,9 @@ export async function hentHmsMaler(db: Db, type?: string) {
  * `hazards` som laget redigerer fritt etterpå. Samme prinsipp som vernerundene: malen er
  * utgangspunktet, laget eier kopien.
  *
- * Sannsynlighet og konsekvens settes til 3/3 («middels») med vilje: et startpunkt som
- * tvinger fram en vurdering, ikke en fasit. Farer som alt finnes (samme tittel) hoppes
- * over, så seeding er trygt å kjøre igjen når malen har fått nye områder.
+ * Sannsynlighet og konsekvens settes til 2/2 («middels» på 1–3-skalaen) med vilje: et
+ * startpunkt som tvinger fram en vurdering, ikke en fasit. Farer som alt finnes (samme
+ * tittel) hoppes over, så seeding er trygt å kjøre igjen når malen har fått nye områder.
  */
 export async function seedFarer(db: Db, orgId: string, templateId: string) {
   const kategorier = await db
@@ -440,8 +448,8 @@ export async function seedFarer(db: Db, orgId: string, templateId: string) {
         orgId,
         title: p.text,
         category: k.label,
-        probability: 3,
-        consequence: 3,
+        probability: 2,
+        consequence: 2,
         status: "open",
       });
       opprettet++;

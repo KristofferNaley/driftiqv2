@@ -340,15 +340,22 @@ export function Tekstomrade({
   verdi,
   onEndre,
   notat,
+  plassholder,
 }: {
   etikett: string;
   verdi: string;
   onEndre: (v: string) => void;
   notat?: string;
+  plassholder?: string;
 }) {
   return (
     <Felt etikett={etikett} notat={notat}>
-      <textarea className="textarea" value={verdi} onChange={(e) => onEndre(e.target.value)} />
+      <textarea
+        className="textarea"
+        value={verdi}
+        placeholder={plassholder}
+        onChange={(e) => onEndre(e.target.value)}
+      />
     </Felt>
   );
 }
