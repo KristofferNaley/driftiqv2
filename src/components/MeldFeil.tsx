@@ -77,11 +77,17 @@ export function MeldFeil({ versjon }: { versjon: string }) {
   return (
     <>
       {/* Lucide-ikon i 16px som alle andre knappeikoner — tegnet «⚙» fulgte skriftstørrelsen
-          og så både større og fremmed ut. Teksten skal ALDRI vekk, heller ikke på mobil:
-          en knapp som bare er et insekt sier ikke at den melder feil. */}
-      <button className="btn btn-ghost meldfeil-knapp" onClick={start} title="Meld feil eller forslag">
+          og så både større og fremmed ut. Teksten vek for plassen på mobil 13.08.2026:
+          toppbaren har tittel, sidehandlinger og denne, og på 375px var det teksten eller
+          knappene. aria-label og title bærer meningen når bare insektet står igjen. */}
+      <button
+        className="btn btn-ghost meldfeil-knapp"
+        onClick={start}
+        title="Meld feil eller forslag"
+        aria-label="Meld feil eller forslag"
+      >
         <Bug size={16} strokeWidth={1.9} aria-hidden />
-        Meld feil
+        <span className="skjul-mobil">Meld feil</span>
       </button>
 
       {apen && (

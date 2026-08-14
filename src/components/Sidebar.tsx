@@ -40,7 +40,6 @@ export default function Sidebar({
   oktKjent,
   bruker,
   tall,
-  versjon,
   onLukk,
   onProfil,
 }: {
@@ -52,7 +51,6 @@ export default function Sidebar({
   tall: { forsinkedeOppgaver: number; apneAvvik: number } | null;
   /** Er økten hentet? Før den er det, tegnes ingen punkter — se `menyFor`. */
   oktKjent: boolean;
-  versjon: string;
   onLukk: () => void;
   /** Åpner «Min profil» — også eneste vei til utlogging. */
   onProfil: () => void;
@@ -129,7 +127,6 @@ export default function Sidebar({
           <Settings size={15} strokeWidth={1.9} aria-hidden />
         </button>
       )}
-      <div className="sidebar-fot">v{versjon}</div>
     </nav>
   );
 }

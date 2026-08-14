@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
-import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
+import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { internkontroll, type Fare, type HmsMal } from "@/lib/klient";
 
 const SANNSYNLIGHET = ["Lite sannsynlig", "Mulig", "Sannsynlig"];
@@ -348,12 +348,6 @@ function FareSkuff({
   const tall = s && k ? s * k : null;
   const nv = tall ? niva(tall) : null;
 
-  useEffect(() => {
-    const paaEsc = (e: KeyboardEvent) => e.key === "Escape" && onLukk();
-    window.addEventListener("keydown", paaEsc);
-    return () => window.removeEventListener("keydown", paaEsc);
-  }, [onLukk]);
-
   async function lagre() {
     if (!s || !k) return;
     setLagrer(true);
@@ -419,135 +413,129 @@ function FareSkuff({
 
   return (
     <>
-      <div className="rv-scrim" onClick={onLukk} />
-      <aside className="rv-skuff" role="dialog" aria-modal="true" aria-label={fare ? "Rediger risiko" : "Ny risiko"}>
-        <div className="rv-skuff-hode">
-          <h2>{fare ? "Rediger risiko" : "Ny risiko"}</h2>
-          <button className="rv-skuff-lukk" onClick={onLukk} aria-label="Lukk">
-            ×
-          </button>
-        </div>
-
-        <div className="rv-skuff-kropp">
-          <Feil melding={feil} />
-
-          <Tekstfelt
-            etikett="Hva kan gå galt? *"
-            verdi={tittel}
-            onEndre={setTittel}
-            plassholder="For eksempel: rømningsvei blokkert av sykler"
-          />
-          <div className="field-row">
-            <Tekstfelt etikett="Område" verdi={kategori} onEndre={setKategori} plassholder="Brannvern, el-sikkerhet …" />
-            <Tekstfelt etikett="Ansvarlig" verdi={eier} onEndre={setEier} plassholder="Navn" />
-          </div>
-
-          <Nivavelger etikett="Sannsynlighet" ord={SANNSYNLIGHET} verdi={s} onVelg={setS} />
-          <Nivavelger etikett="Konsekvens" ord={KONSEKVENS} verdi={k} onVelg={setK} />
-
-          <div className="rv-resultat">
-            <div>
-              <div className="rv-resultat-txt">Risikonivå</div>
-              <div className="rv-resultat-val">{nv ? `${NIVATEKST[nv]} risiko` : "Velg nivå"}</div>
-            </div>
-            <div className={`rv-resultat-tall${nv ? ` ${nv}` : ""}`}>{tall ?? "–"}</div>
-          </div>
-
-          <Tekstomrade
-            etikett="Beskrivelse"
-            verdi={beskrivelse}
-            onEndre={setBeskrivelse}
-            plassholder="Kort om situasjonen og hvem som kan bli berørt"
-          />
-
-          <Nedtrekk etikett="Status" verdi={status} onEndre={setStatus} valg={FARESTATUS} />
-
-          <div className="field">
-            <span className="field-label">Tiltak</span>
-            {!fare ? (
-              <div className="field-note">Lagre risikoen først — så kan tiltak legges til.</div>
-            ) : (
-              <>
-                {tiltak.length === 0 && (
-                  <div className="field-note">
-                    Ingen tiltak registrert{tall && tall >= 3 ? " — denne bør ha minst ett." : "."}
-                  </div>
-                )}
-                {tiltak.map((t) => (
-                  <div key={t.id} className="rv-tiltak">
-                    <span className="list-tittel">{t.title}</span>
-                    <div className="rv-tiltak-felter">
-                      <select
-                        className="select"
-                        aria-label={`Status for ${t.title}`}
-                        value={t.status}
-                        onChange={(e) => void settTiltak(t.id, "status", e.target.value)}
-                      >
-                        {TILTAKSSTATUS.map((v) => (
-                          <option key={v.verdi} value={v.verdi}>{v.etikett}</option>
-                        ))}
-                      </select>
-                      <input
-                        className="input"
-                        type="date"
-                        aria-label={`Frist for ${t.title}`}
-                        value={t.dueDate ?? ""}
-                        onChange={(e) => void settTiltak(t.id, "dueDate", e.target.value)}
-                      />
-                      <button
-                        className="btn btn-ghost"
-                        style={{ color: "var(--muted)", padding: "5px 9px" }}
-                        onClick={() => void fjernTiltak(t.id)}
-                        aria-label={`Fjern ${t.title}`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <form
-                  style={{ display: "flex", gap: "8px", marginTop: "8px" }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void leggTilTiltak();
-                  }}
-                >
-                  <input
-                    className="input"
-                    style={{ flex: 1 }}
-                    placeholder="Nytt tiltak — hva skal gjøres?"
-                    aria-label="Nytt tiltak"
-                    value={nyttTiltak}
-                    onChange={(e) => setNyttTiltak(e.target.value)}
-                  />
-                  <button className="btn btn-ghost" disabled={!nyttTiltak.trim()}>
-                    ＋
-                  </button>
-                </form>
-              </>
+      <Skuff
+        tittel={fare ? "Rediger risiko" : "Ny risiko"}
+        onLukk={onLukk}
+        fot={
+          <>
+            {fare && (
+              <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => setBekreftSlett(true)}>
+                Slett …
+              </button>
             )}
-          </div>
+            <div style={{ flex: 1 }} />
+            <button className="btn btn-ghost" onClick={onLukk}>
+              Avbryt
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => void lagre()}
+              disabled={lagrer || !tittel.trim() || !s || !k}
+            >
+              {lagrer ? "Lagrer …" : "Lagre"}
+            </button>
+          </>
+        }
+      >
+        <Feil melding={feil} />
+
+        <Tekstfelt
+          etikett="Hva kan gå galt? *"
+          verdi={tittel}
+          onEndre={setTittel}
+          plassholder="For eksempel: rømningsvei blokkert av sykler"
+        />
+        <div className="field-row">
+          <Tekstfelt etikett="Område" verdi={kategori} onEndre={setKategori} plassholder="Brannvern, el-sikkerhet …" />
+          <Tekstfelt etikett="Ansvarlig" verdi={eier} onEndre={setEier} plassholder="Navn" />
         </div>
 
-        <div className="rv-skuff-fot">
-          {fare && (
-            <button className="btn btn-ghost" style={{ color: "var(--danger)" }} onClick={() => setBekreftSlett(true)}>
-              Slett …
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          <button className="btn btn-ghost" onClick={onLukk}>
-            Avbryt
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => void lagre()}
-            disabled={lagrer || !tittel.trim() || !s || !k}
-          >
-            {lagrer ? "Lagrer …" : "Lagre"}
-          </button>
+        <Nivavelger etikett="Sannsynlighet" ord={SANNSYNLIGHET} verdi={s} onVelg={setS} />
+        <Nivavelger etikett="Konsekvens" ord={KONSEKVENS} verdi={k} onVelg={setK} />
+
+        <div className="rv-resultat">
+          <div>
+            <div className="rv-resultat-txt">Risikonivå</div>
+            <div className="rv-resultat-val">{nv ? `${NIVATEKST[nv]} risiko` : "Velg nivå"}</div>
+          </div>
+          <div className={`rv-resultat-tall${nv ? ` ${nv}` : ""}`}>{tall ?? "–"}</div>
         </div>
-      </aside>
+
+        <Tekstomrade
+          etikett="Beskrivelse"
+          verdi={beskrivelse}
+          onEndre={setBeskrivelse}
+          plassholder="Kort om situasjonen og hvem som kan bli berørt"
+        />
+
+        <Nedtrekk etikett="Status" verdi={status} onEndre={setStatus} valg={FARESTATUS} />
+
+        <div className="field">
+          <span className="field-label">Tiltak</span>
+          {!fare ? (
+            <div className="field-note">Lagre risikoen først — så kan tiltak legges til.</div>
+          ) : (
+            <>
+              {tiltak.length === 0 && (
+                <div className="field-note">
+                  Ingen tiltak registrert{tall && tall >= 3 ? " — denne bør ha minst ett." : "."}
+                </div>
+              )}
+              {tiltak.map((t) => (
+                <div key={t.id} className="rv-tiltak">
+                  <span className="list-tittel">{t.title}</span>
+                  <div className="rv-tiltak-felter">
+                    <select
+                      className="select"
+                      aria-label={`Status for ${t.title}`}
+                      value={t.status}
+                      onChange={(e) => void settTiltak(t.id, "status", e.target.value)}
+                    >
+                      {TILTAKSSTATUS.map((v) => (
+                        <option key={v.verdi} value={v.verdi}>{v.etikett}</option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      type="date"
+                      aria-label={`Frist for ${t.title}`}
+                      value={t.dueDate ?? ""}
+                      onChange={(e) => void settTiltak(t.id, "dueDate", e.target.value)}
+                    />
+                    <button
+                      className="btn btn-ghost"
+                      style={{ color: "var(--muted)", padding: "5px 9px" }}
+                      onClick={() => void fjernTiltak(t.id)}
+                      aria-label={`Fjern ${t.title}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <form
+                style={{ display: "flex", gap: "8px", marginTop: "8px" }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void leggTilTiltak();
+                }}
+              >
+                <input
+                  className="input"
+                  style={{ flex: 1 }}
+                  placeholder="Nytt tiltak — hva skal gjøres?"
+                  aria-label="Nytt tiltak"
+                  value={nyttTiltak}
+                  onChange={(e) => setNyttTiltak(e.target.value)}
+                />
+                <button className="btn btn-ghost" disabled={!nyttTiltak.trim()}>
+                  ＋
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </Skuff>
 
       {bekreftSlett && fare && (
         <Modal tittel="Slett fare" onLukk={() => setBekreftSlett(false)} bredde={420}>

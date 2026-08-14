@@ -94,6 +94,51 @@ export function Modal({
   );
 }
 
+/**
+ * Skuff fra høyre — modalens søster for redigering av ETT objekt fra en liste.
+ *
+ * Forskjellen fra `Modal` er hva som skjer bak: lista og oversikten står synlige ved siden
+ * av, så man beholder konteksten mens man justerer én rad. Først bygget for risikovurderingen,
+ * delt her så brukersiden (og de neste) får identisk oppførsel i stedet for hver sin kopi.
+ *
+ * `fot` står UTENFOR kroppen og scroller ikke — lagreknappen skal aldri forsvinne oppover
+ * når skjemaet blir langt. Skjema i kroppen + knapp i foten kobles med `<form id>` og
+ * knappens `form`-attributt.
+ */
+export function Skuff({
+  tittel,
+  onLukk,
+  children,
+  fot,
+}: {
+  tittel: string;
+  onLukk: () => void;
+  children: ReactNode;
+  fot?: ReactNode;
+}) {
+  useEffect(() => {
+    const påEsc = (e: KeyboardEvent) => e.key === "Escape" && onLukk();
+    window.addEventListener("keydown", påEsc);
+    return () => window.removeEventListener("keydown", påEsc);
+  }, [onLukk]);
+
+  return (
+    <>
+      <div className="skuff-scrim" onClick={onLukk} />
+      <aside className="skuff" role="dialog" aria-modal="true" aria-label={tittel}>
+        <div className="skuff-hode">
+          <h2>{tittel}</h2>
+          <button className="skuff-lukk" onClick={onLukk} aria-label="Lukk">
+            ×
+          </button>
+        </div>
+        <div className="skuff-kropp">{children}</div>
+        {fot && <div className="skuff-fot">{fot}</div>}
+      </aside>
+    </>
+  );
+}
+
 export type Fanevalg<T extends string> = {
   nokkel: T;
   etikett: string;

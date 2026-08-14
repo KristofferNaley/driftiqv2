@@ -257,7 +257,6 @@ a { color: inherit; text-decoration: none; }
 .sidebar.collapsed .nav-gruppe,
 .sidebar.collapsed .logo-tekst { display: none; }
 
-.sidebar-fot { padding: 12px 18px; border-top: 1px solid var(--border); font-size: var(--fs-label); color: var(--muted); }
 
 .sidebar-backdrop {
   position: fixed;
@@ -641,6 +640,15 @@ a { color: inherit; text-decoration: none; }
   .bruker-rad, .bruker-hode { grid-template-columns: 1fr auto 32px; }
   .bruker-rad .kol-vekk, .bruker-hode .kol-vekk { display: none; }
 }
+/* Admin får hele raden som knapp (åpner skuffen) — samme grep som .rv-rad. Border-bottom
+   gjentas fordi border:none ellers ville nullet .list-item sin skillelinje. */
+.bruker-rad.klikkbar {
+  width: 100%; border: none; border-bottom: 1px solid var(--border);
+  background: none; text-align: left; cursor: pointer;
+  font-family: var(--font-sans); color: var(--text);
+}
+.bruker-rad.klikkbar:hover { background: var(--surface2); }
+.bruker-rad.klikkbar:last-child { border-bottom: none; }
 
 .ikon-btn {
   width: 28px; height: 28px; border-radius: 7px; background: transparent; border: none;
@@ -1825,9 +1833,6 @@ textarea.qr-input { resize: vertical; }
 .sidebar.collapsed .nav-merke { display: none; }
 @media (max-width: 768px) { .sidebar.collapsed .nav-merke { display: inline-flex; } }
 
-.sidebar-fot { display: flex; align-items: center; gap: 7px; }
-.logo-mark.liten { width: 20px; height: 20px; font-size: 9px; border-radius: 5px; }
-.sidebar.collapsed .sidebar-fot span:last-child { display: none; }
 
 /* Søkbar enhetsvelger (EnhetVelger). En `<select>` med 84 H-numre er ubrukelig — man kan
    bare hoppe med førstebokstav, og den er «H» for alle. */
@@ -2738,34 +2743,35 @@ textarea.qr-input { resize: vertical; }
 .rv-rad-frist { font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; }
 .rv-rad-frist.over { color: var(--warn); font-weight: 600; }
 
-/* Skuffen. Mounts ferdig åpen, derfor animation og ikke transition — den spilles ved mount. */
-.rv-scrim {
+/* Skuffen (components/skjema.tsx `Skuff`) — delt av risikovurderingen og brukersiden.
+   Mounts ferdig åpen, derfor animation og ikke transition — den spilles ved mount. */
+.skuff-scrim {
   position: fixed; inset: 0; z-index: 90; background: var(--shadow);
-  animation: rv-tone 0.2s ease;
+  animation: skuff-tone 0.2s ease;
 }
-.rv-skuff {
+.skuff {
   position: fixed; top: 0; right: 0; height: 100dvh; width: 460px; max-width: 100%;
   z-index: 91; display: flex; flex-direction: column;
   background: var(--surface); border-left: 1px solid var(--border);
-  animation: rv-inn 0.22s ease;
+  animation: skuff-inn 0.22s ease;
 }
-@keyframes rv-tone { from { opacity: 0; } }
-@keyframes rv-inn { from { transform: translateX(100%); } }
+@keyframes skuff-tone { from { opacity: 0; } }
+@keyframes skuff-inn { from { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) {
-  .rv-scrim, .rv-skuff { animation: none; }
+  .skuff-scrim, .skuff { animation: none; }
 }
-.rv-skuff-hode {
+.skuff-hode {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-.rv-skuff-hode h2 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
-.rv-skuff-lukk {
+.skuff-hode h2 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.skuff-lukk {
   border: none; background: none; padding: 2px 8px; border-radius: 7px;
   color: var(--muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
 }
-.rv-skuff-lukk:hover { color: var(--text); background: var(--surface2); }
-.rv-skuff-kropp { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 15px; }
-.rv-skuff-fot {
+.skuff-lukk:hover { color: var(--text); background: var(--surface2); }
+.skuff-kropp { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 15px; }
+.skuff-fot {
   display: flex; gap: 10px; align-items: center;
   padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
 }
@@ -2809,6 +2815,15 @@ textarea.qr-input { resize: vertical; }
   .rv-rad { grid-template-columns: 1fr auto; }
   .rv-rad-omrade, .rv-rad-frist { display: none; }
 }
+
+/* Tekst som viker for ikonet på mobil («Meld feil», «＋ Legg til bruker»). Knappen MÅ da
+   bære meningen selv: aria-label og title på knappen — ikonet alene er ikke nok, verken
+   for skjermleser eller for den som ser et ensomt insekt. */
+@media (max-width: 640px) { .skjul-mobil { display: none; } }
+
+/* Leverandør-KPI-ene på mobil: fire hero-tall skjøv selve lista under skjermkanten, og
+   krympet små nok til å få plass sluttet de å si noe. Vekk, ikke krympet. */
+@media (max-width: 640px) { .lev-kpi { display: none; } }
 
 /* ── Utskrift av appsider (vernerunderapporten er første bruker) ─────────────────────────
    Papiret får innholdet: meny, faner og knapper hører til skjermen. Kortene beholder

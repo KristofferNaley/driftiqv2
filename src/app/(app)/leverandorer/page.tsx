@@ -67,7 +67,9 @@ export default function Leverandorer({ searchParams }: { searchParams: Promise<{
       <div className="page-content">
         <Feil melding={feil} />
 
-        <div className="auto-grid">
+        {/* Skjules på mobil (.lev-kpi i globals.css): fire hero-tall skjøv lista under
+            skjermkanten, og på en telefon er det lista man kommer for. */}
+        <div className="auto-grid lev-kpi">
           <Nokkeltall etikett="Aktive leverandører" verdi={kpi.aktive} />
           <Nokkeltall etikett="Løpende avtaler" verdi={kpi.avtaler} />
           <Nokkeltall etikett="Åpne oppgaver" verdi={kpi.oppgaver} />

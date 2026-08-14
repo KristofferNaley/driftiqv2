@@ -7,6 +7,7 @@ import {
   Bell,
   Building2,
   History,
+  Info,
   KeyRound,
   LogOut,
   ShieldCheck,
@@ -20,6 +21,7 @@ import { AKTIVITETSSLAG, SLAG, type MinAktivitet } from "@/lib/aktivitetsslag";
 import { NIVA_ETIKETT, erPlattformadminRolle } from "@/lib/nivaer";
 import { VARSLER, VARSEL_STANDARD } from "@/lib/varselvalg";
 import { Feil, dato } from "./felles";
+import { useOkt } from "./OktProvider";
 import { Bryter, Fanemodal, Tekstfelt, type Fanevalg } from "./skjema";
 
 /**
@@ -45,7 +47,7 @@ import { Bryter, Fanemodal, Tekstfelt, type Fanevalg } from "./skjema";
  * faner ville skjult den bak et valg man må ta først. Bunnraden står stille på alle faner.
  */
 
-type Fane = "profil" | "varsler" | "lag" | "sikkerhet" | "tofaktor" | "aktivitet";
+type Fane = "profil" | "varsler" | "lag" | "sikkerhet" | "tofaktor" | "aktivitet" | "om";
 
 export default function ProfilModal({
   orgId,
@@ -57,6 +59,9 @@ export default function ProfilModal({
   onLagret: () => void;
 }) {
   const [fane, setFane] = useState<Fane>("profil");
+  // Versjonen bor her etter at sidemenyfoten røk 13.08.2026 — den sto der nederst uten at
+  // noen hadde bruk for den. Her har den kontekst: feilmeldinger, og etter hvert endringslogg.
+  const { versjon } = useOkt();
 
   /** Hele svaret, ikke bare feltene: «Mine lag» leser medlemskapene fra det samme kallet. */
   const [profil, setProfil] = useState<MegSvar | null>(null);
@@ -159,6 +164,7 @@ export default function ProfilModal({
     // sjelden rører igjen, og den skal kunne finnes uten å scrolle forbi et passordskjema.
     { nokkel: "tofaktor", etikett: "Tofaktor", Ikon: ShieldCheck },
     { nokkel: "aktivitet", etikett: "Aktivitet", Ikon: History },
+    { nokkel: "om", etikett: "Om appen", Ikon: Info },
   ];
 
   /**
@@ -286,6 +292,21 @@ export default function ProfilModal({
       )}
 
       {fane === "aktivitet" && <MinAktivitetPanel orgId={orgId} onLukk={onLukk} />}
+
+      {/* Når endringsloggen porteres fra v1, hører «Hva er nytt» hjemme her. Ingen lenke til
+          /personvern: den bor på MARKEDSVERTEN når vertene er delt, og ville 404-et herfra. */}
+      {fane === "om" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+          <div className="field">
+            <span className="field-label">DriftIQ</span>
+            <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600 }}>Versjon {versjon}</div>
+            <div className="field-note">
+              Versjonsnummeret legges automatisk ved når du melder feil eller forslag, så du
+              trenger aldri å oppgi det selv.
+            </div>
+          </div>
+        </div>
+      )}
     </Fanemodal>
   );
 }

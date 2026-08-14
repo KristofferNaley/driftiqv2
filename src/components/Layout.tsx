@@ -119,7 +119,6 @@ export default function Layout({
               }
             : null
         }
-        versjon={versjon}
         onLukk={() => setApen(false)}
         onProfil={() => setProfil(true)}
       />
