@@ -26,9 +26,10 @@ export const POLICY_NAVN = "tenant_isolasjon";
  */
 export const DIREKTE_TABELLER: readonly string[] = [
   "vendors", "vendor_contacts", "vendor_access_items", "vendor_notes",
-  // Unloc (BL-87): API-credentials og delte digitale nøkler. Credentials er kryptert i
-  // tillegg, men skal uansett aldri kunne leses på tvers av kunder.
-  "unloc_settings", "vendor_unloc_keys",
+  // Unloc (BL-87) er IKKE bygget ennå — tabellene (unloc_settings, vendor_unloc_keys)
+  // finnes ikke, og skal ikke stå her før de gjør det: registeret hevdet dekning av
+  // tabeller som ikke fantes, og plattformpanelets RLS-sjekk viste «mangler» for dem.
+  // Når integrasjonen bygges, tvinger tests/rls.test.ts dem inn igjen.
   "tasks", "contracts",
   "deviations", "deviation_attachments",
   "completion_photos",
@@ -121,6 +122,8 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // Plattformens singleton-rad med satser og trappetrinn. Har ingen org_id i det hele tatt
   // — dette er DriftIQs egne priser, ikke noe som tilhører en kunde.
   pricing_config: "plattformens prismodell, singleton uten org_id",
+  // Kjøringslogg for bakgrunnsjobbene — plattformdata uten org_id, kun plattformpanelet leser.
+  job_runs: "plattformtabell (kjøringslogg for bakgrunnsjobber), ingen org_id",
 
   // --- Nytt i v2 ---
   // Better Auth eier disse selv. De er global identitet på samme måte som `users`:

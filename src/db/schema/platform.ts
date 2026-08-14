@@ -13,7 +13,7 @@
  * sammenligningen entydig, og migreringen fra v1 tolker de gamle verdiene som UTC.
  */
 
-import { date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -104,3 +104,23 @@ export const pricingConfig = pgTable("pricing_config", {
 });
 
 export type PricingConfig = typeof pricingConfig.$inferSelect;
+
+/**
+ * Kjøringslogg for bakgrunnsjobbene — én rad per fullført kjøring, skrevet av jobben selv.
+ *
+ * Plattformdata uten org: «kjørte varslene i natt?» er plattformadmins spørsmål, og svaret
+ * skal overleve en restart — jobbene i minnet gjør ikke det. Vertens cron-jobber (backup,
+ * docker-prune) logger til filer på verten og har ingen rader her; registeret i
+ * `lib/jobber.ts` er stedet som kjenner dem.
+ */
+export const jobRuns = pgTable("job_runs", {
+  id: varchar("id").primaryKey(),
+  /** Nøkkelen fra `JOBBER` i lib/jobber.ts. */
+  job: varchar("job").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+  ok: boolean("ok").notNull(),
+  detail: text("detail"),
+});
+
+export type JobRun = typeof jobRuns.$inferSelect;

@@ -23,7 +23,15 @@ type Helse = {
   kjoretid: { node: string; next: string; oppetid: string; minneMb: number };
   vert: { oppetid: string; minneBruktMb: number; minneTotaltMb: number; last: number };
   disk: { totaltGb: number; bruktGb: number; prosent: number } | null;
-  jobb: { tidspunkt: string; tidssone: string };
+  jobber: Array<{
+    nokkel: string; navn: string; beskrivelse: string; plan: string;
+    kilde: "app" | "vert"; logg: string | null; neste: string | null;
+    siste: { naar: string; ok: boolean; detail: string | null } | null;
+  }>;
+};
+
+const NAAR: Intl.DateTimeFormatOptions = {
+  weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
 };
 
 export default function System() {
@@ -134,12 +142,44 @@ export default function System() {
         <div className="pf-kort-hode">
           <span>Bakgrunnsjobber</span>
         </div>
-        <div className="pf-kort-kropp">
-          <Felt
-            etikett="Varselsjobb"
-            verdi={`Hver dag kl. ${helse.jobb.tidspunkt} (${helse.jobb.tidssone})`}
-          />
-        </div>
+        {/* Alle jobbene — appens egne (med logget kjøringsstatus) og vertens crontab
+            (status leses i loggfilene på verten; registeret i lib/jobber.ts dokumenterer dem). */}
+        {helse.jobber.map((j) => (
+          <div
+            key={j.nokkel}
+            className="pf-kort-kropp"
+            style={{ borderTop: "1px solid var(--border)", display: "flex", gap: "14px", alignItems: "baseline", flexWrap: "wrap" }}
+          >
+            <div style={{ flex: 1, minWidth: "220px" }}>
+              <div>{j.navn} <span className="badge muted">{j.kilde === "app" ? "appen" : "verten"}</span></div>
+              <div className="field-note">{j.beskrivelse}</div>
+            </div>
+            <div style={{ minWidth: "170px" }}>
+              <div>{j.plan}</div>
+              {j.neste && (
+                <div className="field-note">
+                  neste {new Date(j.neste).toLocaleString("nb-NO", NAAR)}
+                </div>
+              )}
+            </div>
+            <div style={{ minWidth: "180px", textAlign: "right" }}>
+              {j.siste ? (
+                <>
+                  <span className={`badge ${j.siste.ok ? "ok" : "danger"}`}>
+                    {j.siste.ok ? "OK" : "Feilet"}
+                  </span>
+                  <div className="field-note" title={j.siste.detail ?? undefined}>
+                    sist {new Date(j.siste.naar).toLocaleString("nb-NO", NAAR)}
+                  </div>
+                </>
+              ) : j.kilde === "vert" ? (
+                <div className="field-note">status i {j.logg} på verten</div>
+              ) : (
+                <div className="field-note">ingen kjøringer logget ennå</div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
       <p className="field-note">

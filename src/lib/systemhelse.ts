@@ -22,8 +22,10 @@ import { statfs } from "node:fs/promises";
 import os from "node:os";
 import { sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { dbNavn } from "../db/client";
+import { appPool, dbNavn } from "../db/client";
 import { DIREKTE_TABELLER } from "../db/rls/tables";
+import { JOBBER, nesteKjoring } from "./jobber";
+import { sisteKjoringer } from "./jobbkjoring";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -46,10 +48,15 @@ function tid(sekunder: number): string {
 }
 
 export async function hentSystemhelse(db: Db) {
-  const [tilkobling, storrelse, rls, disk] = await Promise.all([
-    db.execute<{ bruker: string; versjon: string }>(
-      sql`select current_user as bruker, version() as versjon`,
-    ),
+  const [tilkobling, approlle, storrelse, rls, disk] = await Promise.all([
+    db.execute<{ versjon: string }>(sql`select version() as versjon`),
+    /**
+     * Rollen KUNDEAPPEN kobler til som — målt på appPool, ikke på denne forespørselens
+     * tilkobling. Plattformpanelet kjører med vilje på admin-poolen (withoutRls), så en
+     * `current_user` her ville alltid vist eierrollen: sjekken målte sitt eget speilbilde
+     * og ropte varsel om det (påvist 14.08.2026).
+     */
+    appPool.query<{ bruker: string }>("select current_user as bruker"),
     db.execute<{ bytes: string }>(sql`select pg_database_size(current_database()) as bytes`),
     /**
      * Står RLS faktisk på? `relrowsecurity` er «policyene gjelder», `relforcerowsecurity`
@@ -63,6 +70,8 @@ export async function hentSystemhelse(db: Db) {
     diskbruk(),
   ]);
 
+  const siste = await sisteKjoringer(db);
+
   const rader = rls.rows ?? [];
   const dekket = new Map(rader.map((r) => [r.tabell, r]));
   // Bare tabellene som SKAL ha policy. En manglende her er en reell hull i isolasjonen.
@@ -72,7 +81,7 @@ export async function hentSystemhelse(db: Db) {
   });
 
   const minne = process.memoryUsage();
-  const bruker = tilkobling.rows?.[0]?.bruker ?? "ukjent";
+  const bruker = approlle.rows?.[0]?.bruker ?? "ukjent";
 
   return {
     database: {
@@ -106,10 +115,24 @@ export async function hentSystemhelse(db: Db) {
     },
     disk,
     /**
-     * Varselsjobben. Tidspunktet er hardkodet i `instrumentation.ts`; det vises her fordi
-     * «kjørte varslene i dag?» er det første man lurer på når en kunde ikke fikk e-post.
+     * Alle bakgrunnsjobbene — appens egne og vertens crontab — med siste og neste kjøring.
+     * «Kjørte varslene i natt?» er det første man lurer på når en kunde ikke fikk e-post.
      */
-    jobb: { tidspunkt: "07:00", tidssone: "Europe/Oslo" },
+    jobber: JOBBER.map((j) => {
+      const s = siste.get(j.nokkel);
+      return {
+        nokkel: j.nokkel,
+        navn: j.navn,
+        beskrivelse: j.beskrivelse,
+        plan: j.plan,
+        kilde: j.kilde,
+        logg: j.logg ?? null,
+        neste: nesteKjoring(j.cron, j.timezone)?.toISOString() ?? null,
+        siste: s
+          ? { naar: s.finishedAt.toISOString(), ok: s.ok, detail: s.detail }
+          : null,
+      };
+    }),
   };
 }
 

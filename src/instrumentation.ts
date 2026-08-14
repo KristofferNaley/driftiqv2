@@ -26,25 +26,36 @@ export async function register(): Promise<void> {
 
   const cron = await import("node-cron");
   const { kjorVarsler } = await import("./lib/varselsjobb");
+  const { medKjoringslogg } = await import("./lib/jobbkjoring");
+  const { JOBBER } = await import("./lib/jobber");
+
+  // Uttrykk og tidssone leses fra jobbregisteret — plattformpanelet viser samme liste,
+  // og to kilder til «når kjører varslene» ville driftet fra hverandre.
+  const varsler = JOBBER.find((j) => j.nokkel === "varsler")!;
 
   cron.schedule(
-    "0 7 * * *",
+    varsler.cron,
     () => {
       void (async () => {
         try {
-          const sendt = await kjorVarsler();
-          console.log(
-            `[varsler] Ferdig — ${sendt.forsinkede} sammendrag, ${sendt.mine} personlige, ` +
-              `${sendt.kontrakter} kontraktvarsler.`,
-          );
+          // Kjøringen logges til job_runs — «kjørte varslene i natt?» skal kunne besvares
+          // fra panelet, også etter en restart.
+          await medKjoringslogg("varsler", async () => {
+            const sendt = await kjorVarsler();
+            const detalj =
+              `${sendt.forsinkede} sammendrag, ${sendt.mine} personlige, ` +
+              `${sendt.kontrakter} kontraktvarsler`;
+            console.log(`[varsler] Ferdig — ${detalj}.`);
+            return detalj;
+          });
         } catch (e) {
           // Jobben skal aldri velte serveren. Feiler den én morgen, kjører den neste.
           console.error("[varsler] Jobben feilet:", e);
         }
       })();
     },
-    { timezone: "Europe/Oslo" },
+    { timezone: varsler.timezone },
   );
 
-  console.log("[varsler] Planlagt kl. 07:00 Europe/Oslo.");
+  console.log(`[varsler] Planlagt: ${varsler.plan}.`);
 }
