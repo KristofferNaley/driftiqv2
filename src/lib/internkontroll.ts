@@ -1053,6 +1053,133 @@ export async function slettEvaluering(db: Db, orgId: string, evalId: string) {
   if (slettet.length === 0) throw ikkeFunnet("Evaluering");
 }
 
+// ---------------------------------------------------------------------------------------
+// Oversikten — internkontrollens forside
+// ---------------------------------------------------------------------------------------
+
+/** Neste frist regnes fra forrige gjennomføring: vernerunde + 6 mnd, risikovurdering + 12. */
+function plussMnd(dato: Date | string, mnd: number): string {
+  const d = new Date(dato);
+  d.setMonth(d.getMonth() + mnd);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Alt Oversikt-fanen viser, regnet server-side i ett kall (som dashbordet).
+ *
+ * Tallene gjelder HOVEDVURDERINGEN (context = NULL) — prosjektene er avgrensede
+ * vurderinger med egne chips på risikofanen, og skal ikke farge lagets forside.
+ * Fristene er lovkrav-varslingen som ble tatt ut av runde-skjemaet: de UTLEDES av
+ * forrige gjennomføring i stedet for å være et felt noen må huske å fylle ut.
+ */
+export async function hentOversikt(db: Db, orgId: string, naa: Date = new Date()) {
+  const [farer, runder, gjennomganger, sjekklister, avvikRader] = await Promise.all([
+    hentFarer(db, orgId, naa),
+    hentRunder(db, orgId),
+    hentGjennomganger(db, orgId),
+    db.select().from(safetyRoundChecklists).where(eq(safetyRoundChecklists.orgId, orgId)),
+    db
+      .select({ id: deviations.id, number: deviations.number, status: deviations.status, roundId: deviations.roundId, createdAt: deviations.reportedAt })
+      .from(deviations)
+      .where(eq(deviations.orgId, orgId)),
+  ]);
+
+  const drift = farer.filter((f) => !f.context);
+  const idag = naa.toISOString().slice(0, 10);
+
+  const kpi = {
+    registrerte: drift.length,
+    hoyRisiko: drift.filter((f) => f.status === "open" && f.niva === "hoy").length,
+    forfalteTiltak: drift
+      .filter((f) => f.status === "open")
+      .flatMap((f) => f.tiltak)
+      .filter((t) => t.status !== "done" && t.dueDate && t.dueDate < idag).length,
+    handtert: drift.filter((f) => f.status !== "open").length,
+  };
+
+  // Siste ÅRLIGE gjennomgang (context = NULL) — prosjektprotokoller er egne dokumenter.
+  const sisteAarlige = gjennomganger.find((g) => !g.context) ?? null;
+  let sisteGjennomgang = null;
+  if (sisteAarlige) {
+    const detalj = await hentGjennomgang(db, orgId, sisteAarlige.id);
+    const perOmrade = new Map<string, number>();
+    for (const p of detalj.punkter) {
+      const navn = p.category ?? "Uten område";
+      perOmrade.set(navn, (perOmrade.get(navn) ?? 0) + 1);
+    }
+    sisteGjennomgang = {
+      id: detalj.id,
+      reviewDate: detalj.reviewDate,
+      participants: detalj.participants,
+      fordeling: {
+        lav: detalj.punkter.filter((p) => p.niva === "lav").length,
+        middels: detalj.punkter.filter((p) => p.niva === "middels").length,
+        hoy: detalj.punkter.filter((p) => p.niva === "hoy").length,
+        uvurdert: detalj.punkter.filter((p) => p.niva === null).length,
+      },
+      utenTiltak: detalj.punkter.filter((p) => !p.actions).length,
+      perOmrade: [...perOmrade.entries()]
+        .map(([omrade, antall]) => ({ omrade, antall }))
+        .sort((a, b) => b.antall - a.antall),
+    };
+  }
+
+  const apneAvvik = avvikRader.filter((a) => a.status !== "lukket");
+  const oppfolging = {
+    risikoerUtenTiltak: drift.filter((f) => f.status === "open" && f.tiltak.length === 0).length,
+    apneAvvik: apneAvvik.length,
+    avvikFraRunder: apneAvvik.filter((a) => a.roundId).length,
+  };
+
+  // Fristene: fullførte gjennomføringer + utledede neste. Samme regler som forfallsflagget
+  // på farene — ingen kalenderfelt noen må huske.
+  const sisteRunde = runder.find((r) => r.status === "completed") ?? null;
+  const frister: Array<{ tittel: string; dato: string | null; status: "fullfort" | "neste" }> = [];
+  if (sisteRunde) frister.push({ tittel: sisteRunde.title, dato: sisteRunde.roundDate, status: "fullfort" });
+  if (sisteAarlige) frister.push({ tittel: "Årlig risikovurdering", dato: sisteAarlige.reviewDate, status: "fullfort" });
+  frister.push({
+    tittel: "Neste vernerunde",
+    dato: sisteRunde?.roundDate ? plussMnd(sisteRunde.roundDate, 6) : null,
+    status: "neste",
+  });
+  frister.push({
+    tittel: "Neste årlige risikovurdering",
+    dato: sisteAarlige ? plussMnd(sisteAarlige.reviewDate, 12) : null,
+    status: "neste",
+  });
+
+  // Aktiviteten settes sammen fra det som alt er tidsstemplet — en leseoperasjon,
+  // ingen egen logg å holde ved like.
+  const aktivitet: Array<{ dato: string; tekst: string }> = [
+    ...gjennomganger.map((g) => ({
+      dato: new Date(g.createdAt).toISOString(),
+      tekst: g.context
+        ? `Prosjektet «${g.context}» ble protokollert${g.participants ? ` av ${g.participants}` : ""}`
+        : `Årlig risikovurdering fullført${g.participants ? ` av ${g.participants}` : ""}`,
+    })),
+    ...runder
+      .filter((r) => r.status === "completed")
+      .map((r) => ({
+        dato: new Date(r.createdAt).toISOString(),
+        tekst: `${r.title} ble fullført og låst`,
+      })),
+    ...apneAvvik
+      .filter((a) => a.roundId)
+      .map((a) => ({
+        dato: new Date(a.createdAt).toISOString(),
+        tekst: `Avvik #${String(a.number ?? 0).padStart(3, "0")} opprettet fra vernerunde`,
+      })),
+    ...sjekklister.map((s) => ({
+      dato: new Date(s.createdAt).toISOString(),
+      tekst: `Sjekklisten «${s.name}» ble opprettet`,
+    })),
+  ]
+    .sort((a, b) => (a.dato < b.dato ? 1 : -1))
+    .slice(0, 8);
+
+  return { kpi, sisteGjennomgang, oppfolging, frister, aktivitet };
+}
+
 /** Status for hele internkontrollen — det § 5-punktene krever, og om de er dekket. */
 export async function status(db: Db, orgId: string) {
   const iAar = new Date().getFullYear();

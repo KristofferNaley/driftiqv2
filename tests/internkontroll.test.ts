@@ -24,6 +24,7 @@ import {
   hentFarer,
   hentRunde,
   hentGjennomgang,
+  hentOversikt,
   hentRunder,
   hentSjekkliste,
   opprettGjennomgang,
@@ -382,6 +383,37 @@ describe("vernerunde", () => {
 
     const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
     expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });
+  });
+});
+
+describe("oversikten", () => {
+  const fareData = { title: "Fare", probability: 2, consequence: 2, status: "open" as const };
+
+  it("regner forsiden fra hovedvurderingen og utleder fristene", async () => {
+    const org = await oppsett();
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Uten tiltak" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Prosjektfare", context: "Tak" }));
+    await i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", participants: "Styret", context: null, avsluttProsjekt: false }));
+    const runde = await i(org, (db) => opprettRunde(db, org, { title: "Høst 2026", roundDate: "2026-08-12" }));
+    await i(org, (db) => fullforRunde(db, org, runde.id));
+
+    const o = await i(org, (db) => hentOversikt(db, org));
+    // Prosjektfaren skal ikke farge forsiden — den hører til sin egen vurdering.
+    expect(o.kpi.registrerte).toBe(1);
+    expect(o.oppfolging.risikoerUtenTiltak).toBe(1);
+    expect(o.sisteGjennomgang?.reviewDate).toBe("2026-08-14");
+    // Neste frister utledes: vernerunde + 6 mnd, risikovurdering + 12.
+    expect(o.frister.find((f) => f.tittel === "Neste vernerunde")?.dato).toBe("2027-02-12");
+    expect(o.frister.find((f) => f.tittel === "Neste årlige risikovurdering")?.dato).toBe("2027-08-14");
+    expect(o.aktivitet.length).toBeGreaterThan(0);
+  });
+
+  it("står seg på et tomt lag", async () => {
+    const org = await oppsett();
+    const o = await i(org, (db) => hentOversikt(db, org));
+    expect(o.kpi.registrerte).toBe(0);
+    expect(o.sisteGjennomgang).toBeNull();
+    expect(o.frister.filter((f) => f.status === "neste").every((f) => f.dato === null)).toBe(true);
   });
 });
 

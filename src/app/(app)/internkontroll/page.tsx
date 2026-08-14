@@ -7,6 +7,7 @@ import { Faner, Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/fell
 import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, useSending } from "@/components/skjema";
 import { DeltakerVelger } from "@/components/deltakervelger";
 import { internkontroll, type HmsMal, type Sjekkliste } from "@/lib/klient";
+import { Oversikt } from "./oversikt";
 import { Risiko } from "./risiko";
 
 function Vernerunder() {
@@ -559,10 +560,9 @@ function SjekklisteSkuff({
 }
 
 export default function Internkontroll() {
-  // «Oversikt» (§ 5-status + HMS-mål) og «Ansvar» (§ 5 pkt. 5) er tatt ut i påvente av
-  // redesign — fokus er risikovurdering og vernerunde. De kommer tilbake senere;
-  // API-ene og lib-laget deres står urørt.
-  const [fane, setFane] = useState<"risiko" | "runder">("risiko");
+  // Oversikten er forsiden (redesignet etter mockups/internkontroll-oversikt-mockup.html).
+  // «Ansvar» (§ 5 pkt. 5) og HMS-målene er fortsatt utsatt; API-ene deres står urørt.
+  const [fane, setFane] = useState<"oversikt" | "risiko" | "runder">("oversikt");
   return (
     <Layout
       tittel="Internkontroll"
@@ -571,6 +571,7 @@ export default function Internkontroll() {
           valgt={fane}
           onVelg={setFane}
           faner={[
+            { nokkel: "oversikt", etikett: "Oversikt" },
             { nokkel: "risiko", etikett: "Risikovurdering" },
             { nokkel: "runder", etikett: "Vernerunder" },
           ]}
@@ -578,6 +579,9 @@ export default function Internkontroll() {
       }
     >
       <div className="page-content">
+        {fane === "oversikt" && (
+          <Oversikt onVisRisiko={() => setFane("risiko")} onVisRunder={() => setFane("runder")} />
+        )}
         {fane === "risiko" && <Risiko />}
         {fane === "runder" && <Vernerunder />}
       </div>

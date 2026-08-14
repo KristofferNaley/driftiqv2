@@ -2674,6 +2674,83 @@ textarea.qr-input { resize: vertical; }
 }
 .sjekkpunkt-avvik:hover { text-decoration: underline; }
 
+/* ══ INTERNKONTROLL-OVERSIKTEN ══
+   Etter mockups/internkontroll-oversikt-mockup.html: statusbanner, KPI-rad (deles med
+   risikofanen), siste gjennomgang med fordeling og områdestolper, oppfølgingsrader,
+   utledede frister og en aktivitetsfeed. */
+
+.iko-banner {
+  display: flex; align-items: flex-start; gap: 13px;
+  background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.3);
+  border-radius: 12px; padding: 14px 17px;
+}
+.iko-banner.ok { background: rgba(15, 186, 129, 0.08); border-color: rgba(15, 186, 129, 0.3); }
+.iko-banner-ico {
+  width: 26px; height: 26px; border-radius: 8px; flex: none;
+  display: grid; place-items: center; font-weight: 700;
+  background: rgba(245, 166, 35, 0.18); color: var(--warn);
+}
+.iko-banner.ok .iko-banner-ico { background: rgba(15, 186, 129, 0.18); color: var(--ok); }
+.iko-banner-t { font-size: var(--fs-sm); font-weight: 600; }
+.iko-banner-s { font-size: var(--fs-label); color: var(--muted); margin-top: 2px; }
+
+.iko-kolonner { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; align-items: start; }
+.iko-stabel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.iko-dato { font-size: var(--fs-lg); font-weight: 600; }
+.iko-av { font-size: var(--fs-label); color: var(--muted); margin-top: 3px; }
+.iko-split { display: flex; gap: 22px; flex-wrap: wrap; margin: 16px 0 6px; }
+.iko-n { font-size: var(--fs-lg); font-weight: 600; }
+.iko-l { font-size: var(--fs-label); color: var(--muted); margin-top: 1px; }
+.iko-split .lav .iko-n { color: var(--ok); }
+.iko-split .mid .iko-n { color: var(--warn); }
+.iko-split .hoy .iko-n { color: var(--danger); }
+.iko-dist { display: flex; height: 7px; border-radius: 4px; overflow: hidden; margin-top: 12px; background: var(--border); }
+.iko-dist i { display: block; height: 100%; }
+.iko-dist .lav { background: var(--ok); }
+.iko-dist .mid { background: var(--warn); }
+.iko-dist .hoy { background: var(--danger); }
+
+.iko-omrader { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.iko-omrader-h { font-size: var(--fs-label); color: var(--muted); margin-bottom: 10px; }
+.iko-arad { display: flex; align-items: center; gap: 11px; margin-bottom: 8px; font-size: var(--fs-label); }
+.iko-arad-navn { width: 130px; flex: none; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iko-arad-spor { flex: 1; height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.iko-arad-spor i { display: block; height: 100%; background: var(--accent); opacity: 0.75; }
+.iko-arad-tall { width: 26px; text-align: right; color: var(--muted); }
+
+.iko-folg {
+  display: flex; align-items: center; gap: 13px; width: 100%; padding: 12px 20px;
+  border: none; border-bottom: 1px solid var(--border); background: none; text-align: left;
+  cursor: pointer; font-family: var(--font-sans); color: var(--text); text-decoration: none;
+  font-size: var(--fs-sm);
+}
+.iko-folg:hover { background: var(--surface2); }
+.iko-folg:last-child { border-bottom: none; }
+.iko-folg-tall { font-size: var(--fs-md); font-weight: 600; width: 30px; flex: none; text-align: center; }
+.iko-folg.gul .iko-folg-tall { color: var(--warn); }
+.iko-folg.roed .iko-folg-tall { color: var(--danger); }
+.iko-folg-t { flex: 1; min-width: 0; }
+.iko-folg-t small { display: block; color: var(--muted); font-size: var(--fs-label); margin-top: 1px; }
+.iko-folg-pil { color: var(--muted); }
+
+.iko-frist { display: flex; align-items: center; gap: 13px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.iko-merke { width: 9px; height: 9px; border-radius: 3px; flex: none; background: var(--muted); opacity: 0.5; }
+.iko-merke.fullfort { background: var(--ok); opacity: 1; }
+.iko-merke.neste { background: var(--accent); opacity: 1; }
+.iko-frist-t { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: var(--fs-sm); }
+.iko-frist-d { font-size: var(--fs-label); color: var(--muted); margin-top: 1px; }
+.iko-frist-note { padding: 11px 20px; font-size: var(--fs-label); color: var(--muted); }
+
+.iko-akt { display: flex; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); }
+.iko-akt:last-child { border-bottom: none; }
+.iko-akt-d { color: var(--muted); width: 52px; flex: none; }
+.iko-akt-t { color: var(--text); min-width: 0; }
+
+@media (max-width: 980px) {
+  .iko-kolonner { grid-template-columns: 1fr; }
+}
+
 /* ══ VERNERUNDE-GJENNOMFØRINGEN ══
    Etter mockups/vernerunde-mockup.html: deltakerne som chips øverst, klebrig
    fremdriftslinje, punktene som kort med tre store valgknapper, avviksskjemaet INNE i

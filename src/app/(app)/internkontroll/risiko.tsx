@@ -441,8 +441,9 @@ function GjennomgangModal({
   );
 }
 
-/** Samme lille kort som avvikssiden bruker — fargen styrer topplinja via `--kpi-farge`. */
-function Kpi({
+/** Samme lille kort som avvikssiden bruker — fargen styrer topplinja via `--kpi-farge`.
+    Eksportert: Oversikt-fanen viser de samme fire tallene. */
+export function Kpi({
   farge,
   etikett,
   verdi,
