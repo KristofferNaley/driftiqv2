@@ -23,8 +23,10 @@ import {
   hentAnsvar,
   hentFarer,
   hentRunde,
+  hentGjennomgang,
   hentRunder,
   hentSjekkliste,
+  opprettGjennomgang,
   leggTilDeltaker,
   leggTilPunkt as leggTilRundepunkt,
   leggTilSjekklistepunkt,
@@ -39,6 +41,7 @@ import {
   seedFarer,
   settAnsvar,
   signerMal,
+  slettFare,
   slettPunkt,
   slettRunde,
   slettSjekkliste,
@@ -78,6 +81,8 @@ afterEach(async () => {
     await eier.query("DELETE FROM safety_round_checklists WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hazard_actions WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hazards WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM risk_review_items WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM risk_reviews WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hms_goal_approvals WHERE goal_id IN (SELECT id FROM hms_goals WHERE org_id = $1)", [id]);
     await eier.query("DELETE FROM hms_sub_goals WHERE goal_id IN (SELECT id FROM hms_goals WHERE org_id = $1)", [id]);
     await eier.query("DELETE FROM hms_goals WHERE org_id = $1", [id]);
@@ -419,6 +424,54 @@ describe("årlig vurdering og prosjektkontekst", () => {
     const farer = await i(org, (db) => hentFarer(db, org));
     expect(farer.find((f) => f.title === "Fallende materialer")?.context).toBe("Takrehabilitering 2027");
     expect(farer.find((f) => f.title === "Isglatte trapper")?.context).toBeNull();
+  });
+});
+
+describe("risikogjennomganger", () => {
+  const fareData = { title: "Fare", probability: 2, consequence: 2, status: "open" as const };
+
+  it("protokollerer et øyeblikksbilde som står seg når registeret endres", async () => {
+    const org = await oppsett();
+    const fare = await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Gammel heis", probability: 3, consequence: 2 }));
+    await i(org, (db) => opprettTiltak(db, org, { hazardId: fare.id, title: "Bestille service", status: "in_progress" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Isglatte trapper" }));
+
+    const g = await i(org, (db) =>
+      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", participants: "Hele styret", conclusion: "Under kontroll", context: null }),
+    );
+    expect(g.punkter.map((p) => p.title)).toEqual(["Gammel heis", "Isglatte trapper"]);
+    expect(g.punkter[0]!.actions).toContain("Bestille service — pågår");
+
+    // Registeret lever videre — protokollen skal lese likt om ti år.
+    await i(org, (db) => endreFare(db, org, fare.id, { probability: 1, consequence: 1 }));
+    await i(org, (db) => slettFare(db, org, fare.id));
+
+    const etter = await i(org, (db) => hentGjennomgang(db, org, g.id));
+    expect(etter.punkter).toHaveLength(2);
+    expect(etter.punkter[0]!.probability).toBe(3);
+    expect(etter.punkter[0]!.risiko).toBe(6);
+  });
+
+  it("protokollerer én vurdering om gangen — drift og prosjekt hver for seg", async () => {
+    const org = await oppsett();
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Drift" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Fallende materialer", context: "Takrehabilitering" }));
+
+    const prosjekt = await i(org, (db) =>
+      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: "Takrehabilitering" }),
+    );
+    expect(prosjekt.punkter.map((p) => p.title)).toEqual(["Fallende materialer"]);
+
+    const drift = await i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null }));
+    expect(drift.punkter.map((p) => p.title)).toEqual(["Drift"]);
+  });
+
+  it("nekter å protokollere en tom vurdering", async () => {
+    const org = await oppsett();
+    const feil = await feilFra(() =>
+      i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null })),
+    );
+    expect(feil.status).toBe(400);
   });
 });
 

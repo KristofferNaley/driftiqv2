@@ -97,6 +97,49 @@ export const hazards = pgTable("hazards", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Gjennomført risikogjennomgang — protokollen for at styret GIKK GJENNOM risikobildet.
+ *
+ * Født låst: å opprette gjennomgangen ER fullføringen, og den kan verken endres eller
+ * slettes — samme filosofi som en fullført vernerunde. Punktene under er KOPIER av
+ * risikobildet i det øyeblikket (jf. sjekklister/runder), så registeret kan leve videre
+ * mens protokollen leser likt om ti år. `context` sier hvilken vurdering som ble
+ * gjennomgått: NULL = den løpende driften, ellers prosjektnavnet.
+ */
+export const riskReviews = pgTable("risk_reviews", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  context: varchar("context"),
+  reviewDate: date("review_date").notNull(),
+  /** Fritekst, som i hms_evaluations — deltakerne trenger ikke være brukere. */
+  participants: varchar("participants"),
+  conclusion: text("conclusion"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Øyeblikksbildet av én fare slik den sto ved gjennomgangen. Egen org_id → enkel RLS. */
+export const riskReviewItems = pgTable("risk_review_items", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  reviewId: varchar("review_id")
+    .notNull()
+    .references(() => riskReviews.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  category: varchar("category"),
+  description: text("description"),
+  probability: integer("probability"),
+  consequence: integer("consequence"),
+  status: varchar("status").notNull(),
+  owner: varchar("owner"),
+  /** Tiltakene som tekst («Skifte rekkverk — pågår, frist 01.10.2026»), én per linje. */
+  actions: text("actions"),
+  order: integer("order").notNull().default(0),
+});
+
 /** Tiltak mot en fare. Egen `org_id` som i v1 — RLS-policyen blir da den enkle formen. */
 export const hazardActions = pgTable("hazard_actions", {
   id: varchar("id").primaryKey(),
@@ -262,6 +305,8 @@ export type HmsGoal = typeof hmsGoals.$inferSelect;
 export type Hazard = typeof hazards.$inferSelect;
 export type HazardAction = typeof hazardActions.$inferSelect;
 export type SafetyRound = typeof safetyRounds.$inferSelect;
+export type RiskReview = typeof riskReviews.$inferSelect;
+export type RiskReviewItem = typeof riskReviewItems.$inferSelect;
 export type SafetyRoundChecklist = typeof safetyRoundChecklists.$inferSelect;
 export type SafetyRoundChecklistItem = typeof safetyRoundChecklistItems.$inferSelect;
 export type HmsResponsibility = typeof hmsResponsibilities.$inferSelect;

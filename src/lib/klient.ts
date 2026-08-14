@@ -432,6 +432,21 @@ export type HmsMal = {
   id: string; templateType: string; name: string; description: string | null; isDefault: boolean;
 };
 
+export type Gjennomgang = {
+  id: string; context: string | null; reviewDate: string;
+  participants: string | null; conclusion: string | null; createdAt: string;
+  antallFarer: number;
+};
+
+export type GjennomgangDetalj = Omit<Gjennomgang, "antallFarer"> & {
+  punkter: Array<{
+    id: string; title: string; category: string | null; description: string | null;
+    probability: number | null; consequence: number | null;
+    status: string; owner: string | null; actions: string | null;
+    risiko: number | null; niva: "lav" | "middels" | "hoy" | null;
+  }>;
+};
+
 export type Sjekkliste = {
   id: string; name: string; description: string | null; antallPunkter: number;
 };
@@ -474,6 +489,9 @@ export const internkontroll = {
   nyttTiltak: (o: string, d: unknown) => api.send(org(o, "/hms/actions"), d),
   endreTiltak: (o: string, id: string, d: unknown) => api.endre(org(o, `/hms/actions/${id}`), d),
   slettTiltak: (o: string, id: string) => api.slett(org(o, `/hms/actions/${id}`)),
+  gjennomganger: (o: string) => api.hent<Gjennomgang[]>(org(o, "/hms/risk-reviews")),
+  hentGjennomgang: (o: string, id: string) => api.hent<GjennomgangDetalj>(org(o, `/hms/risk-reviews/${id}`)),
+  nyGjennomgang: (o: string, d: unknown) => api.send<GjennomgangDetalj>(org(o, "/hms/risk-reviews"), d),
   sjekklister: (o: string) => api.hent<Sjekkliste[]>(org(o, "/hms/checklists")),
   hentSjekkliste: (o: string, id: string) => api.hent<SjekklisteDetalj>(org(o, `/hms/checklists/${id}`)),
   nySjekkliste: (o: string, d: unknown) => api.send<SjekklisteDetalj>(org(o, "/hms/checklists"), d),

@@ -24,6 +24,8 @@ import {
   hmsGoals,
   hmsResponsibilities,
   hmsSubGoals,
+  riskReviewItems,
+  riskReviews,
   safetyRoundChecklistItems,
   safetyRoundChecklists,
   safetyRoundItems,
@@ -154,6 +156,14 @@ export const ansvarInn = z.object({
   area: z.enum(ANSVARSOMRADER),
   personName: tekst,
   note: z.string().nullish(),
+});
+
+export const gjennomgangInn = z.object({
+  reviewDate: z.string().date(),
+  participants: tekst,
+  conclusion: z.string().nullish(),
+  /** Hvilken vurdering som gjennomgås: NULL = løpende drift, ellers prosjektnavnet. */
+  context: tekst,
 });
 
 export const evalueringInn = z.object({
@@ -880,6 +890,103 @@ export async function slettRunde(db: Db, orgId: string, roundId: string) {
   const runde = await hentRunde(db, orgId, roundId);
   krevUlast(runde);
   await db.delete(safetyRounds).where(and(eq(safetyRounds.id, roundId), eq(safetyRounds.orgId, orgId)));
+}
+
+// ---------------------------------------------------------------------------------------
+// Risikogjennomganger — protokollen for at styret gikk gjennom risikobildet
+// ---------------------------------------------------------------------------------------
+
+const TILTAK_ETIKETT: Record<string, string> = {
+  not_started: "ikke startet",
+  in_progress: "pågår",
+  done: "utført",
+};
+
+export async function hentGjennomganger(db: Db, orgId: string) {
+  const gjennomganger = await db
+    .select()
+    .from(riskReviews)
+    .where(eq(riskReviews.orgId, orgId))
+    .orderBy(desc(riskReviews.reviewDate), desc(riskReviews.createdAt));
+
+  const antall = await db
+    .select({ reviewId: riskReviewItems.reviewId, n: count() })
+    .from(riskReviewItems)
+    .where(eq(riskReviewItems.orgId, orgId))
+    .groupBy(riskReviewItems.reviewId);
+
+  return gjennomganger.map((g) => ({
+    ...g,
+    antallFarer: Number(antall.find((a) => a.reviewId === g.id)?.n ?? 0),
+  }));
+}
+
+export async function hentGjennomgang(db: Db, orgId: string, reviewId: string) {
+  const rader = await db
+    .select()
+    .from(riskReviews)
+    .where(and(eq(riskReviews.id, reviewId), eq(riskReviews.orgId, orgId)))
+    .limit(1);
+  const gjennomgang = rader[0];
+  if (!gjennomgang) throw ikkeFunnet("Risikogjennomgang");
+
+  const punkter = await db
+    .select()
+    .from(riskReviewItems)
+    .where(and(eq(riskReviewItems.reviewId, reviewId), eq(riskReviewItems.orgId, orgId)))
+    .orderBy(asc(riskReviewItems.order));
+
+  return {
+    ...gjennomgang,
+    // Ikke medRisiko(): et øyeblikksbilde har ingen «vurder på nytt»-frist — det er
+    // nettopp poenget med det. Bare tall og nivå utledes.
+    punkter: punkter.map((p) => {
+      const tall = risiko(p);
+      return { ...p, risiko: tall, niva: tall === null ? null : risikoniva(tall) };
+    }),
+  };
+}
+
+/**
+ * Fullfører en gjennomgang: protokollen opprettes LÅST, med et øyeblikksbilde av alle
+ * farene i den valgte vurderingen (drift eller ett prosjekt) slik skjermen viste dem.
+ * Registeret lever videre — protokollen skal lese likt om ti år.
+ */
+export async function opprettGjennomgang(db: Db, orgId: string, data: z.infer<typeof gjennomgangInn>) {
+  const alle = await hentFarer(db, orgId);
+  const farer = alle.filter((f) => (data.context ? f.context === data.context : !f.context));
+  if (farer.length === 0) {
+    throw ugyldig("Ingen farer i denne vurderingen — det er ingenting å protokollere");
+  }
+
+  const [ny] = await db
+    .insert(riskReviews)
+    .values({ id: randomUUID(), orgId, ...data })
+    .returning();
+
+  await db.insert(riskReviewItems).values(
+    farer.map((f, i) => ({
+      id: randomUUID(),
+      orgId,
+      reviewId: ny!.id,
+      title: f.title,
+      category: f.category,
+      description: f.description,
+      probability: f.probability,
+      consequence: f.consequence,
+      status: f.status,
+      owner: f.owner,
+      actions:
+        f.tiltak.length > 0
+          ? f.tiltak
+              .map((t) => `${t.title} — ${TILTAK_ETIKETT[t.status] ?? t.status}${t.dueDate ? `, frist ${t.dueDate}` : ""}`)
+              .join("\n")
+          : null,
+      order: i,
+    })),
+  );
+
+  return hentGjennomgang(db, orgId, ny!.id);
 }
 
 // ---------------------------------------------------------------------------------------

@@ -34,6 +34,8 @@ export const DIREKTE_TABELLER: readonly string[] = [
   "completion_photos",
   "units",
   "hms_goals", "hazards", "hazard_actions", "safety_rounds", "safety_round_checklists",
+  // Gjennomgangsprotokollene og øyeblikksbildene deres — begge har egen org_id.
+  "risk_reviews", "risk_review_items",
   "hms_responsibilities", "hms_evaluations",
   "parking_spots", "parking_leases", "parking_waitlist",
   "annual_events", "log_entries",

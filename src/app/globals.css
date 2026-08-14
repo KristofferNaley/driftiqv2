@@ -1334,6 +1334,34 @@ textarea.qr-input { resize: vertical; }
   }
 }
 
+/* ── RISIKOPROTOKOLLEN (flersidig A4) ──
+   Gjennomgangsarket er en tabell som kan bli flere sider — i motsetning til oppgavearket
+   får høyden vokse, og utskriften bryter mellom radene (aldri midt i en). */
+.ark.ark-flersidig { height: auto; min-height: 297mm; overflow: visible; }
+.ark-rtab-wrap { padding: 6mm 14mm 0; }
+.ark-rtab { width: 100%; border-collapse: collapse; font-size: 10.5px; color: #0d1b2a; }
+.ark-rtab th {
+  text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #3d4a5c; border-bottom: 1.5px solid #0d1b2a; padding: 2mm 1.5mm;
+}
+.ark-rtab td { border-bottom: 1px solid #e2e8f0; padding: 2.5mm 1.5mm; vertical-align: top; }
+.ark-rtab tr { break-inside: avoid; }
+.ark-rtab .beskrivelse { color: #3d4a5c; white-space: pre-wrap; font-size: 9.5px; margin-top: 1mm; }
+.ark-rtab td.beskrivelse { margin-top: 0; }
+.ark-rkat td { background: #eef3f9; font-weight: 700; }
+.ark-rniva {
+  display: inline-block; padding: 1px 7px; border-radius: 6px;
+  font-weight: 700; font-size: 9.5px; white-space: nowrap;
+}
+.ark-rniva.lav { background: #e6f6ec; color: #1b7a3d; }
+.ark-rniva.middels { background: #fdf3dd; color: #9a6b00; }
+.ark-rniva.hoy { background: #fdeceb; color: #c22525; }
+.ark-rniva.ukjent { background: #eef1f5; color: #3d4a5c; }
+.ark-rkonk { padding: 6mm 14mm 0; }
+@media print {
+  .ark.ark-flersidig { height: auto; }
+}
+
 /* ── OPPGAVETABELLEN ──
    Samme mekanikk som avvikstabellen: `minmax(0, …)` på fr-kolonnene, og en scroll-container
    rundt i stedet for å presse kolonnene til uleselige på smale skjermer. */

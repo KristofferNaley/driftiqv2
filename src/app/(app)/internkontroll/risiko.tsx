@@ -16,28 +16,25 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { internkontroll, type Fare, type HmsMal } from "@/lib/klient";
+import {
+  FARESTATUS_ETIKETT,
+  KONSEKVENS_ORD as KONSEKVENS,
+  NIVAMERKE,
+  NIVATEKST,
+  SANNSYNLIGHET_ORD as SANNSYNLIGHET,
+  risikonivaKlient as niva,
+} from "@/lib/risikoord";
 
-const SANNSYNLIGHET = ["Lite sannsynlig", "Mulig", "Sannsynlig"];
-const KONSEKVENS = ["Liten", "Moderat", "Alvorlig"];
-const NIVATEKST = { lav: "Lav", middels: "Middels", hoy: "Høy" } as const;
-const NIVAMERKE = { lav: "ok", middels: "warn", hoy: "danger" } as const;
-const FARESTATUS = [
-  { verdi: "open", etikett: "Åpen" },
-  { verdi: "mitigated", etikett: "Under kontroll" },
-  { verdi: "closed", etikett: "Lukket" },
-];
+const FARESTATUS = Object.entries(FARESTATUS_ETIKETT).map(([verdi, etikett]) => ({ verdi, etikett }));
 const TILTAKSSTATUS = [
   { verdi: "not_started", etikett: "Ikke startet" },
   { verdi: "in_progress", etikett: "Pågår" },
   { verdi: "done", etikett: "Utført" },
 ];
-
-/** Klientkopi av lib/internkontroll.ts' `risikoniva` — lib-en drar med seg drizzle/zod. */
-const niva = (tall: number): "lav" | "middels" | "hoy" =>
-  tall <= 2 ? "lav" : tall <= 4 ? "middels" : "hoy";
 
 /** Nærmeste frist blant farens åpne tiltak — det er den datoen styret styrer etter. */
 function nesteFrist(f: Fare): string | null {
@@ -49,8 +46,10 @@ function nesteFrist(f: Fare): string | null {
 
 export function Risiko() {
   const { data, feil, laster, last, orgId } = useOrgData((o) => internkontroll.farer(o));
+  const gjennomganger = useOrgData((o) => internkontroll.gjennomganger(o));
   // null = lukket, { fare: null } = ny fare — skiller «ingen skuff» fra «tom skuff».
   const [skuff, setSkuff] = useState<{ fare: Fare | null } | null>(null);
+  const [fullforer, setFullforer] = useState(false);
   const [seeder, setSeeder] = useState(false);
   const [omrade, setOmrade] = useState<string | null>(null);
   const [celle, setCelle] = useState<{ s: number; k: number } | null>(null);
@@ -224,6 +223,7 @@ export function Risiko() {
           )}
         </div>
 
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
         <div className="card">
           <div className="card-header">
             <div className="card-title">Risikomatrise</div>
@@ -249,6 +249,35 @@ export function Risiko() {
             </div>
           </div>
         </div>
+
+        {/* Protokollene: hver gjennomgang er et låst øyeblikksbilde med eget A4-ark —
+            det er slik «se tilbake i tid» faktisk virker. */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Gjennomganger</div>
+            <button className="btn btn-ghost" onClick={() => setFullforer(true)}>
+              Fullfør gjennomgang
+            </button>
+          </div>
+          {gjennomganger.laster ? (
+            <Tom tekst="Henter …" />
+          ) : (gjennomganger.data ?? []).length === 0 ? (
+            <Tom tekst="Ingen gjennomganger protokollert ennå. «Fullfør gjennomgang» låser et øyeblikksbilde av risikobildet — den årlige dokumentasjonen." />
+          ) : (
+            (gjennomganger.data ?? []).map((g) => (
+              <Link key={g.id} href={`/internkontroll/risikovurdering/${g.id}/ark`} className="list-item" style={{ textDecoration: "none", color: "inherit" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="list-tittel">{dato(g.reviewDate)} — {g.context ?? "Løpende drift"}</div>
+                  <div className="list-meta">
+                    {g.antallFarer} farer{g.participants ? ` · ${g.participants}` : ""}
+                  </div>
+                </div>
+                <span className="badge muted">Åpne ark</span>
+              </Link>
+            ))
+          )}
+        </div>
+        </div>
       </div>
 
       {skuff && orgId && (
@@ -266,7 +295,94 @@ export function Risiko() {
       {seeder && orgId && (
         <SeedModal orgId={orgId} onLukk={() => setSeeder(false)} onLagret={last} />
       )}
+
+      {fullforer && orgId && (
+        <GjennomgangModal
+          orgId={orgId}
+          kontekst={kontekst}
+          antallFarer={grunnlag.length}
+          antallUvurderte={grunnlag.filter((f) => f.trengerVurdering).length}
+          onLukk={() => setFullforer(false)}
+          onLagret={async () => {
+            await gjennomganger.last();
+            setFullforer(false);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * Fullfører en gjennomgang: protokollen fødes låst, med øyeblikksbilde av vurderingen som
+ * er valgt i chipene. Det er DEN årlige dokumentasjonen — registeret lever videre.
+ */
+function GjennomgangModal({
+  orgId,
+  kontekst,
+  antallFarer,
+  antallUvurderte,
+  onLukk,
+  onLagret,
+}: {
+  orgId: string;
+  kontekst: string | null;
+  antallFarer: number;
+  antallUvurderte: number;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+}) {
+  const [datoVerdi, setDatoVerdi] = useState(new Date().toISOString().slice(0, 10));
+  const [deltakere, setDeltakere] = useState("");
+  const [konklusjon, setKonklusjon] = useState("");
+  const { sender, feil, send } = useSending(() => {});
+  const navnet = kontekst ?? "Løpende drift";
+
+  return (
+    <Modal tittel="Fullfør gjennomgang" onLukk={onLukk} bredde={480}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(async () => {
+            await internkontroll.nyGjennomgang(orgId, {
+              reviewDate: datoVerdi,
+              participants: deltakere.trim() || null,
+              conclusion: konklusjon.trim() || null,
+              context: kontekst,
+            });
+            await onLagret();
+          });
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+      >
+        <Feil melding={feil} />
+        <div className="field-note">
+          Protokollerer <b>{navnet}</b> slik den står nå: {antallFarer}{" "}
+          {antallFarer === 1 ? "fare" : "farer"} låses som et øyeblikksbilde med eget
+          utskriftsark. Registeret kan redigeres videre etterpå.
+        </div>
+        {antallUvurderte > 0 && (
+          <div className="field-note" style={{ color: "var(--warn, #b8860b)" }}>
+            {antallUvurderte} av farene mangler vurdering eller er forfalt — de
+            protokolleres som de står. Vurder dem gjerne først.
+          </div>
+        )}
+        <Tekstfelt etikett="Dato for gjennomgangen" type="date" verdi={datoVerdi} onEndre={setDatoVerdi} />
+        <Tekstfelt
+          etikett="Deltakere"
+          verdi={deltakere}
+          onEndre={setDeltakere}
+          plassholder="For eksempel: hele styret, vaktmester"
+        />
+        <Tekstomrade
+          etikett="Konklusjon"
+          verdi={konklusjon}
+          onEndre={setKonklusjon}
+          plassholder="Styrets vurdering — hva er under kontroll, og hva følges opp?"
+        />
+        <Knapperad onAvbryt={onLukk} sendEtikett="Fullfør og lås" sender={sender} deaktivert={antallFarer === 0} />
+      </form>
+    </Modal>
   );
 }
 
