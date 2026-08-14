@@ -16,8 +16,8 @@ import { arssum, grunnpakke, kroner, type Trinn } from "@/lib/prisregler";
  * vertikal fane-skinne i tre grupper (kundeforhold, abonnement, tilgang og sikkerhet),
  * sammendraget først — det svarer på «hvordan står det til» uten å åpne noe.
  *
- * Support-modus står som stripe øverst på ALLE fanene med vilje: det er den mest
- * inngripende handlingen i panelet, og den skal ikke ligge bak en fane man må huske.
+ * Support-modus bor i sin egen fane under «Tilgang og sikkerhet» — men et AKTIVT innsyn
+ * merkes på selve fanen, så et pågående innsyn aldri er usynlig fra resten av siden.
  */
 
 type Kunde = {
@@ -111,15 +111,15 @@ const GRUPPER = [
   },
   {
     navn: "Abonnement",
-    faner: [
-      { nokkel: "moduler", etikett: "Moduler" },
-      { nokkel: "fakturering", etikett: "Fakturering" },
-    ],
+    // Én fane: modulene ER fakturagrunnlaget — å velge moduler og se hva det koster er
+    // samme sak, og hørte aldri hjemme på to sider.
+    faner: [{ nokkel: "abonnement", etikett: "Moduler og pris" }],
   },
   {
     navn: "Tilgang og sikkerhet",
     faner: [
       { nokkel: "brukere", etikett: "Brukere" },
+      { nokkel: "support", etikett: "Support-modus" },
       { nokkel: "innsyn", etikett: "Innsynslogg" },
     ],
   },
@@ -159,16 +159,23 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
     );
   }
 
-  const { org, onboarding } = detalj;
+  const { onboarding } = detalj;
+  // Aktivt innsyn skal synes selv om support bor i en egen fane — et pågående innsyn man
+  // må klikke seg inn for å oppdage, er et glemt innsyn.
+  const aktivSupport = kunde.sesjoner.some(
+    (s) => !s.endedAt && s.expiresAt && new Date(s.expiresAt) > new Date(),
+  );
   const merker: Record<Fane, string | null> = {
     sammendrag: null,
     organisasjon: null,
     onboarding: `${onboarding.prosent} %`,
-    moduler: `${detalj.moduler.length}/${ALLE_MODULER.length}`,
-    fakturering: null,
+    abonnement: `${detalj.moduler.length}/${ALLE_MODULER.length}`,
     brukere: String(kunde.brukere.length),
+    support: aktivSupport ? "Aktiv" : null,
     innsyn: null,
   };
+  const merkeklasse = (nokkel: Fane) =>
+    nokkel === "support" || (nokkel === "onboarding" && onboarding.prosent < 100) ? "warn" : "muted";
 
   return (
     <Ramme tittel={kunde.name}>
@@ -176,18 +183,7 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
         ← Alle kunder
       </Link>
 
-      {/* Merkene under tittelen — det man trenger for å vite HVEM man står i. */}
-      <div className="pf-tags">
-        <span className={`badge ${org.active ? "ok" : "danger"}`}>{org.active ? "Aktiv" : "Inaktiv"}</span>
-        {org.orgForm && <span className="pf-tagg">{org.orgForm}</span>}
-        {org.unitCount !== null && <span className="pf-tagg">{org.unitCount} andeler</span>}
-        {org.createdAt && <span className="pf-tagg">Kunde siden {dato(org.createdAt)}</span>}
-        <span className="pf-tagg">{formatOrgNr(org.orgNr) ?? "org.nr ikke satt"}</span>
-      </div>
-
       {feil && <div className="feilmelding">{feil}</div>}
-
-      <Support kunde={kunde} orgId={orgId} onEndret={last} onFeil={setFeil} />
 
       <div className="pf-skinne-layout">
         <nav className="pf-skinne" aria-label="Kundeseksjoner">
@@ -202,9 +198,7 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
                 >
                   {f.etikett}
                   {merker[f.nokkel] && (
-                    <span className={`badge ${f.nokkel === "onboarding" && onboarding.prosent < 100 ? "warn" : "muted"}`}>
-                      {merker[f.nokkel]}
-                    </span>
+                    <span className={`badge ${merkeklasse(f.nokkel)}`}>{merker[f.nokkel]}</span>
                   )}
                 </button>
               ))}
@@ -216,11 +210,16 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
           {fane === "sammendrag" && <Sammendrag detalj={detalj} kunde={kunde} onGaTil={setFane} />}
           {fane === "organisasjon" && <Organisasjon detalj={detalj} onEndret={last} />}
           {fane === "onboarding" && <OnboardingFane detalj={detalj} />}
-          {fane === "moduler" && <ModulFane detalj={detalj} orgId={orgId} onEndret={last} />}
-          {fane === "fakturering" && (
-            <Fakturering detalj={detalj} orgId={orgId} onEndret={last} onFeil={setFeil} />
+          {fane === "abonnement" && (
+            <>
+              <ModulFane detalj={detalj} orgId={orgId} onEndret={last} />
+              <Fakturering detalj={detalj} orgId={orgId} onEndret={last} onFeil={setFeil} />
+            </>
           )}
           {fane === "brukere" && <Brukere kunde={kunde} />}
+          {fane === "support" && (
+            <Support kunde={kunde} orgId={orgId} onEndret={last} onFeil={setFeil} />
+          )}
           {fane === "innsyn" && <Innsynslogg kunde={kunde} />}
         </div>
       </div>
@@ -348,7 +347,7 @@ function Sammendrag({
   return (
     <>
       <div className="pf-grid">
-        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("fakturering")}>
+        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("abonnement")}>
           <span className="pf-snarvei-tittel">Abonnement</span>
           {abonnement ? (
             <>
@@ -376,7 +375,7 @@ function Sammendrag({
           )}
         </button>
 
-        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("moduler")}>
+        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("abonnement")}>
           <span className="pf-snarvei-tittel">Aktive moduler</span>
           <span className="pf-snarvei-tall">
             {detalj.moduler.length} / {ALLE_MODULER.length}
@@ -626,8 +625,11 @@ function ModulFane({
             const betalt = TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number]);
             return (
               <label key={n} className="pf-modul-valg">
+                {/* Sjekkboks i semantikken, bryter i utseendet — skjermleser og tastatur
+                    får et vanlig checkbox-felt, øyet får mockupens av/på. */}
                 <input
                   type="checkbox"
+                  className="pf-bryter-input"
                   checked={alltidPa || valgte.includes(n)}
                   // Dashboard kan ikke slås av — det er ikke en modul man selger, det er forsiden.
                   disabled={alltidPa}
@@ -635,6 +637,7 @@ function ModulFane({
                     setValgte(e.target.checked ? [...valgte, n] : valgte.filter((v) => v !== n))
                   }
                 />
+                <span className="pf-bryter" aria-hidden />
                 <span style={{ minWidth: 0 }}>
                   <span className="pf-navn">{MENY[n]!.etikett}</span>
                 </span>

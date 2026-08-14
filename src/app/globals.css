@@ -1994,14 +1994,8 @@ textarea.qr-input { resize: vertical; }
 .pf-stat-rad.hode .pf-sorter:not(:first-child) { text-align: right; }
 
 /* ── Kundesiden (v3) ──
-   Etter mockups/kundeside-v3-mockup.html: merker under tittelen, og vertikal fane-skinne
-   i grupper — kundeforhold, abonnement, tilgang og sikkerhet. */
-.pf-tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.pf-tagg {
-  font-size: var(--fs-label); padding: 3px 9px; border-radius: 999px;
-  border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
-}
-
+   Etter mockups/kundeside-v3-mockup.html: vertikal fane-skinne i grupper —
+   kundeforhold, abonnement, tilgang og sikkerhet. */
 .pf-skinne-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
 .pf-skinne { position: sticky; top: 12px; }
 .pf-skinne-gruppe { margin-bottom: 16px; }
@@ -2026,6 +2020,22 @@ textarea.qr-input { resize: vertical; }
   padding: 10px 16px 4px; font-size: var(--fs-label); font-weight: 700;
   letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted);
 }
+
+/* Av/på-bryteren på modulfanen. Selve inputen er usynlig men til stede — fokus og
+   skjermleser treffer en ekte sjekkboks, sporet og knotten er ren pynt. */
+.pf-bryter-input { position: absolute; opacity: 0; pointer-events: none; }
+.pf-bryter {
+  width: 34px; height: 20px; border-radius: 999px; position: relative; flex: none;
+  background: var(--surface2); border: 1px solid var(--border); transition: background 0.15s;
+}
+.pf-bryter::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--muted); transition: left 0.15s, background 0.15s;
+}
+.pf-bryter-input:checked + .pf-bryter { background: var(--accent); border-color: var(--accent); }
+.pf-bryter-input:checked + .pf-bryter::after { left: 16px; background: #fff; }
+.pf-bryter-input:disabled + .pf-bryter { opacity: 0.55; }
+.pf-bryter-input:focus-visible + .pf-bryter { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   /* Skinnen blir en horisontal faner-rad — samme grep som mockupen. */
