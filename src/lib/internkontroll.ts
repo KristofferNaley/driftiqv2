@@ -162,8 +162,14 @@ export const gjennomgangInn = z.object({
   reviewDate: z.string().date(),
   participants: tekst,
   conclusion: z.string().nullish(),
-  /** Hvilken vurdering som gjennomgås: NULL = løpende drift, ellers prosjektnavnet. */
+  /** Hvilken vurdering som gjennomgås: NULL = den årlige hovedvurderingen, ellers prosjektnavnet. */
   context: tekst,
+  /**
+   * Avslutter prosjektet: etter protokolleringen SLETTES farene i konteksten fra
+   * registeret. Protokollen er historikken — registeret skal bare vise det som er
+   * aktuelt. Krever `context`; hovedvurderingen kan aldri avsluttes.
+   */
+  avsluttProsjekt: z.boolean().default(false),
 });
 
 export const evalueringInn = z.object({
@@ -953,6 +959,11 @@ export async function hentGjennomgang(db: Db, orgId: string, reviewId: string) {
  * Registeret lever videre — protokollen skal lese likt om ti år.
  */
 export async function opprettGjennomgang(db: Db, orgId: string, data: z.infer<typeof gjennomgangInn>) {
+  const { avsluttProsjekt, ...felter } = data;
+  if (avsluttProsjekt && !data.context) {
+    throw ugyldig("Bare prosjekter kan avsluttes — den årlige risikovurderingen består");
+  }
+
   const alle = await hentFarer(db, orgId);
   const farer = alle.filter((f) => (data.context ? f.context === data.context : !f.context));
   if (farer.length === 0) {
@@ -961,7 +972,7 @@ export async function opprettGjennomgang(db: Db, orgId: string, data: z.infer<ty
 
   const [ny] = await db
     .insert(riskReviews)
-    .values({ id: randomUUID(), orgId, ...data })
+    .values({ id: randomUUID(), orgId, ...felter })
     .returning();
 
   await db.insert(riskReviewItems).values(
@@ -985,6 +996,12 @@ export async function opprettGjennomgang(db: Db, orgId: string, data: z.infer<ty
       order: i,
     })),
   );
+
+  // Sluttgjennomgang: protokollen er sikret over — nå kan prosjektet ut av registeret.
+  // Samme transaksjon som withOrg gir: feiler slettingen, finnes heller ingen protokoll.
+  if (avsluttProsjekt && data.context) {
+    await db.delete(hazards).where(and(eq(hazards.orgId, orgId), eq(hazards.context, data.context)));
+  }
 
   return hentGjennomgang(db, orgId, ny!.id);
 }

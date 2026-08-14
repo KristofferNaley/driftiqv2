@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useOkt } from "@/components/OktProvider";
 import { dato } from "@/components/felles";
 import { internkontroll, type GjennomgangDetalj } from "@/lib/klient";
-import { KONSEKVENS_ORD, NIVATEKST, SANNSYNLIGHET_ORD, FARESTATUS_ETIKETT } from "@/lib/risikoord";
+import { FARESTATUS_ETIKETT, HOVEDVURDERING, KONSEKVENS_ORD, NIVATEKST, SANNSYNLIGHET_ORD } from "@/lib/risikoord";
 
 /**
  * Utskriftsarket for en fullført risikogjennomgang — protokollen på papir.
@@ -59,7 +59,7 @@ export default function Risikoark({ params }: { params: Promise<{ id: string }> 
 
         <div className="ark-band">
           <span className="ark-kicker">Risikogjennomgang</span>
-          <h2>{ark.context ?? "Løpende drift"}</h2>
+          <h2>{ark.context ?? HOVEDVURDERING}</h2>
           <div className="ark-fakta">
             <div>Gjennomført: <b>{dato(ark.reviewDate)}</b></div>
             {ark.participants && <div>Deltakere: <b>{ark.participants}</b></div>}

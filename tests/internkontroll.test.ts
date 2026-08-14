@@ -437,7 +437,7 @@ describe("risikogjennomganger", () => {
     await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Isglatte trapper" }));
 
     const g = await i(org, (db) =>
-      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", participants: "Hele styret", conclusion: "Under kontroll", context: null }),
+      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", participants: "Hele styret", conclusion: "Under kontroll", context: null, avsluttProsjekt: false }),
     );
     expect(g.punkter.map((p) => p.title)).toEqual(["Gammel heis", "Isglatte trapper"]);
     expect(g.punkter[0]!.actions).toContain("Bestille service — pågår");
@@ -458,18 +458,46 @@ describe("risikogjennomganger", () => {
     await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Fallende materialer", context: "Takrehabilitering" }));
 
     const prosjekt = await i(org, (db) =>
-      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: "Takrehabilitering" }),
+      opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: "Takrehabilitering", avsluttProsjekt: false }),
     );
     expect(prosjekt.punkter.map((p) => p.title)).toEqual(["Fallende materialer"]);
 
-    const drift = await i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null }));
+    const drift = await i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null, avsluttProsjekt: false }));
     expect(drift.punkter.map((p) => p.title)).toEqual(["Drift"]);
   });
 
   it("nekter å protokollere en tom vurdering", async () => {
     const org = await oppsett();
     const feil = await feilFra(() =>
-      i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null })),
+      i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null, avsluttProsjekt: false })),
+    );
+    expect(feil.status).toBe(400);
+  });
+
+  it("avslutter et prosjekt: protokollen består, farene forsvinner fra registeret", async () => {
+    const org = await oppsett();
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Drift" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Stillasvelt", context: "Takrehabilitering" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Fallende materialer", context: "Takrehabilitering" }));
+
+    const slutt = await i(org, (db) =>
+      opprettGjennomgang(db, org, {
+        reviewDate: "2026-08-14", conclusion: "Prosjektet er levert", context: "Takrehabilitering", avsluttProsjekt: true,
+      }),
+    );
+    expect(slutt.punkter).toHaveLength(2);
+
+    // Registeret viser bare det som er aktuelt — protokollen er historikken.
+    const igjen = await i(org, (db) => hentFarer(db, org));
+    expect(igjen.map((f) => f.title)).toEqual(["Drift"]);
+    expect((await i(org, (db) => hentGjennomgang(db, org, slutt.id))).punkter).toHaveLength(2);
+  });
+
+  it("nekter å avslutte den årlige hovedvurderingen", async () => {
+    const org = await oppsett();
+    await i(org, (db) => opprettFare(db, org, fareData));
+    const feil = await feilFra(() =>
+      i(org, (db) => opprettGjennomgang(db, org, { reviewDate: "2026-08-14", context: null, avsluttProsjekt: true })),
     );
     expect(feil.status).toBe(400);
   });

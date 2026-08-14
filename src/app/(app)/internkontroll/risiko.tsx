@@ -22,6 +22,7 @@ import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending }
 import { internkontroll, type Fare, type HmsMal } from "@/lib/klient";
 import {
   FARESTATUS_ETIKETT,
+  HOVEDVURDERING,
   KONSEKVENS_ORD as KONSEKVENS,
   NIVAMERKE,
   NIVATEKST,
@@ -49,7 +50,8 @@ export function Risiko() {
   const gjennomganger = useOrgData((o) => internkontroll.gjennomganger(o));
   // null = lukket, { fare: null } = ny fare — skiller «ingen skuff» fra «tom skuff».
   const [skuff, setSkuff] = useState<{ fare: Fare | null } | null>(null);
-  const [fullforer, setFullforer] = useState(false);
+  // { avslutt: true } = sluttgjennomgang som også fjerner prosjektet fra registeret.
+  const [fullforer, setFullforer] = useState<{ avslutt: boolean } | null>(null);
   const [seeder, setSeeder] = useState(false);
   const [omrade, setOmrade] = useState<string | null>(null);
   const [celle, setCelle] = useState<{ s: number; k: number } | null>(null);
@@ -99,7 +101,7 @@ export function Risiko() {
               setCelle(null);
             }}
           >
-            Løpende drift
+            {HOVEDVURDERING}
           </button>
           {kontekster.map((k) => (
             <button
@@ -114,6 +116,15 @@ export function Risiko() {
               {k}
             </button>
           ))}
+          {kontekst && (
+            <button
+              className="btn btn-ghost"
+              style={{ marginLeft: "auto" }}
+              onClick={() => setFullforer({ avslutt: true })}
+            >
+              Avslutt prosjektet …
+            </button>
+          )}
         </div>
       )}
 
@@ -255,7 +266,7 @@ export function Risiko() {
         <div className="card">
           <div className="card-header">
             <div className="card-title">Gjennomganger</div>
-            <button className="btn btn-ghost" onClick={() => setFullforer(true)}>
+            <button className="btn btn-ghost" onClick={() => setFullforer({ avslutt: false })}>
               Fullfør gjennomgang
             </button>
           </div>
@@ -267,7 +278,7 @@ export function Risiko() {
             (gjennomganger.data ?? []).map((g) => (
               <Link key={g.id} href={`/internkontroll/risikovurdering/${g.id}/ark`} className="list-item" style={{ textDecoration: "none", color: "inherit" }}>
                 <div style={{ minWidth: 0 }}>
-                  <div className="list-tittel">{dato(g.reviewDate)} — {g.context ?? "Løpende drift"}</div>
+                  <div className="list-tittel">{dato(g.reviewDate)} — {g.context ?? HOVEDVURDERING}</div>
                   <div className="list-meta">
                     {g.antallFarer} farer{g.participants ? ` · ${g.participants}` : ""}
                   </div>
@@ -300,12 +311,18 @@ export function Risiko() {
         <GjennomgangModal
           orgId={orgId}
           kontekst={kontekst}
+          avslutt={fullforer.avslutt}
           antallFarer={grunnlag.length}
           antallUvurderte={grunnlag.filter((f) => f.trengerVurdering).length}
-          onLukk={() => setFullforer(false)}
-          onLagret={async () => {
+          onLukk={() => setFullforer(null)}
+          onLagret={async (avsluttet) => {
             await gjennomganger.last();
-            setFullforer(false);
+            if (avsluttet) {
+              // Prosjektet er ute av registeret — chipen finnes ikke lenger.
+              await last();
+              setKontekst(null);
+            }
+            setFullforer(null);
           }}
         />
       )}
@@ -320,6 +337,7 @@ export function Risiko() {
 function GjennomgangModal({
   orgId,
   kontekst,
+  avslutt,
   antallFarer,
   antallUvurderte,
   onLukk,
@@ -327,19 +345,25 @@ function GjennomgangModal({
 }: {
   orgId: string;
   kontekst: string | null;
+  /** Sluttgjennomgang: prosjektet fjernes fra registeret etter protokollering. */
+  avslutt: boolean;
   antallFarer: number;
   antallUvurderte: number;
   onLukk: () => void;
-  onLagret: () => Promise<void>;
+  onLagret: (avsluttet: boolean) => Promise<void>;
 }) {
   const [datoVerdi, setDatoVerdi] = useState(new Date().toISOString().slice(0, 10));
   const [deltakere, setDeltakere] = useState("");
   const [konklusjon, setKonklusjon] = useState("");
   const { sender, feil, send } = useSending(() => {});
-  const navnet = kontekst ?? "Løpende drift";
+  const navnet = kontekst ?? HOVEDVURDERING;
 
   return (
-    <Modal tittel="Fullfør gjennomgang" onLukk={onLukk} bredde={480}>
+    <Modal
+      tittel={avslutt ? "Avslutt prosjektet" : "Fullfør gjennomgang"}
+      onLukk={onLukk}
+      bredde={480}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -349,18 +373,28 @@ function GjennomgangModal({
               participants: deltakere.trim() || null,
               conclusion: konklusjon.trim() || null,
               context: kontekst,
+              avsluttProsjekt: avslutt,
             });
-            await onLagret();
+            await onLagret(avslutt);
           });
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
-        <div className="field-note">
-          Protokollerer <b>{navnet}</b> slik den står nå: {antallFarer}{" "}
-          {antallFarer === 1 ? "fare" : "farer"} låses som et øyeblikksbilde med eget
-          utskriftsark. Registeret kan redigeres videre etterpå.
-        </div>
+        {avslutt ? (
+          <div className="field-note">
+            Sluttgjennomgang for <b>{navnet}</b>: de {antallFarer}{" "}
+            {antallFarer === 1 ? "faren" : "farene"} protokolleres med eget utskriftsark —
+            og fjernes deretter fra registeret. Protokollen består under Gjennomganger;
+            et nytt prosjekt starter med blanke ark.
+          </div>
+        ) : (
+          <div className="field-note">
+            Protokollerer <b>{navnet}</b> slik den står nå: {antallFarer}{" "}
+            {antallFarer === 1 ? "fare" : "farer"} låses som et øyeblikksbilde med eget
+            utskriftsark. Registeret kan redigeres videre etterpå.
+          </div>
+        )}
         {antallUvurderte > 0 && (
           <div className="field-note" style={{ color: "var(--warn, #b8860b)" }}>
             {antallUvurderte} av farene mangler vurdering eller er forfalt — de
@@ -380,7 +414,13 @@ function GjennomgangModal({
           onEndre={setKonklusjon}
           plassholder="Styrets vurdering — hva er under kontroll, og hva følges opp?"
         />
-        <Knapperad onAvbryt={onLukk} sendEtikett="Fullfør og lås" sender={sender} deaktivert={antallFarer === 0} />
+        <Knapperad
+          onAvbryt={onLukk}
+          sendEtikett={avslutt ? "Protokoller og avslutt" : "Fullfør og lås"}
+          farlig={avslutt}
+          sender={sender}
+          deaktivert={antallFarer === 0}
+        />
       </form>
     </Modal>
   );

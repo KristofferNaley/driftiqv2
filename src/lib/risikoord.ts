@@ -11,6 +11,13 @@ export const KONSEKVENS_ORD = ["Liten", "Moderat", "Alvorlig"];
 export const NIVATEKST = { lav: "Lav", middels: "Middels", hoy: "Høy" } as const;
 export const NIVAMERKE = { lav: "ok", middels: "warn", hoy: "danger" } as const;
 
+/**
+ * Etiketten for hovedvurderingen (context = NULL i basen) — det styrene kjenner fra
+ * forskriften. Fast med vilje: en konfigurerbar etikett på lovpålagt dokumentasjon gir
+ * støttespørsmål og ingen verdi. Prosjektene har frie navn; hovedvurderingen har ett.
+ */
+export const HOVEDVURDERING = "Årlig risikovurdering";
+
 export const FARESTATUS_ETIKETT: Record<string, string> = {
   open: "Åpen",
   mitigated: "Under kontroll",
