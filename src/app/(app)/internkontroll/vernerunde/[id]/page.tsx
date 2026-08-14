@@ -172,6 +172,16 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
           )
         )}
 
+        {/* Deltakerne først — befaringen er planlagt med folk og dato før punktene gås gjennom. */}
+        <Deltakere
+          orgId={orgId!}
+          rundeId={id}
+          deltakere={data.deltakere}
+          laast={laast}
+          onEndret={last}
+          onFeil={setFeil}
+        />
+
         {/* Fremdrift — brøken sier hvor langt befaringen faktisk er kommet. */}
         <div className="card">
           <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -231,15 +241,6 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
             <Plus size={15} strokeWidth={2} aria-hidden /> Legg til sjekkpunkt
           </button>
         )}
-
-        <Deltakere
-          orgId={orgId!}
-          rundeId={id}
-          deltakere={data.deltakere}
-          laast={laast}
-          onEndret={last}
-          onFeil={setFeil}
-        />
       </div>
 
       {avvikFor && orgId && (
@@ -489,7 +490,7 @@ function NyttPunkt({
           etikett="Hva skal sjekkes? *"
           verdi={tekst}
           onEndre={setTekst}
-          notat="Punktet blir med videre: neste runde kopierer denne rundens punktliste."
+          notat="Punktet gjelder bare denne runden. Skal det med i alle senere runder, legg det også inn i sjekklista under Vernerunder."
         />
         {seksjoner.length > 0 && (
           <Nedtrekk

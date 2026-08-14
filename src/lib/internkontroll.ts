@@ -24,6 +24,8 @@ import {
   hmsGoals,
   hmsResponsibilities,
   hmsSubGoals,
+  safetyRoundChecklistItems,
+  safetyRoundChecklists,
   safetyRoundItems,
   safetyRoundParticipants,
   safetyRounds,
@@ -91,16 +93,41 @@ export const tiltakEndring = tiltakInn.partial().omit({ hazardId: true });
 
 export const PUNKTSTATUSER = ["ok", "avvik", "ikke_aktuelt"] as const;
 
+export const deltakerInn = z.object({
+  name: z.string().trim().min(1, "Navn må fylles ut"),
+  role: tekst,
+});
+
 export const rundeInn = z.object({
   title: z.string().trim().min(1, "Tittel må fylles ut"),
   roundDate: z.string().date().nullish(),
   dueDate: z.string().date().nullish(),
   notes: z.string().nullish(),
+  /** Rundetypen: punktene kopieres fra denne av lagets sjekklister. */
+  checklistId: z.string().nullish(),
   /**
-   * Fyller runden med punktene fra en HMS-mal. Uten den kopieres punktene fra lagets
-   * FORRIGE runde — det er slik lagets egne tilpasninger følger med videre.
+   * Eldre vei: fyller runden med punktene fra en HMS-mal. Uten både denne og
+   * `checklistId` kopieres punktene fra lagets FORRIGE runde.
    */
   templateId: z.string().nullish(),
+  /** Befaringen planlegges med folk og dato FØR punktene gås gjennom. */
+  deltakere: z.array(deltakerInn).optional(),
+});
+
+export const sjekklisteInn = z.object({
+  name: z.string().trim().min(1, "Navn må fylles ut"),
+  description: tekst,
+  /** Kopierer punktene fra en standardmal inn som lagets egne. */
+  templateId: z.string().nullish(),
+});
+export const sjekklisteEndring = z.object({
+  name: z.string().trim().min(1, "Navn må fylles ut").optional(),
+  description: tekst,
+});
+
+export const sjekklistepunktInn = z.object({
+  text: z.string().trim().min(1, "Punktet kan ikke være tomt"),
+  section: tekst,
 });
 
 export const punktInn = z.object({
@@ -115,11 +142,6 @@ export const punktEndring = z.object({
   notes: z.string().nullish(),
   text: z.string().trim().min(1).optional(),
   section: tekst,
-});
-
-export const deltakerInn = z.object({
-  name: z.string().trim().min(1, "Navn må fylles ut"),
-  role: tekst,
 });
 
 export const ansvarInn = z.object({
@@ -458,12 +480,154 @@ export async function seedFarer(db: Db, orgId: string, templateId: string) {
   return { opprettet, hoppetOver };
 }
 
-export async function hentRunder(db: Db, orgId: string) {
-  return db
+/** Punktene i en standardmal, flatet ut i mal-rekkefølge — til kopiering. */
+async function hentMalpunkter(db: Db, templateId: string) {
+  const kategorier = await db
     .select()
+    .from(hmsTemplateCategories)
+    .where(eq(hmsTemplateCategories.templateId, templateId))
+    .orderBy(asc(hmsTemplateCategories.order));
+  const punkter = await db.select().from(hmsTemplateItems).orderBy(asc(hmsTemplateItems.order));
+
+  return kategorier.flatMap((k) =>
+    punkter.filter((p) => p.categoryId === k.id).map((p) => ({ text: p.text, section: k.label })),
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+// Lagets sjekklister — rundetypene (inne, ute, garasje …)
+// ---------------------------------------------------------------------------------------
+
+export async function hentSjekklister(db: Db, orgId: string) {
+  const lister = await db
+    .select()
+    .from(safetyRoundChecklists)
+    .where(eq(safetyRoundChecklists.orgId, orgId))
+    .orderBy(asc(safetyRoundChecklists.createdAt));
+
+  const antall = await db
+    .select({ checklistId: safetyRoundChecklistItems.checklistId, n: count() })
+    .from(safetyRoundChecklistItems)
+    .innerJoin(
+      safetyRoundChecklists,
+      eq(safetyRoundChecklists.id, safetyRoundChecklistItems.checklistId),
+    )
+    .where(eq(safetyRoundChecklists.orgId, orgId))
+    .groupBy(safetyRoundChecklistItems.checklistId);
+
+  return lister.map((l) => ({
+    ...l,
+    antallPunkter: Number(antall.find((a) => a.checklistId === l.id)?.n ?? 0),
+  }));
+}
+
+export async function hentSjekkliste(db: Db, orgId: string, checklistId: string) {
+  const rader = await db
+    .select()
+    .from(safetyRoundChecklists)
+    .where(and(eq(safetyRoundChecklists.id, checklistId), eq(safetyRoundChecklists.orgId, orgId)))
+    .limit(1);
+  const liste = rader[0];
+  if (!liste) throw ikkeFunnet("Sjekkliste");
+
+  const punkter = await db
+    .select()
+    .from(safetyRoundChecklistItems)
+    .where(eq(safetyRoundChecklistItems.checklistId, checklistId))
+    .orderBy(asc(safetyRoundChecklistItems.order), asc(safetyRoundChecklistItems.createdAt));
+
+  return { ...liste, punkter };
+}
+
+/**
+ * Oppretter en av lagets egne sjekklister, eventuelt med punktene KOPIERT fra en
+ * standardmal. Kopiert, ikke referert: standarden er utgangspunktet, laget eier lista og
+ * sletter punktene som ikke passer dem — ikke alt gjelder alle lag.
+ */
+export async function opprettSjekkliste(db: Db, orgId: string, data: z.infer<typeof sjekklisteInn>) {
+  const { templateId, ...felter } = data;
+  const [ny] = await db
+    .insert(safetyRoundChecklists)
+    .values({ id: randomUUID(), orgId, ...felter })
+    .returning();
+
+  if (templateId) {
+    const punkter = await hentMalpunkter(db, templateId);
+    if (punkter.length > 0) {
+      await db.insert(safetyRoundChecklistItems).values(
+        punkter.map((p, i) => ({ id: randomUUID(), checklistId: ny!.id, ...p, order: i })),
+      );
+    }
+  }
+  return hentSjekkliste(db, orgId, ny!.id);
+}
+
+export async function endreSjekkliste(
+  db: Db,
+  orgId: string,
+  checklistId: string,
+  data: z.infer<typeof sjekklisteEndring>,
+) {
+  await hentSjekkliste(db, orgId, checklistId);
+  const [endret] = await db
+    .update(safetyRoundChecklists)
+    .set(data)
+    .where(and(eq(safetyRoundChecklists.id, checklistId), eq(safetyRoundChecklists.orgId, orgId)))
+    .returning();
+  return endret!;
+}
+
+/** Gjennomførte runder står seg: punktene deres er kopier, og FK-en settes til NULL. */
+export async function slettSjekkliste(db: Db, orgId: string, checklistId: string) {
+  await hentSjekkliste(db, orgId, checklistId);
+  await db
+    .delete(safetyRoundChecklists)
+    .where(and(eq(safetyRoundChecklists.id, checklistId), eq(safetyRoundChecklists.orgId, orgId)));
+}
+
+export async function leggTilSjekklistepunkt(
+  db: Db,
+  orgId: string,
+  checklistId: string,
+  data: z.infer<typeof sjekklistepunktInn>,
+) {
+  const liste = await hentSjekkliste(db, orgId, checklistId);
+  const nesteOrder = Math.max(-1, ...liste.punkter.map((p) => p.order)) + 1;
+  const [ny] = await db
+    .insert(safetyRoundChecklistItems)
+    .values({ id: randomUUID(), checklistId, ...data, order: nesteOrder })
+    .returning();
+  return ny!;
+}
+
+export async function slettSjekklistepunkt(
+  db: Db,
+  orgId: string,
+  checklistId: string,
+  itemId: string,
+) {
+  await hentSjekkliste(db, orgId, checklistId);
+  const slettet = await db
+    .delete(safetyRoundChecklistItems)
+    .where(
+      and(
+        eq(safetyRoundChecklistItems.id, itemId),
+        eq(safetyRoundChecklistItems.checklistId, checklistId),
+      ),
+    )
+    .returning({ id: safetyRoundChecklistItems.id });
+  if (slettet.length === 0) throw ikkeFunnet("Sjekklistepunkt");
+}
+
+export async function hentRunder(db: Db, orgId: string) {
+  // LEFT JOIN: typenavnet vises i lista, og runder med slettet sjekkliste skal ikke falle ut.
+  const rader = await db
+    .select({ runde: safetyRounds, checklistName: safetyRoundChecklists.name })
     .from(safetyRounds)
+    .leftJoin(safetyRoundChecklists, eq(safetyRoundChecklists.id, safetyRounds.checklistId))
     .where(eq(safetyRounds.orgId, orgId))
     .orderBy(desc(safetyRounds.roundDate));
+  return rader.map((r) => ({ ...r.runde, checklistName: r.checklistName }));
 }
 
 export async function hentRunde(db: Db, orgId: string, roundId: string) {
@@ -477,7 +641,7 @@ export async function hentRunde(db: Db, orgId: string, roundId: string) {
 
   const [punkter, deltakere, avvik] = await Promise.all([
     db.select().from(safetyRoundItems).where(eq(safetyRoundItems.roundId, roundId))
-      .orderBy(asc(safetyRoundItems.createdAt)),
+      .orderBy(asc(safetyRoundItems.order), asc(safetyRoundItems.createdAt)),
     db.select().from(safetyRoundParticipants).where(eq(safetyRoundParticipants.roundId, roundId))
       .orderBy(asc(safetyRoundParticipants.createdAt)),
     db.select().from(deviations).where(and(eq(deviations.roundId, roundId), eq(deviations.orgId, orgId)))
@@ -488,41 +652,44 @@ export async function hentRunde(db: Db, orgId: string, roundId: string) {
 }
 
 /**
- * Oppretter runden, eventuelt fylt med punktene fra en HMS-mal.
+ * Oppretter runden — planlagt med deltakere og dato FØR punktene gås gjennom.
  *
- * Punktene KOPIERES inn — de peker ikke på malen. Endres malen etterpå, skal en gjennomført
- * runde fortsatt vise hva som faktisk ble sjekket. Samme prinsipp som sjekklisteresultater
- * på oppgaver.
+ * Punktene KOPIERES inn fra lagets sjekkliste (`checklistId`) — de peker ikke på den.
+ * Endres sjekklista etterpå, skal en gjennomført runde fortsatt vise hva som faktisk ble
+ * sjekket. Samme prinsipp som sjekklisteresultater på oppgaver.
  */
 export async function opprettRunde(db: Db, orgId: string, data: z.infer<typeof rundeInn>) {
-  const { templateId, ...felter } = data;
-  const [ny] = await db.insert(safetyRounds).values({ id: randomUUID(), orgId, ...felter }).returning();
+  const { templateId, checklistId, deltakere, ...felter } = data;
 
-  if (templateId) {
-    const kategorier = await db
-      .select()
-      .from(hmsTemplateCategories)
-      .where(eq(hmsTemplateCategories.templateId, templateId))
-      .orderBy(asc(hmsTemplateCategories.order));
+  // Slås opp FØR runden opprettes: en fremmed/slettet sjekkliste skal gi 404, ikke en
+  // tom runde med dinglende FK.
+  const sjekkliste = checklistId ? await hentSjekkliste(db, orgId, checklistId) : null;
 
-    if (kategorier.length > 0) {
-      const punkter = await db
-        .select()
-        .from(hmsTemplateItems)
-        .orderBy(asc(hmsTemplateItems.order));
+  const [ny] = await db
+    .insert(safetyRounds)
+    .values({ id: randomUUID(), orgId, checklistId: sjekkliste?.id ?? null, ...felter })
+    .returning();
 
-      const rader = kategorier.flatMap((k) =>
-        punkter
-          .filter((p) => p.categoryId === k.id)
-          .map((p) => ({ id: randomUUID(), roundId: ny!.id, text: p.text, section: k.label })),
+  if (sjekkliste) {
+    if (sjekkliste.punkter.length > 0) {
+      await db.insert(safetyRoundItems).values(
+        sjekkliste.punkter.map((p, i) => ({
+          id: randomUUID(), roundId: ny!.id, text: p.text, section: p.section, order: i,
+        })),
       );
-      if (rader.length > 0) await db.insert(safetyRoundItems).values(rader);
+    }
+  } else if (templateId) {
+    // Eldre vei: punktene rett fra en standardmal, uten sjekkliste imellom.
+    const punkter = await hentMalpunkter(db, templateId);
+    if (punkter.length > 0) {
+      await db.insert(safetyRoundItems).values(
+        punkter.map((p, i) => ({ id: randomUUID(), roundId: ny!.id, ...p, order: i })),
+      );
     }
   } else {
     /**
-     * Uten mal kopieres punktene fra lagets FORRIGE runde — tekst og seksjon, aldri svar.
-     * Det er slik lagets egne tilpasninger (punkter lagt til eller fjernet) blir varige:
-     * malen er utgangspunktet for den FØRSTE runden, deretter eier laget sin egen liste.
+     * Uten både sjekkliste og mal kopieres punktene fra lagets FORRIGE runde — tekst og
+     * seksjon, aldri svar. Beholdt for lag fra før sjekklistene fantes.
      */
     const forrige = await db
       .select({ id: safetyRounds.id })
@@ -535,14 +702,23 @@ export async function opprettRunde(db: Db, orgId: string, data: z.infer<typeof r
         .select()
         .from(safetyRoundItems)
         .where(eq(safetyRoundItems.roundId, forrige[0].id))
-        .orderBy(asc(safetyRoundItems.createdAt));
+        .orderBy(asc(safetyRoundItems.order), asc(safetyRoundItems.createdAt));
       if (punkter.length > 0) {
         await db.insert(safetyRoundItems).values(
-          punkter.map((p) => ({ id: randomUUID(), roundId: ny!.id, text: p.text, section: p.section })),
+          punkter.map((p, i) => ({
+            id: randomUUID(), roundId: ny!.id, text: p.text, section: p.section, order: i,
+          })),
         );
       }
     }
   }
+
+  if (deltakere && deltakere.length > 0) {
+    await db.insert(safetyRoundParticipants).values(
+      deltakere.map((d) => ({ id: randomUUID(), roundId: ny!.id, name: d.name, role: d.role })),
+    );
+  }
+
   return hentRunde(db, orgId, ny!.id);
 }
 
@@ -554,9 +730,11 @@ export async function leggTilPunkt(
 ) {
   const runde = await hentRunde(db, orgId, roundId);
   krevUlast(runde);
+  // Nye punkter havner sist — etter det som kom fra sjekklista.
+  const nesteOrder = Math.max(-1, ...runde.punkter.map((p) => p.order)) + 1;
   const [ny] = await db
     .insert(safetyRoundItems)
-    .values({ id: randomUUID(), roundId, ...data })
+    .values({ id: randomUUID(), roundId, ...data, order: nesteOrder })
     .returning();
   return ny!;
 }

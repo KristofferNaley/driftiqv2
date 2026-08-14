@@ -21,12 +21,16 @@ import {
   hentAnsvar,
   hentFarer,
   hentRunde,
+  hentRunder,
+  hentSjekkliste,
   leggTilDeltaker,
   leggTilPunkt as leggTilRundepunkt,
+  leggTilSjekklistepunkt,
   opprettEvaluering,
   opprettFare,
   opprettMal,
   opprettRunde,
+  opprettSjekkliste,
   opprettTiltak,
   risiko,
   risikoniva,
@@ -35,6 +39,8 @@ import {
   signerMal,
   slettPunkt,
   slettRunde,
+  slettSjekkliste,
+  slettSjekklistepunkt,
   status,
 } from "../src/lib/internkontroll";
 import { leggTilKategori, leggTilPunkt, opprettMal as opprettHmsMal } from "../src/lib/maler";
@@ -66,6 +72,8 @@ afterEach(async () => {
     await eier.query("DELETE FROM safety_round_items WHERE round_id IN (SELECT id FROM safety_rounds WHERE org_id = $1)", [id]);
     await eier.query("DELETE FROM safety_round_participants WHERE round_id IN (SELECT id FROM safety_rounds WHERE org_id = $1)", [id]);
     await eier.query("DELETE FROM safety_rounds WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM safety_round_checklist_items WHERE checklist_id IN (SELECT id FROM safety_round_checklists WHERE org_id = $1)", [id]);
+    await eier.query("DELETE FROM safety_round_checklists WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hazard_actions WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hazards WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM hms_goal_approvals WHERE goal_id IN (SELECT id FROM hms_goals WHERE org_id = $1)", [id]);
@@ -359,6 +367,103 @@ describe("vernerunde", () => {
 
     const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
     expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });
+  });
+});
+
+describe("sjekklister (rundetyper)", () => {
+  async function malMedToSeksjoner() {
+    const mal = await p((db) =>
+      opprettHmsMal(db, { templateType: "vernerunde", name: `Std ${randomUUID().slice(0, 8)}`, isDefault: false, active: true }),
+    );
+    ryddMal.push(mal.id);
+    const inne = await p((db) => leggTilKategori(db, mal.id, { key: "oppgang", label: "Oppganger", order: 0 }));
+    const ute = await p((db) => leggTilKategori(db, mal.id, { key: "ute", label: "Uteområde", order: 1 }));
+    await p((db) => leggTilPunkt(db, inne.id, { text: "Rømningsveier frie", order: 0 }));
+    await p((db) => leggTilPunkt(db, inne.id, { text: "Nødlys lyser", order: 1 }));
+    await p((db) => leggTilPunkt(db, ute.id, { text: "Dekke uten snublefeller", order: 0 }));
+    return mal;
+  }
+
+  it("kopierer standardmalen inn som lagets egen liste, i mal-rekkefølge", async () => {
+    const org = await oppsett();
+    const mal = await malMedToSeksjoner();
+    const liste = await i(org, (db) => opprettSjekkliste(db, org, { name: "Vernerunde inne", templateId: mal.id }));
+
+    expect(liste.punkter.map((x) => x.text)).toEqual([
+      "Rømningsveier frie", "Nødlys lyser", "Dekke uten snublefeller",
+    ]);
+    expect(liste.punkter.map((x) => x.section)).toEqual(["Oppganger", "Oppganger", "Uteområde"]);
+
+    // Laget eier kopien: punkter som ikke gjelder dem, slettes uten at malen røres.
+    await i(org, (db) => slettSjekklistepunkt(db, org, liste.id, liste.punkter[2]!.id));
+    const etter = await i(org, (db) => hentSjekkliste(db, org, liste.id));
+    expect(etter.punkter).toHaveLength(2);
+    const malPunkter = await eier.query("SELECT count(*)::int AS n FROM hms_template_items i JOIN hms_template_categories k ON k.id = i.category_id WHERE k.template_id = $1", [mal.id]);
+    expect(malPunkter.rows[0].n).toBe(3);
+  });
+
+  it("oppretter runden med punktene fra sjekklista og deltakerne fra planleggingen", async () => {
+    // Befaringen planlegges med folk og dato FØR punktene gås gjennom.
+    const org = await oppsett();
+    const mal = await malMedToSeksjoner();
+    const liste = await i(org, (db) => opprettSjekkliste(db, org, { name: "Inne", templateId: mal.id }));
+
+    const runde = await i(org, (db) =>
+      opprettRunde(db, org, {
+        title: "Inne — høst",
+        checklistId: liste.id,
+        deltakere: [{ name: "Kari", role: "styreleder" }, { name: "Tore", role: null }],
+      }),
+    );
+
+    expect(runde.punkter.map((x) => x.text)).toEqual([
+      "Rømningsveier frie", "Nødlys lyser", "Dekke uten snublefeller",
+    ]);
+    expect(runde.deltakere.map((d) => d.name)).toEqual(["Kari", "Tore"]);
+    expect(runde.checklistId).toBe(liste.id);
+  });
+
+  it("lar sjekklista endres uten at en opprettet runde påvirkes", async () => {
+    const org = await oppsett();
+    const liste = await i(org, (db) => opprettSjekkliste(db, org, { name: "Ute" }));
+    await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Lekeapparater", section: "Uteområde" }));
+    const runde = await i(org, (db) => opprettRunde(db, org, { title: "Ute — vår", checklistId: liste.id }));
+
+    await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Utebelysning", section: "Uteområde" }));
+
+    const etter = await i(org, (db) => hentRunde(db, org, runde.id));
+    expect(etter.punkter.map((x) => x.text)).toEqual(["Lekeapparater"]);
+
+    // Neste runde fra samme liste får det nye punktet.
+    const neste = await i(org, (db) => opprettRunde(db, org, { title: "Ute — høst", checklistId: liste.id }));
+    expect(neste.punkter.map((x) => x.text)).toEqual(["Lekeapparater", "Utebelysning"]);
+  });
+
+  it("lar gjennomførte runder stå når sjekklista slettes", async () => {
+    const org = await oppsett();
+    const liste = await i(org, (db) => opprettSjekkliste(db, org, { name: "Garasje" }));
+    await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Port og ladepunkt" }));
+    const runde = await i(org, (db) => opprettRunde(db, org, { title: "Garasje — vår", checklistId: liste.id }));
+    await i(org, (db) => fullforRunde(db, org, runde.id));
+
+    await i(org, (db) => slettSjekkliste(db, org, liste.id));
+
+    const etter = await i(org, (db) => hentRunde(db, org, runde.id));
+    expect(etter.punkter.map((x) => x.text)).toEqual(["Port og ladepunkt"]);
+    expect(etter.checklistId).toBeNull();
+    expect((await i(org, (db) => hentRunder(db, org)))[0]!.checklistName).toBeNull();
+  });
+
+  it("holder en annen orgs sjekkliste utenfor rekkevidde", async () => {
+    const a = await oppsett();
+    const b = await oppsett();
+    const liste = await i(a, (db) => opprettSjekkliste(db, a, { name: "Vår liste" }));
+
+    expect((await feilFra(() => i(b, (db) => hentSjekkliste(db, b, liste.id)))).status).toBe(404);
+    // En runde i b kan ikke opprettes fra a sin liste — 404, ikke en tom runde.
+    expect(
+      (await feilFra(() => i(b, (db) => opprettRunde(db, b, { title: "Snik", checklistId: liste.id })))).status,
+    ).toBe(404);
   });
 });
 

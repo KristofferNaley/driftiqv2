@@ -98,6 +98,36 @@ export const hazardActions = pgTable("hazard_actions", {
 });
 
 /**
+ * Lagets egne sjekklister for vernerunder — én per rundetype (inne, ute, garasje …).
+ *
+ * Standardmalene fra plattformen (`hms_templates`) er bare utgangspunktet: velges en
+ * standardmal, kopieres punktene inn som lagets EGEN liste, og laget redigerer kopien
+ * fritt etterpå. Punkter som ikke passer laget slettes her — «ikke aktuelt» på en runde
+ * er for det som vanligvis sjekkes, men ikke fantes den dagen.
+ */
+export const safetyRoundChecklists = pgTable("safety_round_checklists", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const safetyRoundChecklistItems = pgTable("safety_round_checklist_items", {
+  id: varchar("id").primaryKey(),
+  checklistId: varchar("checklist_id")
+    .notNull()
+    .references(() => safetyRoundChecklists.id, { onDelete: "cascade" }),
+  text: varchar("text").notNull(),
+  section: varchar("section"),
+  /** Rekkefølgen i lista — createdAt er lik for punkter kopiert inn i samme kall. */
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Vernerunde. `completed` LÅSER runden: den er dokumentasjon på hva som ble observert den
  * dagen, og en runde som kan redigeres i ettertid dokumenterer ingenting.
  */
@@ -106,6 +136,13 @@ export const safetyRounds = pgTable("safety_rounds", {
   orgId: varchar("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
+  /**
+   * Rundetypen — hvilken av lagets sjekklister runden ble opprettet fra. SET NULL ved
+   * sletting: punktene er uansett KOPIERT inn i runden, så dokumentasjonen står seg.
+   */
+  checklistId: varchar("checklist_id").references(() => safetyRoundChecklists.id, {
+    onDelete: "set null",
+  }),
   title: varchar("title").notNull(),
   roundDate: date("round_date"),
   /** Fristen — bransjepraksis er vernerunde innen 1. juni og 1. desember. Driver banneret. */
@@ -123,6 +160,12 @@ export const safetyRoundItems = pgTable("safety_round_items", {
     .references(() => safetyRounds.id, { onDelete: "cascade" }),
   text: varchar("text").notNull(),
   section: varchar("section"),
+  /**
+   * Rekkefølgen fra sjekklista punktene ble kopiert fra. `createdAt` er ubrukelig som
+   * sortering her: now() er transaksjonstid, så alle punkter satt inn i samme kall får
+   * samme stempel. Eldre rader har 0 og faller tilbake på createdAt.
+   */
+  order: integer("order").notNull().default(0),
   /**
    * `ok` | `avvik` | `ikke_aktuelt` | NULL = ubesvart. En avkryssing kunne ikke skille
    * «i orden» fra «ikke sjekket» fra «finnes ikke hos oss» — og det er forskjellen som
@@ -203,5 +246,7 @@ export type HmsGoal = typeof hmsGoals.$inferSelect;
 export type Hazard = typeof hazards.$inferSelect;
 export type HazardAction = typeof hazardActions.$inferSelect;
 export type SafetyRound = typeof safetyRounds.$inferSelect;
+export type SafetyRoundChecklist = typeof safetyRoundChecklists.$inferSelect;
+export type SafetyRoundChecklistItem = typeof safetyRoundChecklistItems.$inferSelect;
 export type HmsResponsibility = typeof hmsResponsibilities.$inferSelect;
 export type HmsEvaluation = typeof hmsEvaluations.$inferSelect;

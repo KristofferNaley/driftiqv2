@@ -425,6 +425,15 @@ export type HmsMal = {
   id: string; templateType: string; name: string; description: string | null; isDefault: boolean;
 };
 
+export type Sjekkliste = {
+  id: string; name: string; description: string | null; antallPunkter: number;
+};
+
+export type SjekklisteDetalj = {
+  id: string; name: string; description: string | null;
+  punkter: Array<{ id: string; text: string; section: string | null; order: number }>;
+};
+
 export type Rundepunkt = {
   id: string; text: string; section: string | null;
   /** ok | avvik | ikke_aktuelt | null = ubesvart. */
@@ -458,8 +467,15 @@ export const internkontroll = {
   nyttTiltak: (o: string, d: unknown) => api.send(org(o, "/hms/actions"), d),
   endreTiltak: (o: string, id: string, d: unknown) => api.endre(org(o, `/hms/actions/${id}`), d),
   slettTiltak: (o: string, id: string) => api.slett(org(o, `/hms/actions/${id}`)),
+  sjekklister: (o: string) => api.hent<Sjekkliste[]>(org(o, "/hms/checklists")),
+  hentSjekkliste: (o: string, id: string) => api.hent<SjekklisteDetalj>(org(o, `/hms/checklists/${id}`)),
+  nySjekkliste: (o: string, d: unknown) => api.send<SjekklisteDetalj>(org(o, "/hms/checklists"), d),
+  endreSjekkliste: (o: string, id: string, d: unknown) => api.endre(org(o, `/hms/checklists/${id}`), d),
+  slettSjekkliste: (o: string, id: string) => api.slett(org(o, `/hms/checklists/${id}`)),
+  nyttSjekklistepunkt: (o: string, id: string, d: unknown) => api.send(org(o, `/hms/checklists/${id}/items`), d),
+  slettSjekklistepunkt: (o: string, id: string, pid: string) => api.slett(org(o, `/hms/checklists/${id}/items/${pid}`)),
   runder: (o: string) =>
-    api.hent<Array<{ id: string; title: string; roundDate: string | null; dueDate: string | null; status: string }>>(org(o, "/hms/rounds")),
+    api.hent<Array<{ id: string; title: string; roundDate: string | null; dueDate: string | null; status: string; checklistName: string | null }>>(org(o, "/hms/rounds")),
   hentRunde: (o: string, id: string) => api.hent<Runde>(org(o, `/hms/rounds/${id}`)),
   nyRunde: (o: string, d: unknown) => api.send<{ id: string }>(org(o, "/hms/rounds"), d),
   slettRunde: (o: string, id: string) => api.slett(org(o, `/hms/rounds/${id}`)),

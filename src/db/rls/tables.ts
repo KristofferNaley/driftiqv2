@@ -33,7 +33,7 @@ export const DIREKTE_TABELLER: readonly string[] = [
   "deviations", "deviation_attachments",
   "completion_photos",
   "units",
-  "hms_goals", "hazards", "hazard_actions", "safety_rounds",
+  "hms_goals", "hazards", "hazard_actions", "safety_rounds", "safety_round_checklists",
   "hms_responsibilities", "hms_evaluations",
   "parking_spots", "parking_leases", "parking_waitlist",
   "annual_events", "log_entries",
@@ -78,6 +78,8 @@ export const BARNETABELLER: Readonly<Record<string, string>> = {
     `EXISTS (SELECT 1 FROM safety_rounds p WHERE p.id = safety_round_items.round_id AND p.org_id = ${ORG})`,
   safety_round_participants:
     `EXISTS (SELECT 1 FROM safety_rounds p WHERE p.id = safety_round_participants.round_id AND p.org_id = ${ORG})`,
+  safety_round_checklist_items:
+    `EXISTS (SELECT 1 FROM safety_round_checklists p WHERE p.id = safety_round_checklist_items.checklist_id AND p.org_id = ${ORG})`,
   routine_steps:
     `EXISTS (SELECT 1 FROM routines p WHERE p.id = routine_steps.routine_id AND p.org_id = ${ORG})`,
   ai_messages:
@@ -139,6 +141,7 @@ export const FK_INDEKSER: readonly string[] = [
   "CREATE INDEX IF NOT EXISTS idx_hms_sub_goals_goal       ON hms_sub_goals(goal_id)",
   "CREATE INDEX IF NOT EXISTS idx_safety_round_items_round ON safety_round_items(round_id)",
   "CREATE INDEX IF NOT EXISTS idx_safety_round_part_round  ON safety_round_participants(round_id)",
+  "CREATE INDEX IF NOT EXISTS idx_sr_checklist_items_liste ON safety_round_checklist_items(checklist_id)",
   "CREATE INDEX IF NOT EXISTS idx_routine_steps_routine    ON routine_steps(routine_id)",
   "CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation ON ai_messages(conversation_id)",
   "CREATE INDEX IF NOT EXISTS idx_feedback_messages_report ON feedback_messages(report_id)",
