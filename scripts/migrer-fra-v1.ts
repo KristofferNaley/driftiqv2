@@ -29,6 +29,17 @@ import { adminPool, lukkPooler } from "../src/db/client";
 const V1_URL = process.env.DATABASE_URL_V1;
 const TORRKJOR = process.argv.includes("--torrkjor");
 
+/**
+ * `--tabeller=a,b` kjører KUN de navngitte tabellene. Til etterfyll av noe som manglet
+ * (som vedleggene, oppdaget 14.08.2026): en full kjøring OPPDATERER rader v2 har endret
+ * siden sist — et avvik lukket i v2 ville blitt gjenåpnet av v1s status. Med filter
+ * hoppes også passord, kontaktarv og QR-verifisering over.
+ */
+const TABELLFILTER = (() => {
+  const arg = process.argv.find((a) => a.startsWith("--tabeller="));
+  return arg ? new Set(arg.slice("--tabeller=".length).split(",").map((s) => s.trim())) : null;
+})();
+
 if (!V1_URL) {
   console.error("DATABASE_URL_V1 er ikke satt — pek den på v1-databasen du migrerer fra.");
   process.exit(1);
@@ -451,6 +462,26 @@ const TABELLER: Tabell[] = [
     oppdater: ["title", "description", "category", "severity", "status", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
   },
   {
+    navn: "deviation_attachments",
+    // Filene kopieres separat med scripts/migrer-opplastinger.sh — v1 lagrer dem nøstet
+    // (deviations/{devId}/fil), v2 leser flatt (deviations/fil). Raden uten fila gir
+    // «Fil ikke funnet på disk», fila uten raden er usynlig — begge må med.
+    kilde: `SELECT id, deviation_id, org_id, treatment_id, filename, original_name,
+                   content_type, file_size, uploaded_by, COALESCE(uploaded_at, now()) AS uploaded_at
+            FROM deviation_attachments`,
+    kolonner: ["id", "deviation_id", "org_id", "treatment_id", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at"],
+    // Dokumentasjon — append-only, som behandlingsinnleggene.
+    oppdater: [],
+  },
+  {
+    navn: "completion_photos",
+    kilde: `SELECT id, completion_id, org_id, filename, original_name, content_type,
+                   file_size, COALESCE(uploaded_at, now()) AS uploaded_at
+            FROM completion_photos`,
+    kolonner: ["id", "completion_id", "org_id", "filename", "original_name", "content_type", "file_size", "uploaded_at"],
+    oppdater: [],
+  },
+  {
     navn: "deviation_treatments",
     kilde: `SELECT id, deviation_id, text, created_by, COALESCE(created_at, now()) AS created_at
             FROM deviation_treatments`,
@@ -681,9 +712,20 @@ async function verifiserQrTokens(): Promise<void> {
 async function main(): Promise<void> {
   console.log(TORRKJOR ? "== TØRRKJØRING — ingenting skrives ==" : "== Migrerer fra v1 ==");
 
-  for (const t of TABELLER) {
+  const tabeller = TABELLFILTER ? TABELLER.filter((t) => TABELLFILTER.has(t.navn)) : TABELLER;
+  if (TABELLFILTER && tabeller.length !== TABELLFILTER.size) {
+    const kjente = new Set(tabeller.map((t) => t.navn));
+    throw new Error(`Ukjente tabeller i --tabeller: ${[...TABELLFILTER].filter((n) => !kjente.has(n)).join(", ")}`);
+  }
+
+  for (const t of tabeller) {
     const antall = await kopier(t);
     console.log(`  ${t.navn.padEnd(24)} ${antall}`);
+  }
+
+  if (TABELLFILTER) {
+    console.log("Ferdig (kun filtrerte tabeller — passord, kontaktarv og QR hoppet over).");
+    return;
   }
 
   const passord = await kopierPassord();
