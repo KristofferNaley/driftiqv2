@@ -76,13 +76,6 @@ export function Risiko() {
   const grunnlag = liste.filter((f) => (kontekst === null ? !f.context : f.context === kontekst));
 
   const idag = new Date().toISOString().slice(0, 10);
-  const hoye = grunnlag.filter((f) => f.status === "open" && f.niva === "hoy").length;
-  const forfalte = grunnlag
-    .filter((f) => f.status === "open")
-    .flatMap((f) => f.tiltak)
-    .filter((t) => t.status !== "done" && t.dueDate && t.dueDate < idag).length;
-  const handtert = grunnlag.filter((f) => f.status !== "open").length;
-
   const omrader = [...new Set(grunnlag.map((f) => f.category).filter((k): k is string => Boolean(k)))];
 
   // Serveren sorterer (trenger vurdering først, så risiko synkende) — filtrene bevarer det.
@@ -135,13 +128,8 @@ export function Risiko() {
         </div>
       )}
 
-      <div className="kpi-grid">
-        <Kpi farge="blaa" etikett="Registrerte risikoer" verdi={grunnlag.length} />
-        <Kpi farge="roed" etikett="Høy risiko" verdi={hoye} under="åpne farer" />
-        <Kpi farge="gul" etikett="Forfalte tiltak" verdi={forfalte} under="frist passert" />
-        <Kpi farge="gronn" etikett="Håndtert" verdi={handtert} under="under kontroll eller lukket" />
-      </div>
-
+      {/* Ingen KPI-rad her — tallene bor på Oversikt-fanen. Risikofanen er arbeidsflaten:
+          matrisen, lista og skuffen skal ha roen for seg selv. */}
       <div className="rv-kolonner">
         <div className="card">
           <div className="card-header">
