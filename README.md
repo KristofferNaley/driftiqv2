@@ -55,8 +55,9 @@ docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npm install && npx 
 docker compose up -d --build
 ```
 
-Merk `-p driftiq-v2`. Uten prosjektnavnet blir det `driftiq`, og du får et sett containere som
-kolliderer med prod på porter — samme felle som er dokumentert for testmiljøet i CLAUDE.md.
+Prosjektnavnet blir `driftiqv2` av mappenavnet, godt adskilt fra v1s `driftiq` (prod) og
+`driftiq-test` — ingen `-p` er nødvendig her. Prosjektnavn-fella gjelder v1-repoet, der
+testmiljøet må kjøres med `-p driftiq-test` for ikke å kollidere med prod.
 
 ## Kjørende miljø
 

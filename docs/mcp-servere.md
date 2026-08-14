@@ -1,7 +1,11 @@
 # MCP-servere
 
-`.mcp.json` i repo-roten setter opp to MCP-servere for Claude Code. Fila er prosjekt-scopet,
-så den gjelder alle som åpner dette repoet — ikke bare denne maskinen.
+`.mcp.json` i repo-roten setter opp MCP-servere for Claude Code: to lokale som kjøres i
+Docker (`nextjs` og `better-auth`, beskrevet under) og seks eksterne som bare er URL-er —
+`context7` (se under) og fem Cloudflare-servere (`mcp.cloudflare.com` +
+docs/bindings/builds/observability — remote-servere uten lokal kjøring, autentisert mot
+Cloudflare-kontoen ved bruk). Fila er prosjekt-scopet, så den gjelder alle som åpner dette
+repoet — ikke bare denne maskinen.
 
 ## Hvorfor de kjører i Docker
 
@@ -9,7 +13,7 @@ så den gjelder alle som åpner dette repoet — ikke bare denne maskinen.
 gjennom `docker run node:22-alpine` eller `docker compose`. En vanlig MCP-oppsett med
 `"command": "npx"` ville derfor bare feilet med «command not found».
 
-Begge serverne kjøres i stedet som `docker run --rm -i node:22-alpine npx …`, med repoet
+De to lokale serverne kjøres i stedet som `docker run --rm -i node:22-alpine npx …`, med repoet
 montert på `/app`. Volumet `driftiq-mcp-npm` holder npm-cachen mellom kjøringer — uten det
 lastes pakken ned på nytt hver gang en økt starter. Opprett det med:
 
@@ -58,6 +62,34 @@ Vær dessuten oppmerksom på at **serveren er pinnet til 1.4.17 mens appen kjør
 Det er den nyeste versjonen med et kjørbart binary (1.7.0-rc.4 har ingen `bin`). Genererer
 den et oppsett, kan det være mot et eldre API enn det vi faktisk bruker — sjekk mot
 `src/lib/auth.ts` før du tror på det.
+
+## `context7` — mcp.context7.com
+
+Versjonsriktig biblioteksdokumentasjon på forespørsel. Lagt til for **Drizzle og Better
+Auth**: Next-dokumentasjonen ligger allerede lokalt i `node_modules/next/dist/docs/`, men
+de to andre har ingen tilsvarende — og uten oppslagsverk svares det fra hukommelsen, som
+kan være en major-versjon bak.
+
+Remote-server, ingen lokal kjøring. Gratisnivået er ratebegrenset; en API-nøkkel fra
+context7.com hever grensene, men er ikke lagt inn — trengs den, hører den hjemme i
+personlig konfigurasjon, ikke i denne prosjekt-scopede fila.
+
+Merk at denne overlapper med `better-auth`-serveren: den er pinnet til et eldre API og gir
+bare et oppsettsverktøy for prosjekter som ikke har Better Auth ennå. Når Context7 har
+vist seg å svare godt på Better Auth-spørsmål, kan `better-auth`-serveren fjernes.
+
+## Vurdert og ikke lagt til
+
+- **Playwright MCP** — ville dekket det reelle hullet (UI-verifisering; to ganger har et
+  klikk gjennom appen funnet feil alle andre lag slapp gjennom), men en agent skriver ikke
+  passord i innloggingsfelt, og v2 har ingen sesjonsmynting for testbrukeren slik v1 hadde
+  JWT-mynting. Uten den er verdien begrenset til utloggede flater. Tas opp igjen hvis det
+  bygges et dev-skript som lager en sesjon for `claude@driftiq.test`.
+- **Postgres MCP** — `docker exec postgres psql` gir det samme, med samme forbehold
+  (superbruker omgår RLS).
+- **Resend MCP** — `scripts/test-epost.ts` dekker behovet, og et sendeverktøy utenom
+  domenevakten er mer risiko enn nytte.
+- **GitHub MCP** — `gh`-CLI-en dekker alt; arbeidsflyten er push-til-main uten PR-er.
 
 ## Sjekke at de virker
 

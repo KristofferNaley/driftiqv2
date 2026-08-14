@@ -22,6 +22,7 @@
         "npx", "-y", "@better-auth/mcp@1.4.17"
       ]
     },
+    "context7": { "url": "https://mcp.context7.com/mcp" },
     "cloudflare": { "url": "https://mcp.cloudflare.com/mcp" },
     "cloudflare-docs": { "url": "https://docs.mcp.cloudflare.com/mcp" },
     "cloudflare-bindings": { "url": "https://bindings.mcp.cloudflare.com/mcp" },
