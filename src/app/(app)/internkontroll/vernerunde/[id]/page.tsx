@@ -4,8 +4,7 @@ import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Lock, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { useOkt } from "@/components/OktProvider";
-import { Feil, Tom, dato, initialer, useOrgData } from "@/components/felles";
+import { Feil, Tom, initialer, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "@/lib/klient";
 
@@ -39,7 +38,6 @@ import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "
  */
 export default function Vernerunde({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { aktivOrg } = useOkt();
   const { data, setData, feil, setFeil, last, orgId } = useOrgData(
     (o) => internkontroll.hentRunde(o, id),
     [id],
@@ -138,11 +136,10 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
       handlinger={
         laast && (
           <>
-            {/* Rapporten er utskriften: siden er ren dokumentasjon når runden er låst,
-                og print-CSS-en fjerner alt som hører til skjermen. */}
-            <button className="btn btn-ghost" onClick={() => window.print()}>
-              Skriv ut rapport
-            </button>
+            {/* Rapporten er et eget A4-ark — samme mønster som risikovurderingens. */}
+            <Link href={`/internkontroll/vernerunde/${id}/ark`} className="btn btn-ghost">
+              Åpne rapport
+            </Link>
             <span className="badge ok">
               <Lock size={13} strokeWidth={2.2} aria-hidden /> Fullført og låst
             </span>
@@ -156,23 +153,6 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
         </Link>
 
         <Feil melding={feil} />
-
-        {/* Rapporthodet — finnes KUN på papiret. Skjermen har tittelen i toppbaren og
-            deltakerne som chips; utskriften trenger dem samlet øverst som en rapport. */}
-        <div className="vr-print-hode">
-          <div className="vr-print-tittel">{data.title}</div>
-          <div className="vr-print-meta">
-            {aktivOrg?.name}
-            {data.roundDate && <> · befaring {dato(data.roundDate)}</>}
-            {data.deltakere.length > 0 && (
-              <> · {data.deltakere.map((d) => (d.role ? `${d.name} (${d.role})` : d.name)).join(", ")}</>
-            )}
-          </div>
-          <div className="vr-print-meta">
-            {besvarte} av {data.punkter.length} punkter vurdert · {antallOk} i orden ·{" "}
-            {antallAvvik} avvik{laast && " · Fullført og låst"}
-          </div>
-        </div>
 
         {/* Deltakerne øverst — befaringen er planlagt med folk og dato før punktene gås gjennom. */}
         <div className="vr-folk print-skjul">

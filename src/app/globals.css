@@ -2770,9 +2770,6 @@ textarea.qr-input { resize: vertical; }
 .vr-bunn-status b { color: var(--text); }
 .vr-bunn-knapper { display: flex; gap: 8px; }
 
-/* Rapporthodet finnes kun på papiret — se print-blokken sist i fila. */
-.vr-print-hode { display: none; }
-
 /* Oppsummeringen i fullfør-modalen — talloppstilling som i mockupen. */
 .vr-sum { display: flex; flex-direction: column; }
 .vr-sum > div {
@@ -2989,11 +2986,8 @@ textarea.qr-input { resize: vertical; }
   .card { break-inside: avoid; box-shadow: none; }
   body { background: #fff; color: #000; }
 
-  /* Vernerunderapporten: skjermen har tittel i toppbaren og deltakere som chips —
-     papiret får dem samlet i et rapporthode i stedet (skjult på skjerm). */
-  .vr-print-hode { display: block; margin: 0 0 6mm; }
-  .vr-print-tittel { font-size: 20px; font-weight: 700; color: #000; }
-  .vr-print-meta { font-size: 11.5px; color: #333; margin-top: 3px; }
+  /* Skulle noen Ctrl+P-e selve rundesiden: gjør den lesbar — men RAPPORTEN er
+     A4-arket på /internkontroll/vernerunde/[id]/ark, samme mønster som risikoarket. */
   .vr-seksjon-hode h2 { color: #000; }
   .vr-n { color: #333; background: none; border-color: #bbb; }
   .vr-linje { background: #ccc; }
