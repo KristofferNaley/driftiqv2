@@ -16,6 +16,7 @@ import { opprettAvvik } from "../src/lib/avvik";
 import {
   ANSVARSOMRADER,
   endrePunkt,
+  endreSjekklistepunkt,
   fjernSignatur,
   fullforRunde,
   hentAnsvar,
@@ -205,6 +206,8 @@ describe("ansvarsfordeling (§ 5 pkt. 5)", () => {
 describe("risikovurdering (§ 5 pkt. 6)", () => {
   it("regner risiko som sannsynlighet × konsekvens", () => {
     expect(risiko({ probability: 2, consequence: 3 })).toBe(6);
+    // NULL = ikke vurdert — ikke 0, ikke et forvalg.
+    expect(risiko({ probability: null, consequence: 3 })).toBeNull();
     // 1–3-skalaen gir produktene 1, 2, 3, 4, 6 og 9.
     expect(risikoniva(2)).toBe("lav");
     expect(risikoniva(4)).toBe("middels");
@@ -268,7 +271,12 @@ describe("vernerunde", () => {
     const mal = await malMedPunkter();
     const runde = await i(org, (db) => opprettRunde(db, org, { title: "Vår", templateId: mal.id }));
 
-    await eier.query("UPDATE hms_template_items SET text = 'Helt annet punkt'");
+    // Skopet til testens EGEN mal. Testene deler base med appen, og et UPDATE uten WHERE
+    // omskrev punktteksten i alle standardmalene i drift (påvist 14.08.2026).
+    await eier.query(
+      "UPDATE hms_template_items SET text = 'Helt annet punkt' WHERE category_id IN (SELECT id FROM hms_template_categories WHERE template_id = $1)",
+      [mal.id],
+    );
 
     const etter = await i(org, (db) => hentRunde(db, org, runde.id));
     expect(etter.punkter[0]!.text).toBe("Sjekk slokkeapparat");
@@ -362,8 +370,8 @@ describe("vernerunde", () => {
 
     const farer = await i(org, (db) => hentFarer(db, org));
     expect(farer.map((f) => f.category)).toEqual(["Brannvern", "Brannvern"]);
-    // 2/2 («middels» på 1–3-skalaen) er et STARTPUNKT som tvinger fram en vurdering, ikke en fasit.
-    expect(farer.every((f) => f.probability === 2 && f.consequence === 2)).toBe(true);
+    // Uvurdert, ikke et forvalg: 2/2 så ut som en gjennomført vurdering ingen hadde gjort.
+    expect(farer.every((f) => f.probability === null && f.consequence === null && f.niva === null)).toBe(true);
 
     const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
     expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });
@@ -426,17 +434,19 @@ describe("sjekklister (rundetyper)", () => {
   it("lar sjekklista endres uten at en opprettet runde påvirkes", async () => {
     const org = await oppsett();
     const liste = await i(org, (db) => opprettSjekkliste(db, org, { name: "Ute" }));
-    await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Lekeapparater", section: "Uteområde" }));
+    const punkt = await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Lekeapparater", section: "Uteområde" }));
     const runde = await i(org, (db) => opprettRunde(db, org, { title: "Ute — vår", checklistId: liste.id }));
 
     await i(org, (db) => leggTilSjekklistepunkt(db, org, liste.id, { text: "Utebelysning", section: "Uteområde" }));
+    // Omformulering er trygt — runden har en KOPI av punktet.
+    await i(org, (db) => endreSjekklistepunkt(db, org, liste.id, punkt.id, { text: "Lekeapparater og fallunderlag" }));
 
     const etter = await i(org, (db) => hentRunde(db, org, runde.id));
     expect(etter.punkter.map((x) => x.text)).toEqual(["Lekeapparater"]);
 
-    // Neste runde fra samme liste får det nye punktet.
+    // Neste runde fra samme liste får både omformuleringen og det nye punktet.
     const neste = await i(org, (db) => opprettRunde(db, org, { title: "Ute — høst", checklistId: liste.id }));
-    expect(neste.punkter.map((x) => x.text)).toEqual(["Lekeapparater", "Utebelysning"]);
+    expect(neste.punkter.map((x) => x.text)).toEqual(["Lekeapparater og fallunderlag", "Utebelysning"]);
   });
 
   it("lar gjennomførte runder stå når sjekklista slettes", async () => {

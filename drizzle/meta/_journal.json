@@ -253,6 +253,13 @@
       "when": 1786708055313,
       "tag": "0035_chubby_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786710412583,
+      "tag": "0036_slippery_jackal",
+      "breakpoints": true
     }
   ]
 }

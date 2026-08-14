@@ -416,8 +416,10 @@ export type IkStatus = {
 };
 export type Fare = {
   id: string; title: string; category: string | null; description: string | null;
-  probability: number; consequence: number;
-  status: string; owner: string | null; risiko: number; niva: "lav" | "middels" | "hoy";
+  /** null = ikke vurdert — seedede farer starter slik til noen tar stilling. */
+  probability: number | null; consequence: number | null;
+  status: string; owner: string | null;
+  risiko: number | null; niva: "lav" | "middels" | "hoy" | null;
   tiltak: Array<{ id: string; title: string; status: string; dueDate: string | null; owner: string | null }>;
 };
 
@@ -473,6 +475,7 @@ export const internkontroll = {
   endreSjekkliste: (o: string, id: string, d: unknown) => api.endre(org(o, `/hms/checklists/${id}`), d),
   slettSjekkliste: (o: string, id: string) => api.slett(org(o, `/hms/checklists/${id}`)),
   nyttSjekklistepunkt: (o: string, id: string, d: unknown) => api.send(org(o, `/hms/checklists/${id}/items`), d),
+  endreSjekklistepunkt: (o: string, id: string, pid: string, d: unknown) => api.endre(org(o, `/hms/checklists/${id}/items/${pid}`), d),
   slettSjekklistepunkt: (o: string, id: string, pid: string) => api.slett(org(o, `/hms/checklists/${id}/items/${pid}`)),
   runder: (o: string) =>
     api.hent<Array<{ id: string; title: string; roundDate: string | null; dueDate: string | null; status: string; checklistName: string | null }>>(org(o, "/hms/rounds")),

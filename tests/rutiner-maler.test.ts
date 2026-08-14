@@ -33,10 +33,15 @@ let eierPool: Pool;
 let eier: PoolClient;
 const ryddOrg: string[] = [];
 const ryddMal: string[] = [];
+/** De EKTE standardmalene ved teststart — flagget skal tilbake dit etter hver test. */
+let ekteStandarder: string[] = [];
 
 beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
   eier = await eierPool.connect();
+  ekteStandarder = (
+    await eier.query<{ id: string }>("SELECT id FROM hms_templates WHERE is_default = true")
+  ).rows.map((r) => r.id);
 });
 
 afterAll(async () => {
@@ -59,6 +64,12 @@ afterEach(async () => {
   }
   for (const id of ryddMal.splice(0)) {
     await eier.query("DELETE FROM hms_templates WHERE id = $1", [id]);
+  }
+  // Testene flytter standardflagget (én-standard-regelen i opprettMal/endreMal) og sletter
+  // så sine egne maler — uten denne sto de EKTE malene uten standard etter en testkjøring
+  // (påvist 14.08.2026: begge standardmalene mistet is_default i drift).
+  for (const id of ekteStandarder) {
+    await eier.query("UPDATE hms_templates SET is_default = true WHERE id = $1", [id]);
   }
 });
 

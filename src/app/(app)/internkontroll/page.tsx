@@ -36,11 +36,7 @@ function Vernerunder() {
               key={r.id}
               onClick={() => router.push(`/internkontroll/vernerunde/${r.id}`)}
               tittel={r.title}
-              meta={[
-                r.checklistName,
-                r.roundDate && `startet ${dato(r.roundDate)}`,
-                r.dueDate && r.status !== "completed" && `frist ${dato(r.dueDate)}`,
-              ]
+              meta={[r.checklistName, r.roundDate && `befaring ${dato(r.roundDate)}`]
                 .filter(Boolean)
                 .join(" · ")}
               hoyre={
@@ -101,8 +97,6 @@ function NyRundeModal({
   const [tittel, setTittel] = useState(`Vernerunde ${halvaar} ${aar}`);
   const [tittelRort, setTittelRort] = useState(false);
   const [rundeDato, setRundeDato] = useState(new Date().toISOString().slice(0, 10));
-  // Bransjepraksis: innen 1. juni og 1. desember.
-  const [frist, setFrist] = useState(`${aar}-${new Date().getMonth() < 6 ? "06-01" : "12-01"}`);
   const [maler, setMaler] = useState<HmsMal[] | null>(null);
   /** `liste:<id>` (lagets sjekkliste), `mal:<id>` (standard, kopieres inn) eller `forrige`. */
   const [valg, setValg] = useState(sjekklister[0] ? `liste:${sjekklister[0].id}` : "");
@@ -159,7 +153,6 @@ function NyRundeModal({
             const ny = await internkontroll.nyRunde(orgId, {
               title: tittel.trim(),
               roundDate: rundeDato || null,
-              dueDate: frist || null,
               checklistId,
               deltakere,
             });
@@ -169,6 +162,15 @@ function NyRundeModal({
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
+
+        <Tekstfelt
+          etikett="Navn på runden *"
+          verdi={tittel}
+          onEndre={(v) => {
+            setTittel(v);
+            setTittelRort(true);
+          }}
+        />
 
         {maler === null ? (
           <Tom tekst="Henter sjekklister …" />
@@ -187,27 +189,11 @@ function NyRundeModal({
           />
         )}
 
-        <div className="field-row">
-          <Tekstfelt etikett="Dato for befaringen" type="date" verdi={rundeDato} onEndre={setRundeDato} />
-          <Tekstfelt
-            etikett="Frist"
-            type="date"
-            verdi={frist}
-            onEndre={setFrist}
-            notat="Bransjepraksis: innen 1. juni og 1. desember."
-          />
-        </div>
+        {/* Én dato: runden opprettes når den GJENNOMFØRES. Varsling om lovpålagt frist
+            kommer et annet sted senere — ikke som et skjemafelt her. */}
+        <Tekstfelt etikett="Dato for befaringen" type="date" verdi={rundeDato} onEndre={setRundeDato} />
 
         <DeltakerVelger orgId={orgId} deltakere={deltakere} onEndre={setDeltakere} />
-
-        <Tekstfelt
-          etikett="Navn på runden *"
-          verdi={tittel}
-          onEndre={(v) => {
-            setTittel(v);
-            setTittelRort(true);
-          }}
-        />
 
         <Knapperad
           onAvbryt={onLukk}
@@ -250,22 +236,25 @@ function DeltakerVelger({
   return (
     <div>
       <div className="field-label">Deltakere på befaringen</div>
+      {/* Liste nedover, ikke små merker — hvem som går runden er et hovedfelt i skjemaet. */}
       {deltakere.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "6px 0 10px" }}>
+        <div style={{ margin: "6px 0 4px" }}>
           {deltakere.map((d) => (
-            <span key={d.name} className="badge muted">
-              {d.name}
-              {d.role ? ` · ${d.role}` : ""}
+            <div key={d.name} className="list-item" style={{ padding: "7px 0" }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="list-tittel">{d.name}</div>
+                {d.role && <div className="list-meta">{d.role}</div>}
+              </div>
               <button
                 type="button"
-                className="sp-lenke"
-                style={{ marginLeft: "4px" }}
+                className="btn btn-ghost"
+                style={{ color: "var(--muted)", padding: "2px 8px" }}
                 aria-label={`Fjern ${d.name}`}
                 onClick={() => onEndre(deltakere.filter((x) => x.name !== d.name))}
               >
-                ✕
+                Fjern
               </button>
-            </span>
+            </div>
           ))}
         </div>
       )}
@@ -472,6 +461,7 @@ function SjekklisteSkuff({
   );
   const [nyTekst, setNyTekst] = useState("");
   const [nySeksjon, setNySeksjon] = useState("");
+  const [redigerer, setRedigerer] = useState<{ id: string; tekst: string } | null>(null);
   const [bekreftSlett, setBekreftSlett] = useState(false);
 
   const seksjoner: Array<[string, NonNullable<typeof data>["punkter"]]> = [];
@@ -502,6 +492,19 @@ function SjekklisteSkuff({
       await Promise.all([last(), onEndret()]);
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Kunne ikke fjerne punktet");
+    }
+  }
+
+  async function lagreEndring() {
+    if (!redigerer?.tekst.trim()) return;
+    try {
+      await internkontroll.endreSjekklistepunkt(orgId, checklistId, redigerer.id, {
+        text: redigerer.tekst.trim(),
+      });
+      setRedigerer(null);
+      await Promise.all([last(), onEndret()]);
+    } catch (e) {
+      setFeil(e instanceof Error ? e.message : "Kunne ikke lagre punktet");
     }
   }
 
@@ -555,19 +558,58 @@ function SjekklisteSkuff({
             seksjoner.map(([navn, punkter]) => (
               <div key={navn}>
                 <div className="field-label" style={{ marginBottom: "6px" }}>{navn}</div>
-                {punkter.map((p) => (
-                  <div key={p.id} className="list-item" style={{ padding: "7px 0" }}>
-                    <div className="list-tittel" style={{ minWidth: 0, flex: 1 }}>{p.text}</div>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ color: "var(--muted)", padding: "2px 8px" }}
-                      aria-label={`Fjern punktet ${p.text}`}
-                      onClick={() => void fjern(p.id)}
+                {punkter.map((p) =>
+                  redigerer?.id === p.id ? (
+                    <form
+                      key={p.id}
+                      style={{ display: "flex", gap: "8px", padding: "7px 0" }}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void lagreEndring();
+                      }}
                     >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <input
+                        className="input"
+                        style={{ flex: 1 }}
+                        autoFocus
+                        aria-label={`Endre punktet ${p.text}`}
+                        value={redigerer.tekst}
+                        onChange={(e) => setRedigerer({ id: p.id, tekst: e.target.value })}
+                      />
+                      <button className="btn btn-ghost" disabled={!redigerer.tekst.trim()}>
+                        Lagre
+                      </button>
+                      <button type="button" className="btn btn-ghost" style={{ color: "var(--muted)" }} onClick={() => setRedigerer(null)}>
+                        Avbryt
+                      </button>
+                    </form>
+                  ) : (
+                    <div key={p.id} className="list-item" style={{ padding: "7px 0" }}>
+                      {/* Teksten ER redigeringsknappen. <button> arver verken farge eller
+                          font — begge settes eksplisitt (kjent felle). */}
+                      <button
+                        type="button"
+                        onClick={() => setRedigerer({ id: p.id, tekst: p.text })}
+                        title="Klikk for å endre punktet"
+                        style={{
+                          minWidth: 0, flex: 1, textAlign: "left", background: "none",
+                          border: "none", padding: 0, cursor: "pointer",
+                          color: "inherit", font: "inherit",
+                        }}
+                      >
+                        <span className="list-tittel">{p.text}</span>
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ color: "var(--muted)", padding: "2px 8px" }}
+                        aria-label={`Fjern punktet ${p.text}`}
+                        onClick={() => void fjern(p.id)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ),
+                )}
               </div>
             ))
           )}

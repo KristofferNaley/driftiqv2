@@ -27,16 +27,25 @@ const ryddBruker: string[] = [];
 const MANDAG = new Date("2026-08-10T09:00:00Z");
 const TIRSDAG = new Date("2026-08-11T09:00:00Z");
 
+/** Org-ene som VAR aktive før testkjøringen — bare de skal aktiveres igjen etterpå. */
+let varAktive: string[] = [];
+
 beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
   eier = await eierPool.connect();
   // Andre org-er i basen skal ikke påvirke tellingen. Jobben går på TVERS av kunder, så
-  // testene deaktiverer alt annet og slår det på igjen etterpå.
+  // testene deaktiverer alt annet og slår det på igjen etterpå. Snapshotet er viktig:
+  // «alt som ikke er vårt» ville også reaktivert kunder som var deaktivert med vilje.
+  varAktive = (
+    await eier.query<{ id: string }>("SELECT id FROM organizations WHERE active = true")
+  ).rows.map((r) => r.id);
   await eier.query("UPDATE organizations SET active = false WHERE active = true");
 });
 
 afterAll(async () => {
-  await eier.query("UPDATE organizations SET active = true WHERE id NOT LIKE 'vjobb-%'");
+  for (const id of varAktive) {
+    await eier.query("UPDATE organizations SET active = true WHERE id = $1", [id]);
+  }
   eier.release();
   await eierPool.end();
   await lukkPooler();

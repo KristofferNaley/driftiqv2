@@ -4,7 +4,7 @@ import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Lock, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "@/lib/klient";
 
@@ -111,9 +111,6 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
   const besvarte = data.punkter.filter((p) => p.status).length;
   const ubesvarte = data.punkter.length - besvarte;
   const avvikPerPunkt = new Map(data.avvik.filter((a) => a.roundItemId).map((a) => [a.roundItemId!, a]));
-  const dagerIgjen = data.dueDate
-    ? Math.ceil((new Date(data.dueDate).getTime() - Date.now()) / 86_400_000)
-    : null;
 
   return (
     <Layout
@@ -144,32 +141,15 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
 
         <Feil melding={feil} />
 
-        {laast ? (
+        {/* Fristbanneret er tatt ut: runden opprettes når den gjennomføres, og varsling om
+            lovpålagt oppfølging kommer et annet sted senere. */}
+        {laast && (
           <div className="card">
             <div className="card-body" style={{ color: "var(--muted)", fontSize: "var(--fs-sm)" }}>
               Runden er fullført og låst. Den dokumenterer hva som ble observert den dagen —
               kunne den redigeres i ettertid, dokumenterte den ingenting.
             </div>
           </div>
-        ) : (
-          data.dueDate &&
-          dagerIgjen !== null && (
-            <div className={`runde-frist${dagerIgjen < 14 ? " snart" : ""}`}>
-              <span style={{ minWidth: 0 }}>
-                <b>Frist {dato(data.dueDate)}.</b> Bransjepraksis: vernerunde gjennomføres to
-                ganger årlig — innen 1. juni og 1. desember.
-              </span>
-              <span className="runde-frist-dager">
-                {dagerIgjen >= 0 ? (
-                  <>
-                    <b>{dagerIgjen}</b> dager igjen
-                  </>
-                ) : (
-                  <b>{Math.abs(dagerIgjen)} dager over fristen</b>
-                )}
-              </span>
-            </div>
-          )
         )}
 
         {/* Deltakerne først — befaringen er planlagt med folk og dato før punktene gås gjennom. */}

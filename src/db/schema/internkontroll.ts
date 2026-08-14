@@ -72,10 +72,14 @@ export const hazards = pgTable("hazards", {
   title: varchar("title").notNull(),
   category: varchar("category"),
   description: text("description"),
-  /** 1–3 — se `skala` i lib/internkontroll.ts for hvorfor ikke v1s 1–5. */
-  probability: integer("probability").notNull(),
-  /** 1–3. */
-  consequence: integer("consequence").notNull(),
+  /**
+   * 1–3 — se `skala` i lib/internkontroll.ts for hvorfor ikke v1s 1–5. NULL = ikke
+   * vurdert: seeding fra mal skal SE uvurdert ut — et forvalg på 2/2 så ut som en
+   * gjennomført vurdering ingen hadde gjort.
+   */
+  probability: integer("probability"),
+  /** 1–3, NULL = ikke vurdert. */
+  consequence: integer("consequence"),
   owner: varchar("owner"),
   status: varchar("status").notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

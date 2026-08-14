@@ -157,7 +157,10 @@ async function hentInternkontrollStatus(db: Db, orgId: string) {
     hmsMaal: mal[0] ? { tekst: mal[0].goalText, godkjent: mal[0].approved } : null,
     antallFarer: farer.length,
     // Samme grense som `risikoniva` i lib/internkontroll.ts: 6+ er høy på 1–3-skalaen.
-    hoyRisiko: farer.filter((h) => h.probability * h.consequence >= 6).map((h) => h.title),
+    // NULL = ikke vurdert ennå — de er ikke «høye», de er ubesvarte.
+    hoyRisiko: farer
+      .filter((h) => h.probability != null && h.consequence != null && h.probability * h.consequence >= 6)
+      .map((h) => h.title),
     vernerunder: runder.map((r) => ({ tittel: r.title, dato: r.roundDate, status: r.status })),
   };
 }

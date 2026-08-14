@@ -166,9 +166,14 @@ export function Risiko() {
                         {FARESTATUS.find((s) => s.verdi === f.status)?.etikett ?? f.status}
                       </span>
                     )}
-                    <span className={`badge ${NIVAMERKE[f.niva]}`}>
-                      {NIVATEKST[f.niva]} {f.risiko}
-                    </span>
+                    {f.niva ? (
+                      <span className={`badge ${NIVAMERKE[f.niva]}`}>
+                        {NIVATEKST[f.niva]} {f.risiko}
+                      </span>
+                    ) : (
+                      // Uvurdert skal SE uferdig ut — det er en oppfordring, ikke et nivå.
+                      <span className="badge warn">Ikke vurdert</span>
+                    )}
                   </div>
                 </button>
               );
@@ -440,7 +445,8 @@ function FareSkuff({
       >
         <Feil melding={feil} />
 
-        <Tekstfelt
+        {/* Tekstområde, ikke énlinjesfelt: lange titler skal kunne LESES, ikke scrolles. */}
+        <Tekstomrade
           etikett="Hva kan gå galt? *"
           verdi={tittel}
           onEndre={setTittel}
@@ -469,7 +475,13 @@ function FareSkuff({
           plassholder="Kort om situasjonen og hvem som kan bli berørt"
         />
 
-        <Nedtrekk etikett="Status" verdi={status} onEndre={setStatus} valg={FARESTATUS} />
+        <Nedtrekk
+          etikett="Status"
+          verdi={status}
+          onEndre={setStatus}
+          valg={FARESTATUS}
+          notat="«Åpen» følges opp. «Under kontroll» = tiltakene virker, dere lever med restrisikoen. «Lukket» = ikke lenger aktuell. De to siste teller som håndtert i oversikten — risikoen blir stående i lista som dokumentasjon."
+        />
 
         <div className="field">
           <span className="field-label">Tiltak</span>
@@ -600,8 +612,8 @@ function SeedModal({
         <>
           <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, margin: 0 }}>
             Hentet <b>{resultat.opprettet}</b> fareområde{resultat.opprettet === 1 ? "" : "r"}
-            {resultat.hoppetOver > 0 && <> — {resultat.hoppetOver} fantes fra før</>}. Alle er
-            satt til middels sannsynlighet og konsekvens: gå gjennom og juster, det er selve
+            {resultat.hoppetOver > 0 && <> — {resultat.hoppetOver} fantes fra før</>}. Alle
+            står som «ikke vurdert» øverst i lista til dere har tatt stilling — det er selve
             vurderingen.
           </p>
           <Knapperad onAvbryt={onLukk} avbrytEtikett="Lukk" sendEtikett="Ferdig" onSend={onLukk} />

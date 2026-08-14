@@ -129,6 +129,10 @@ export const sjekklistepunktInn = z.object({
   text: z.string().trim().min(1, "Punktet kan ikke være tomt"),
   section: tekst,
 });
+export const sjekklistepunktEndring = z.object({
+  text: z.string().trim().min(1, "Punktet kan ikke være tomt").optional(),
+  section: tekst,
+});
 
 export const punktInn = z.object({
   text: z.string().trim().min(1, "Punktet kan ikke være tomt"),
@@ -306,9 +310,15 @@ export async function settAnsvar(db: Db, orgId: string, data: z.infer<typeof ans
 // Risikovurdering (§ 5 pkt. 6)
 // ---------------------------------------------------------------------------------------
 
-/** Risikotall = sannsynlighet × konsekvens. Utledet, aldri lagret. */
-export function risiko(h: { probability: number; consequence: number }): number {
-  return h.probability * h.consequence;
+/** Risikotall = sannsynlighet × konsekvens. Utledet, aldri lagret. NULL = ikke vurdert. */
+export function risiko(h: { probability: number | null; consequence: number | null }): number | null {
+  return h.probability != null && h.consequence != null ? h.probability * h.consequence : null;
+}
+
+/** Raden slik API-et leverer den: med utledet risikotall og nivå. */
+function medRisiko<T extends { probability: number | null; consequence: number | null }>(h: T) {
+  const tall = risiko(h);
+  return { ...h, risiko: tall, niva: tall === null ? null : risikoniva(tall) };
 }
 
 /**
@@ -330,14 +340,10 @@ export async function hentFarer(db: Db, orgId: string) {
     .orderBy(asc(hazardActions.dueDate));
 
   return rader
-    .map((h) => ({
-      ...h,
-      risiko: risiko(h),
-      niva: risikoniva(risiko(h)),
-      tiltak: tiltak.filter((t) => t.hazardId === h.id),
-    }))
-    // Høyest risiko først: den listen skal leses ovenfra og ned.
-    .sort((a, b) => b.risiko - a.risiko);
+    .map((h) => ({ ...medRisiko(h), tiltak: tiltak.filter((t) => t.hazardId === h.id) }))
+    // Ikke vurderte ØVERST — de roper «her må det vurderes» — deretter høyest risiko
+    // først: den listen skal leses ovenfra og ned.
+    .sort((a, b) => (b.risiko ?? 99) - (a.risiko ?? 99));
 }
 
 async function hentFare(db: Db, orgId: string, hazardId: string) {
@@ -352,7 +358,7 @@ async function hentFare(db: Db, orgId: string, hazardId: string) {
 
 export async function opprettFare(db: Db, orgId: string, data: z.infer<typeof fareInn>) {
   const [ny] = await db.insert(hazards).values({ id: randomUUID(), orgId, ...data }).returning();
-  return { ...ny!, risiko: risiko(ny!), niva: risikoniva(risiko(ny!)) };
+  return medRisiko(ny!);
 }
 
 export async function endreFare(db: Db, orgId: string, hazardId: string, data: z.infer<typeof fareEndring>) {
@@ -362,7 +368,7 @@ export async function endreFare(db: Db, orgId: string, hazardId: string, data: z
     .set(data)
     .where(and(eq(hazards.id, hazardId), eq(hazards.orgId, orgId)))
     .returning();
-  return { ...endret!, risiko: risiko(endret!), niva: risikoniva(risiko(endret!)) };
+  return medRisiko(endret!);
 }
 
 export async function slettFare(db: Db, orgId: string, hazardId: string) {
@@ -438,9 +444,10 @@ export async function hentHmsMaler(db: Db, type?: string) {
  * `hazards` som laget redigerer fritt etterpå. Samme prinsipp som vernerundene: malen er
  * utgangspunktet, laget eier kopien.
  *
- * Sannsynlighet og konsekvens settes til 2/2 («middels» på 1–3-skalaen) med vilje: et
- * startpunkt som tvinger fram en vurdering, ikke en fasit. Farer som alt finnes (samme
- * tittel) hoppes over, så seeding er trygt å kjøre igjen når malen har fått nye områder.
+ * Sannsynlighet og konsekvens settes IKKE — de står som «ikke vurdert» til noen tar
+ * stilling. Et forvalg (2/2 i et tidligere utkast) så ut som en gjennomført vurdering
+ * ingen hadde gjort. Farer som alt finnes (samme tittel) hoppes over, så seeding er
+ * trygt å kjøre igjen når malen har fått nye områder.
  */
 export async function seedFarer(db: Db, orgId: string, templateId: string) {
   const kategorier = await db
@@ -470,8 +477,6 @@ export async function seedFarer(db: Db, orgId: string, templateId: string) {
         orgId,
         title: p.text,
         category: k.label,
-        probability: 2,
-        consequence: 2,
         status: "open",
       });
       opprettet++;
@@ -598,6 +603,29 @@ export async function leggTilSjekklistepunkt(
     .values({ id: randomUUID(), checklistId, ...data, order: nesteOrder })
     .returning();
   return ny!;
+}
+
+/** Trygt å omformulere: rundene har KOPIER av punktene, så historikken står seg. */
+export async function endreSjekklistepunkt(
+  db: Db,
+  orgId: string,
+  checklistId: string,
+  itemId: string,
+  data: z.infer<typeof sjekklistepunktEndring>,
+) {
+  await hentSjekkliste(db, orgId, checklistId);
+  const [endret] = await db
+    .update(safetyRoundChecklistItems)
+    .set(data)
+    .where(
+      and(
+        eq(safetyRoundChecklistItems.id, itemId),
+        eq(safetyRoundChecklistItems.checklistId, checklistId),
+      ),
+    )
+    .returning();
+  if (!endret) throw ikkeFunnet("Sjekklistepunkt");
+  return endret;
 }
 
 export async function slettSjekklistepunkt(
