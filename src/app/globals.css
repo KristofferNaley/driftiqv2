@@ -2674,6 +2674,118 @@ textarea.qr-input { resize: vertical; }
 }
 .sjekkpunkt-avvik:hover { text-decoration: underline; }
 
+/* ══ VERNERUNDE-GJENNOMFØRINGEN ══
+   Etter mockups/vernerunde-mockup.html: deltakerne som chips øverst, klebrig
+   fremdriftslinje, punktene som kort med tre store valgknapper, avviksskjemaet INNE i
+   kortet, og en bunnlinje som følger med — runden gås med telefonen i hånda. */
+
+.vr-folk { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vr-person {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
+  padding: 4px 11px 4px 4px; font-size: var(--fs-label);
+}
+.vr-avatar {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-size: 10px; font-weight: 600; flex: none;
+}
+/* <button> arver verken farge eller font — kjent felle, settes eksplisitt. */
+.vr-person button {
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  padding: 0 2px; font-family: var(--font-sans); font-size: var(--fs-label);
+}
+.vr-person button:hover { color: var(--danger); }
+.vr-leggtil {
+  background: none; border: 1px dashed var(--border); color: var(--muted);
+  border-radius: 20px; padding: 5px 11px; font-size: var(--fs-label);
+  cursor: pointer; font-family: var(--font-sans);
+}
+.vr-leggtil:hover { color: var(--text); border-color: var(--muted); }
+
+/* Klebrig innenfor .page-content-scrollen — brøken følger med nedover lista. */
+.vr-fremdrift {
+  position: sticky; top: 0; z-index: 20; background: var(--bg);
+  padding: 10px 0 9px; border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+}
+.vr-fremdrift-rad {
+  display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  font-size: var(--fs-label); color: var(--muted);
+}
+.vr-fremdrift-rad b { color: var(--text); }
+.vr-tellinger { display: flex; gap: 12px; }
+.vr-telling { display: inline-flex; align-items: center; gap: 5px; }
+.vr-telling i { width: 8px; height: 8px; border-radius: 2px; }
+.vr-telling.ok i { background: var(--ok); }
+.vr-telling.avvik i { background: var(--danger); }
+
+.vr-seksjon-hode { display: flex; align-items: center; gap: 10px; padding: 4px 2px 8px; }
+.vr-seksjon-hode h2 { font-size: var(--fs-sm); font-weight: 600; margin: 0; }
+.vr-n {
+  font-size: var(--fs-label); color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px;
+}
+.vr-linje { flex: 1; height: 1px; background: var(--border); }
+
+.vr-punkt {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 13px 16px; transition: border-color 0.15s; break-inside: avoid;
+}
+.vr-punkt.gjort-ok { border-color: rgba(15, 186, 129, 0.35); }
+.vr-punkt.gjort-avvik { border-color: rgba(240, 64, 64, 0.4); }
+.vr-punkt.gjort-na { opacity: 0.6; }
+.vr-punkt-hode { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.vr-valg { display: flex; gap: 6px; margin-top: 12px; }
+.vr-valg .sp-knapp { flex: 1; padding: 10px 8px; text-align: center; font-size: var(--fs-sm); white-space: normal; }
+
+.vr-avviksskjema {
+  margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.vr-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vr-seg button {
+  background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+  padding: 8px 6px; border-radius: 9px; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-label);
+}
+.vr-seg button.valgt {
+  background: rgba(var(--accent-rgb), 0.16); border-color: var(--accent); color: var(--text);
+}
+
+.vr-avvikkort {
+  margin-top: 11px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(240, 64, 64, 0.08); border: 1px solid rgba(240, 64, 64, 0.28);
+  border-radius: 10px; padding: 10px 13px; font-size: var(--fs-label);
+}
+.vr-avvikkort b { color: var(--danger); }
+.vr-avvikkort a { color: var(--accent); text-decoration: none; }
+.vr-avvikkort a:hover { text-decoration: underline; }
+
+.vr-bunn {
+  position: sticky; bottom: 0; z-index: 20; flex-shrink: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 11px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.vr-bunn-status { font-size: var(--fs-label); color: var(--muted); }
+.vr-bunn-status b { color: var(--text); }
+.vr-bunn-knapper { display: flex; gap: 8px; }
+
+/* Oppsummeringen i fullfør-modalen — talloppstilling som i mockupen. */
+.vr-sum { display: flex; flex-direction: column; }
+.vr-sum > div {
+  display: flex; justify-content: space-between; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
+}
+.vr-sum > div:last-child { border-bottom: none; }
+.vr-sum > div span:last-child { font-weight: 600; }
+
+@media (max-width: 640px) {
+  .vr-bunn { flex-direction: column; align-items: stretch; }
+  .vr-bunn-knapper { display: grid; grid-template-columns: 1fr 1fr; }
+  .vr-valg { flex-wrap: wrap; }
+  .vr-valg .sp-knapp { min-width: calc(50% - 3px); }
+}
+
 /* Fristbanneret — gult og vennlig til det nærmer seg, tydeligere de siste to ukene. */
 .runde-frist {
   display: flex; align-items: center; gap: 16px; justify-content: space-between;
@@ -2763,9 +2875,12 @@ textarea.qr-input { resize: vertical; }
 
 /* Risikoradene — kolonnetabell som kontraktlista: tittel eier bredden.
    minmax(0, 1fr), ikke 1fr: grid-kolonner har min-width auto, og en lang tittel uten
-   brekkpunkt presset område- og fristkolonnene ut av raden (kjent felle, jf. .bruker-rad). */
+   brekkpunkt presset område- og fristkolonnene ut av raden (kjent felle, jf. .bruker-rad).
+   Merkekolonnen har FAST bredde, ikke auto: hver rad er sitt eget grid, og en auto-kolonne
+   som varierer med antall merker flyttet område-kolonnen fra rad til rad — lista sluttet å
+   se ut som en tabell. To merker som ikke får plass brekker til to linjer i stedet. */
 .rv-rad {
-  display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px 170px; gap: 12px; align-items: center;
   width: 100%; padding: 12px 20px; border: none; border-bottom: 1px solid var(--border);
   background: none; text-align: left; cursor: pointer; font-family: var(--font-sans); color: var(--text);
 }
@@ -2845,7 +2960,7 @@ textarea.qr-input { resize: vertical; }
   .rv-kolonner { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .rv-rad { grid-template-columns: 1fr auto; }
+  .rv-rad { grid-template-columns: minmax(0, 1fr) auto; }
   .rv-rad-omrade, .rv-rad-frist { display: none; }
 }
 
@@ -2863,6 +2978,7 @@ textarea.qr-input { resize: vertical; }
    kantene sine så seksjonene er lesbare i svart-hvitt. */
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
+  .vr-bunn, .vr-leggtil, .vr-valg,
   .tilbake-lenke, .sidebar-backdrop { display: none !important; }
   .app-shell { display: block; }
   .app-main, .app-body, .page-content { display: block; overflow: visible; height: auto; }

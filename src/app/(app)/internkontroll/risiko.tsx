@@ -215,7 +215,7 @@ export function Risiko() {
                   <div className={`rv-rad-frist${frist && frist < idag ? " over" : ""}`}>
                     {frist ? dato(frist) : ""}
                   </div>
-                  <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", flexWrap: "wrap" }}>
                     {f.status !== "open" && (
                       <span className="badge muted" title={STATUSFORKLARING[f.status]}>
                         {FARESTATUS.find((s) => s.verdi === f.status)?.etikett ?? f.status}

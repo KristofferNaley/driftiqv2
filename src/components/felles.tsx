@@ -49,7 +49,9 @@ export function useOrgData<T>(
     void last();
   }, [last]);
 
-  return { data, feil, setFeil, laster: laster || lasterOkt, last, orgId };
+  // `setData` er med for optimistiske oppdateringer: en avkryssing skal endre punktet i
+  // hånden UMIDDELBART, ikke via lasteskjerm — `last()` etterpå er bare avstemming.
+  return { data, setData, feil, setFeil, laster: laster || lasterOkt, last, orgId };
 }
 
 export function Kort({

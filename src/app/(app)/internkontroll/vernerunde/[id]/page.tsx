@@ -4,12 +4,15 @@ import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Lock, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { Feil, Kort, Tom, useOrgData } from "@/components/felles";
+import { Feil, Tom, initialer, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "@/lib/klient";
 
 /**
- * Vernerunde — egenkontrollen av bygget, med sjekkliste. Port av v1s rundedetalj.
+ * Vernerunde-gjennomføringen — bygget etter `mockups/vernerunde-mockup.html`: deltakerne
+ * som chips øverst, klebrig fremdriftslinje, punktene som kort med tre store valgknapper,
+ * avviksskjemaet INNE i kortet, og en bunnlinje som følger med. Runden gås med telefonen
+ * i hånda; alt lagres fortløpende.
  *
  * ## Trestatus, ikke avkryssing
  *
@@ -17,10 +20,16 @@ import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "
  * «ikke sjekket» fra «finnes ikke hos oss» — og det er den forskjellen som er
  * dokumentasjonen. Ubesvart (ingen av de tre) er også et svar: det runden ikke rakk.
  *
- * ## «Registrer avvik» oppretter et EKTE avvik
+ * ## Optimistisk avkryssing
  *
- * Koblet til punktet via roundId/roundItemId. Avviket lever videre i avviksmodulen med
- * hele behandlingskjeden sin — runden er der det ble OPPDAGET, ikke der det følges opp.
+ * Et klikk endrer punktet i hånden umiddelbart (`setData`), API-kallet går i bakgrunnen —
+ * å vise lasteskjerm for hvert kryss føltes som at hele siden lastet på nytt. Feiler
+ * kallet, hentes sannheten på nytt.
+ *
+ * ## «Avvik» åpner et EKTE avviksskjema i kortet
+ *
+ * Avviket opprettes i avviksmodulen, koblet til punktet via roundId/roundItemId, og følges
+ * opp der — runden er der det ble OPPDAGET, ikke der det behandles.
  *
  * ## En fullført runde er låst
  *
@@ -29,38 +38,42 @@ import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "
  */
 export default function Vernerunde({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, feil, setFeil, laster, last, orgId } = useOrgData(
+  const { data, setData, feil, setFeil, last, orgId } = useOrgData(
     (o) => internkontroll.hentRunde(o, id),
     [id],
   );
-  const [lagrer, setLagrer] = useState<string | null>(null);
-  const [avvikFor, setAvvikFor] = useState<Rundepunkt | null>(null);
+  const [apentSkjema, setApentSkjema] = useState<string | null>(null);
   const [nyttPunkt, setNyttPunkt] = useState(false);
+  const [nyDeltaker, setNyDeltaker] = useState(false);
   const [bekreftFullfor, setBekreftFullfor] = useState(false);
 
   async function settStatus(punkt: Rundepunkt, status: string) {
     if (!orgId) return;
-    setLagrer(punkt.id);
+    // Samme knapp igjen = nullstill til ubesvart. Feilklikk skal kunne angres.
+    const ny = punkt.status === status ? null : status;
+    setData((d) =>
+      d ? { ...d, punkter: d.punkter.map((p) => (p.id === punkt.id ? { ...p, status: ny } : p)) } : d,
+    );
+    setApentSkjema(ny === "avvik" ? punkt.id : null);
     try {
-      // Samme knapp igjen = nullstill til ubesvart. Feilklikk skal kunne angres.
-      await internkontroll.kryssAv(orgId, id, punkt.id, {
-        status: punkt.status === status ? null : status,
-      });
-      await last();
+      await internkontroll.kryssAv(orgId, id, punkt.id, { status: ny });
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Kunne ikke lagre");
-    } finally {
-      setLagrer(null);
+      await last();
     }
   }
 
   async function lagreNotat(punktId: string, notat: string) {
     if (!orgId) return;
+    const verdi = notat.trim() || null;
+    setData((d) =>
+      d ? { ...d, punkter: d.punkter.map((p) => (p.id === punktId ? { ...p, notes: verdi } : p)) } : d,
+    );
     try {
-      await internkontroll.kryssAv(orgId, id, punktId, { notes: notat.trim() || null });
-      await last();
+      await internkontroll.kryssAv(orgId, id, punktId, { notes: verdi });
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke lagre kommentaren");
+      setFeil(e instanceof Error ? e.message : "Kunne ikke lagre merknaden");
+      await last();
     }
   }
 
@@ -85,7 +98,7 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
     }
   }
 
-  // Punktene gruppert på seksjon, i innsettingsrekkefølge — samme rekkefølge som malen.
+  // Punktene gruppert på seksjon, i innsettingsrekkefølge — samme rekkefølge som sjekklista.
   const seksjoner = useMemo(() => {
     const kart = new Map<string, Rundepunkt[]>();
     for (const p of data?.punkter ?? []) {
@@ -96,7 +109,7 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
     return [...kart.entries()];
   }, [data]);
 
-  if (laster || !data) {
+  if (!data) {
     return (
       <Layout tittel="Vernerunde">
         <div className="page-content">
@@ -109,14 +122,19 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
 
   const laast = data.status === "completed";
   const besvarte = data.punkter.filter((p) => p.status).length;
+  const antallOk = data.punkter.filter((p) => p.status === "ok").length;
+  const antallAvvik = data.punkter.filter((p) => p.status === "avvik").length;
   const ubesvarte = data.punkter.length - besvarte;
   const avvikPerPunkt = new Map(data.avvik.filter((a) => a.roundItemId).map((a) => [a.roundItemId!, a]));
+  const avvikUtenMelding = data.punkter.filter(
+    (p) => p.status === "avvik" && !avvikPerPunkt.has(p.id),
+  ).length;
 
   return (
     <Layout
       tittel={data.title}
       handlinger={
-        laast ? (
+        laast && (
           <>
             {/* Rapporten er utskriften: siden er ren dokumentasjon når runden er låst,
                 og print-CSS-en fjerner alt som hører til skjermen. */}
@@ -127,10 +145,6 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
               <Lock size={13} strokeWidth={2.2} aria-hidden /> Fullført og låst
             </span>
           </>
-        ) : (
-          <button className="btn btn-primary" onClick={() => setBekreftFullfor(true)}>
-            Fullfør runden
-          </button>
         )
       }
     >
@@ -141,8 +155,39 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
 
         <Feil melding={feil} />
 
-        {/* Fristbanneret er tatt ut: runden opprettes når den gjennomføres, og varsling om
-            lovpålagt oppfølging kommer et annet sted senere. */}
+        {/* Deltakerne øverst — befaringen er planlagt med folk og dato før punktene gås gjennom. */}
+        <div className="vr-folk">
+          {data.deltakere.map((d) => (
+            <span key={d.id} className="vr-person">
+              <span className="vr-avatar" aria-hidden>{initialer(d.name)}</span>
+              {d.name}
+              {d.role && <span style={{ color: "var(--muted)" }}>· {d.role}</span>}
+              {!laast && (
+                <button
+                  aria-label={`Fjern ${d.name}`}
+                  onClick={() => {
+                    if (!orgId) return;
+                    void internkontroll
+                      .slettDeltaker(orgId, id, d.id)
+                      .then(last)
+                      .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke fjerne deltakeren"));
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+          {!laast && (
+            <button className="vr-leggtil" onClick={() => setNyDeltaker(true)}>
+              + Deltaker
+            </button>
+          )}
+          {data.deltakere.length === 0 && laast && (
+            <span className="list-meta">Ingen deltakere registrert.</span>
+          )}
+        </div>
+
         {laast && (
           <div className="card">
             <div className="card-body" style={{ color: "var(--muted)", fontSize: "var(--fs-sm)" }}>
@@ -152,86 +197,92 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
           </div>
         )}
 
-        {/* Deltakerne først — befaringen er planlagt med folk og dato før punktene gås gjennom. */}
-        <Deltakere
-          orgId={orgId!}
-          rundeId={id}
-          deltakere={data.deltakere}
-          laast={laast}
-          onEndret={last}
-          onFeil={setFeil}
-        />
-
-        {/* Fremdrift — brøken sier hvor langt befaringen faktisk er kommet. */}
-        <div className="card">
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-sm)" }}>
-              <b>Fremdrift</b>
-              <span className="list-meta">
-                {besvarte} / {data.punkter.length} punkter
-                {data.avvik.length > 0 && ` · ${data.avvik.length} avvik funnet`}
-              </span>
-            </div>
-            <div className="tg-spor">
-              <div
-                className="tg-fyll"
-                style={{
-                  width: `${data.punkter.length ? Math.round((100 * besvarte) / data.punkter.length) : 0}%`,
-                  ["--tg-farge" as string]: "var(--accent2)",
-                }}
-              />
-            </div>
+        {/* Klebrig fremdrift — brøken følger med nedover lista. */}
+        <div className="vr-fremdrift">
+          <div className="vr-fremdrift-rad">
+            <span>
+              <b>{besvarte}</b> av <b>{data.punkter.length}</b> punkter vurdert
+            </span>
+            <span className="vr-tellinger">
+              <span className="vr-telling ok"><i aria-hidden /> {antallOk} i orden</span>
+              <span className="vr-telling avvik"><i aria-hidden /> {antallAvvik} avvik</span>
+            </span>
+          </div>
+          <div className="tg-spor">
+            <div
+              className="tg-fyll"
+              style={{
+                width: `${data.punkter.length ? Math.round((100 * besvarte) / data.punkter.length) : 0}%`,
+                ["--tg-farge" as string]: "var(--accent2)",
+              }}
+            />
           </div>
         </div>
 
-        {seksjoner.length === 0 ? (
-          <Kort tittel="Sjekkpunkter">
-            <Tom tekst="Ingen sjekkpunkter. Legg til egne under, eller opprett neste runde fra en HMS-mal." />
-          </Kort>
-        ) : (
-          seksjoner.map(([navn, punkter]) => (
-            <Kort
-              key={navn}
-              tittel={navn}
-              handling={
-                <span className="field-note">
-                  {punkter.filter((p) => p.status).length}/{punkter.length}
-                </span>
-              }
-            >
+        {seksjoner.length === 0 && (
+          <Tom tekst="Ingen sjekkpunkter. Legg til egne under, eller opprett neste runde fra en sjekkliste." />
+        )}
+
+        {seksjoner.map(([navn, punkter]) => (
+          <section key={navn}>
+            <div className="vr-seksjon-hode">
+              <h2>{navn}</h2>
+              <span className="vr-n">
+                {punkter.filter((p) => p.status).length}/{punkter.length}
+              </span>
+              <span className="vr-linje" aria-hidden />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
               {punkter.map((p) => (
-                <Sjekkpunkt
+                <Punktkort
                   key={p.id}
                   punkt={p}
                   laast={laast}
-                  lagrer={lagrer === p.id}
+                  orgId={orgId!}
+                  rundeId={id}
                   avvik={avvikPerPunkt.get(p.id) ?? null}
+                  skjemaApent={apentSkjema === p.id}
                   onStatus={(s) => void settStatus(p, s)}
                   onNotat={(n) => void lagreNotat(p.id, n)}
-                  onRegistrerAvvik={() => setAvvikFor(p)}
+                  onApneSkjema={() => setApentSkjema(p.id)}
+                  onLukkSkjema={() => setApentSkjema(null)}
+                  onOpprettet={last}
                   onFjern={() => void fjernPunkt(p.id)}
                 />
               ))}
-            </Kort>
-          ))
-        )}
+            </div>
+          </section>
+        ))}
 
         {!laast && (
-          <button className="btn btn-ghost" onClick={() => setNyttPunkt(true)}>
+          <button className="btn btn-ghost" style={{ alignSelf: "flex-start" }} onClick={() => setNyttPunkt(true)}>
             <Plus size={15} strokeWidth={2} aria-hidden /> Legg til sjekkpunkt
           </button>
         )}
-      </div>
 
-      {avvikFor && orgId && (
-        <RegistrerAvvik
-          orgId={orgId}
-          rundeId={id}
-          punkt={avvikFor}
-          onLukk={() => setAvvikFor(null)}
-          onLagret={last}
-        />
-      )}
+        {/* Bunnlinja følger med — fullføringen skal være ett trykk unna hele veien. */}
+        {!laast && (
+          <div className="vr-bunn">
+            <span className="vr-bunn-status">
+              {besvarte === 0 ? (
+                "Ingen punkter vurdert ennå"
+              ) : (
+                <>
+                  <b>{besvarte}</b> av {data.punkter.length} vurdert · <b>{data.avvik.length}</b> avvik opprettet
+                </>
+              )}
+            </span>
+            <div className="vr-bunn-knapper">
+              <Link href="/internkontroll" className="btn btn-ghost">
+                Lagre og fortsett senere
+              </Link>
+              <button className="btn btn-primary" onClick={() => setBekreftFullfor(true)}>
+                Fullfør vernerunde
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {nyttPunkt && orgId && (
         <NyttPunkt
@@ -243,19 +294,40 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
         />
       )}
 
+      {nyDeltaker && orgId && (
+        <NyDeltakerModal
+          orgId={orgId}
+          rundeId={id}
+          deltakere={data.deltakere}
+          onLukk={() => setNyDeltaker(false)}
+          onEndret={last}
+        />
+      )}
+
       {bekreftFullfor && (
-        <Modal tittel="Fullfør runden" onLukk={() => setBekreftFullfor(false)} bredde={440}>
-          <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, margin: 0 }}>
-            {ubesvarte > 0 ? (
-              <>
-                <b>{ubesvarte}</b> {ubesvarte === 1 ? "punkt er ubesvart" : "punkter er ubesvarte"}.
-                Runden låses ved fullføring og kan ikke gjenåpnes — de ubesvarte blir stående
-                som «ikke sjekket» i dokumentasjonen.
-              </>
-            ) : (
-              <>Alle punkter er besvart. Runden låses ved fullføring og kan ikke gjenåpnes.</>
-            )}
+        <Modal tittel="Fullfør vernerunden" onLukk={() => setBekreftFullfor(false)} bredde={440}>
+          <p className="list-meta" style={{ margin: "0 0 10px" }}>
+            Rapporten arkiveres i internkontrollen, og avvikene følges opp videre i Avvik.
           </p>
+          <div className="vr-sum">
+            <div><span>Punkter i orden</span><span>{antallOk}</span></div>
+            <div><span>Punkter med avvik</span><span>{antallAvvik}</span></div>
+            <div><span>Ikke aktuelt</span><span>{data.punkter.filter((p) => p.status === "ikke_aktuelt").length}</span></div>
+            <div><span>Avvik opprettet</span><span>{data.avvik.length}</span></div>
+          </div>
+          {ubesvarte > 0 && (
+            <div className="field-note" style={{ marginTop: "10px" }}>
+              {ubesvarte} {ubesvarte === 1 ? "punkt er ikke vurdert" : "punkter er ikke vurdert"} —
+              {" "}de blir stående som «ikke sjekket» i dokumentasjonen. Runden låses og kan
+              ikke gjenåpnes.
+            </div>
+          )}
+          {avvikUtenMelding > 0 && (
+            <div className="field-note" style={{ marginTop: "8px", color: "var(--warn)" }}>
+              {avvikUtenMelding} {avvikUtenMelding === 1 ? "punkt" : "punkter"} er merket som
+              avvik uten at avvik er opprettet — da blir det ikke fulgt opp i systemet.
+            </div>
+          )}
           <Knapperad
             onAvbryt={() => setBekreftFullfor(false)}
             sendEtikett="Fullfør og lås"
@@ -267,48 +339,53 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
   );
 }
 
-/** Ett sjekkpunkt: trestatus, kommentar, avvikskobling — og fjerning på ulåst runde. */
-function Sjekkpunkt({
+const VALG = [
+  { verdi: "ok", etikett: "I orden", klasse: "ok" },
+  { verdi: "avvik", etikett: "Avvik", klasse: "avvik" },
+  { verdi: "ikke_aktuelt", etikett: "Ikke aktuelt", klasse: "ia" },
+];
+
+/** Ett punktkort: trestatus, merknad, avviksskjema i kortet — og fjerning på ulåst runde. */
+function Punktkort({
   punkt,
   laast,
-  lagrer,
+  orgId,
+  rundeId,
   avvik,
+  skjemaApent,
   onStatus,
   onNotat,
-  onRegistrerAvvik,
+  onApneSkjema,
+  onLukkSkjema,
+  onOpprettet,
   onFjern,
 }: {
   punkt: Rundepunkt;
   laast: boolean;
-  lagrer: boolean;
+  orgId: string;
+  rundeId: string;
   avvik: { id: string; number: number | null; title: string; status: string } | null;
+  skjemaApent: boolean;
   onStatus: (status: string) => void;
   onNotat: (notat: string) => void;
-  onRegistrerAvvik: () => void;
+  onApneSkjema: () => void;
+  onLukkSkjema: () => void;
+  onOpprettet: () => Promise<void>;
   onFjern: () => void;
 }) {
   const [skriver, setSkriver] = useState(false);
   const [notat, setNotat] = useState(punkt.notes ?? "");
 
-  const VALG = [
-    { verdi: "ok", etikett: "OK", klasse: "ok" },
-    { verdi: "avvik", etikett: "Avvik", klasse: "avvik" },
-    { verdi: "ikke_aktuelt", etikett: "Ikke aktuelt", klasse: "ia" },
-  ];
+  const tilstand =
+    punkt.status === "ok" ? " gjort-ok" : punkt.status === "avvik" ? " gjort-avvik" : punkt.status === "ikke_aktuelt" ? " gjort-na" : "";
 
   return (
-    <div className="sjekkpunkt">
-      <div className="sjekkpunkt-hode">
+    <div className={`vr-punkt${tilstand}`}>
+      <div className="vr-punkt-hode">
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="list-tittel">{punkt.text}</div>
           {punkt.notes && !skriver && <div className="list-meta">💬 {punkt.notes}</div>}
-          {avvik && (
-            <Link href={`/avvik/${avvik.id}`} className="sjekkpunkt-avvik">
-              ⚠ Avvik #{String(avvik.number ?? 0).padStart(3, "0")} — {avvik.title}
-            </Link>
-          )}
         </div>
-
         {laast ? (
           <span
             className={`badge ${
@@ -318,119 +395,172 @@ function Sjekkpunkt({
             {VALG.find((v) => v.verdi === punkt.status)?.etikett ?? "Ikke sjekket"}
           </span>
         ) : (
-          <div className="sjekkpunkt-valg">
+          <button className="btn btn-ghost sp-fjern" onClick={onFjern} aria-label={`Fjern punktet ${punkt.text}`}>
+            ✕
+          </button>
+        )}
+      </div>
+
+      {avvik && (
+        <div className="vr-avvikkort">
+          <b>⚠ Avvik #{String(avvik.number ?? 0).padStart(3, "0")}</b>
+          <span style={{ flex: 1, minWidth: "120px" }}>{avvik.title}</span>
+          <Link href={`/avvik/${avvik.id}`}>Åpne i Avvik</Link>
+        </div>
+      )}
+
+      {!laast && (
+        <>
+          <div className="vr-valg">
             {VALG.map((v) => (
               <button
                 key={v.verdi}
                 className={`sp-knapp ${v.klasse}${punkt.status === v.verdi ? " valgt" : ""}`}
-                disabled={lagrer}
+                aria-pressed={punkt.status === v.verdi}
                 onClick={() => onStatus(v.verdi)}
               >
                 {v.etikett}
               </button>
             ))}
-            <button className="btn btn-ghost sp-fjern" onClick={onFjern} aria-label={`Fjern punktet ${punkt.text}`}>
-              ✕
-            </button>
           </div>
-        )}
-      </div>
 
-      {!laast && (
-        <div className="sjekkpunkt-handlinger">
-          {skriver ? (
-            <form
-              style={{ display: "flex", gap: "8px", flex: 1 }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                onNotat(notat);
-                setSkriver(false);
+          {punkt.status === "avvik" && !avvik && skjemaApent && (
+            <Avviksskjema
+              orgId={orgId}
+              rundeId={rundeId}
+              punkt={punkt}
+              onAvbryt={() => {
+                // Avbrutt skjema = punktet er ikke et avvik likevel — tilbake til ubesvart.
+                onLukkSkjema();
+                onStatus("avvik");
               }}
-            >
-              <input
-                className="input"
-                style={{ flex: 1, padding: "6px 10px", fontSize: "var(--fs-sm)" }}
-                value={notat}
-                autoFocus
-                placeholder="Kommentar til punktet …"
-                onChange={(e) => setNotat(e.target.value)}
-              />
-              <button className="btn btn-ghost" style={{ padding: "6px 12px" }}>
-                Lagre
-              </button>
-            </form>
-          ) : (
-            <>
-              <button className="sp-lenke" onClick={() => setSkriver(true)}>
-                {punkt.notes ? "Endre kommentar" : "+ Legg til kommentar"}
-              </button>
-              {!avvik && (
-                <button className="sp-lenke avvik" onClick={onRegistrerAvvik}>
-                  + Registrer avvik
-                </button>
-              )}
-            </>
+              onOpprettet={async () => {
+                onLukkSkjema();
+                await onOpprettet();
+              }}
+            />
           )}
-        </div>
+
+          <div className="sjekkpunkt-handlinger">
+            {skriver ? (
+              <form
+                style={{ display: "flex", gap: "8px", flex: 1 }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onNotat(notat);
+                  setSkriver(false);
+                }}
+              >
+                <input
+                  className="input"
+                  style={{ flex: 1, padding: "6px 10px", fontSize: "var(--fs-sm)" }}
+                  value={notat}
+                  autoFocus
+                  placeholder="Merknad til punktet …"
+                  onChange={(e) => setNotat(e.target.value)}
+                />
+                <button className="btn btn-ghost" style={{ padding: "6px 12px" }}>
+                  Lagre
+                </button>
+              </form>
+            ) : (
+              <>
+                <button className="sp-lenke" onClick={() => setSkriver(true)}>
+                  {punkt.notes ? "Endre merknad" : "+ Legg til merknad"}
+                </button>
+                {punkt.status === "avvik" && !avvik && !skjemaApent && (
+                  <button className="sp-lenke avvik" onClick={onApneSkjema}>
+                    + Registrer avvik
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
+const ALVOR = [
+  { verdi: "lav", etikett: "Lav" },
+  { verdi: "middels", etikett: "Middels" },
+  { verdi: "akutt", etikett: "Akutt" },
+];
+
 /**
- * Oppretter et EKTE avvik koblet til punktet. Tittelen er forhåndsutfylt fra punktteksten —
- * den som står i en kald kjeller med telefonen skal slippe å formulere seg fra null.
+ * Avviksskjemaet i punktkortet — oppretter et EKTE avvik koblet til punktet. Tittelen er
+ * punktteksten: den som står i en kald kjeller med telefonen skal slippe å formulere seg
+ * fra null. Behandlingen skjer videre i avviksmodulen.
  */
-function RegistrerAvvik({
+function Avviksskjema({
   orgId,
   rundeId,
   punkt,
-  onLukk,
-  onLagret,
+  onAvbryt,
+  onOpprettet,
 }: {
   orgId: string;
   rundeId: string;
   punkt: Rundepunkt;
-  onLukk: () => void;
-  onLagret: () => Promise<void>;
+  onAvbryt: () => void;
+  onOpprettet: () => Promise<void>;
 }) {
-  const [tittel, setTittel] = useState(punkt.text);
-  const [beskrivelse, setBeskrivelse] = useState(punkt.notes ?? "");
+  const [beskrivelse, setBeskrivelse] = useState("");
+  const [alvor, setAlvor] = useState("middels");
   const { sender, feil, send } = useSending(async () => {
-    await onLagret();
-    onLukk();
+    await onOpprettet();
   });
 
   return (
-    <Modal tittel="Registrer avvik fra punktet" onLukk={onLukk}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(async () => {
-            await avvikKlient.meld(orgId, {
-              title: tittel.trim(),
-              description: beskrivelse.trim() || null,
-              category: "hms",
-              roundId: rundeId,
-              roundItemId: punkt.id,
-            });
-            // Punktet settes til «avvik» i samme slengen — det er jo det som ble funnet.
-            await internkontroll.kryssAv(orgId, rundeId, punkt.id, { status: "avvik" });
-          });
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
-      >
-        <Feil melding={feil} />
-        <Tekstfelt etikett="Tittel *" verdi={tittel} onEndre={setTittel} />
-        <Tekstomrade
-          etikett="Hva ble observert?"
-          verdi={beskrivelse}
-          onEndre={setBeskrivelse}
-          notat="Avviket opprettes i avviksmodulen, koblet til dette punktet, og følges opp der med hele behandlingskjeden."
-        />
-        <Knapperad onAvbryt={onLukk} sendEtikett="Registrer avvik" sender={sender} deaktivert={!tittel.trim()} />
-      </form>
-    </Modal>
+    <form
+      className="vr-avviksskjema"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send(() =>
+          avvikKlient.meld(orgId, {
+            title: punkt.text,
+            description: beskrivelse.trim() || null,
+            category: "hms",
+            severity: alvor,
+            roundId: rundeId,
+            roundItemId: punkt.id,
+          }),
+        );
+      }}
+    >
+      <Feil melding={feil} />
+      <Tekstomrade
+        etikett="Hva ble observert?"
+        verdi={beskrivelse}
+        onEndre={setBeskrivelse}
+        plassholder="Beskriv det du ser, og hvor det er"
+      />
+      <div>
+        <div className="field-label">Alvorlighet</div>
+        <div className="vr-seg" style={{ marginTop: "6px" }}>
+          {ALVOR.map((a) => (
+            <button
+              key={a.verdi}
+              type="button"
+              className={alvor === a.verdi ? "valgt" : ""}
+              aria-pressed={alvor === a.verdi}
+              onClick={() => setAlvor(a.verdi)}
+            >
+              {a.etikett}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+        <button type="button" className="btn btn-ghost" onClick={onAvbryt} disabled={sender}>
+          Avbryt
+        </button>
+        <button className="btn btn-primary" disabled={sender}>
+          {sender ? "Oppretter …" : "Opprett avvik"}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -486,25 +616,24 @@ function NyttPunkt({
   );
 }
 
-/** Deltakerne på befaringen — interne fra brukerlista, eksterne med navn og rolle. */
-function Deltakere({
+/** Legger til deltakere underveis — interne fra brukerlista, eksterne med navn og rolle. */
+function NyDeltakerModal({
   orgId,
   rundeId,
   deltakere,
-  laast,
+  onLukk,
   onEndret,
-  onFeil,
 }: {
   orgId: string;
   rundeId: string;
   deltakere: Array<{ id: string; name: string; role: string | null }>;
-  laast: boolean;
+  onLukk: () => void;
   onEndret: () => Promise<void>;
-  onFeil: (m: string) => void;
 }) {
   const [folk, setFolk] = useState<Array<{ id: string; name: string }> | null>(null);
   const [eksternNavn, setEksternNavn] = useState("");
   const [eksternRolle, setEksternRolle] = useState("");
+  const [feil, setFeil] = useState<string | null>(null);
 
   async function hentFolk() {
     if (folk !== null) return;
@@ -520,93 +649,69 @@ function Deltakere({
       await internkontroll.nyDeltaker(orgId, rundeId, { name: navn, role: rolle });
       await onEndret();
     } catch (e) {
-      onFeil(e instanceof Error ? e.message : "Kunne ikke legge til deltakeren");
-    }
-  }
-
-  async function fjern(deltakerId: string) {
-    try {
-      await internkontroll.slettDeltaker(orgId, rundeId, deltakerId);
-      await onEndret();
-    } catch (e) {
-      onFeil(e instanceof Error ? e.message : "Kunne ikke fjerne deltakeren");
+      setFeil(e instanceof Error ? e.message : "Kunne ikke legge til deltakeren");
     }
   }
 
   return (
-    <Kort tittel="Deltakere på befaring">
-      {deltakere.length === 0 ? (
-        <Tom tekst="Ingen deltakere registrert." />
-      ) : (
-        deltakere.map((d) => (
-          <div key={d.id} className="list-item">
-            <div style={{ minWidth: 0 }}>
-              <div className="list-tittel">{d.name}</div>
-              {d.role && <div className="list-meta">{d.role}</div>}
-            </div>
-            {!laast && (
-              <button className="btn btn-ghost" style={{ color: "var(--muted)" }} onClick={() => void fjern(d.id)}>
-                Fjern
-              </button>
-            )}
-          </div>
-        ))
-      )}
-
-      {!laast && (
-        <div style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <select
-            className="select"
-            aria-label="Legg til bruker i organisasjonen"
-            value=""
-            onFocus={() => void hentFolk()}
-            onChange={(e) => {
-              const b = folk?.find((f) => f.id === e.target.value);
-              if (b) void leggTil(b.name, null);
-            }}
-          >
-            <option value="">Velg bruker i organisasjonen …</option>
-            {(folk ?? [])
-              .filter((f) => !deltakere.some((d) => d.name === f.name))
-              .map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-          </select>
-
-          <form
-            style={{ display: "flex", gap: "8px" }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!eksternNavn.trim()) return;
-              void leggTil(eksternNavn.trim(), eksternRolle.trim() || null);
-              setEksternNavn("");
-              setEksternRolle("");
-            }}
-          >
-            <input
-              className="input"
-              style={{ flex: 1 }}
-              placeholder="Ekstern deltaker — navn"
-              aria-label="Ekstern deltaker, navn"
-              value={eksternNavn}
-              onChange={(e) => setEksternNavn(e.target.value)}
-            />
-            <input
-              className="input"
-              style={{ width: "140px" }}
-              placeholder="Rolle"
-              aria-label="Ekstern deltaker, rolle"
-              value={eksternRolle}
-              onChange={(e) => setEksternRolle(e.target.value)}
-            />
-            <button className="btn btn-ghost" disabled={!eksternNavn.trim()}>
-              ＋
-            </button>
-          </form>
+    <Modal tittel="Legg til deltaker" onLukk={onLukk} bredde={440}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <Feil melding={feil} />
+        <select
+          className="select"
+          aria-label="Legg til bruker i organisasjonen"
+          value=""
+          onFocus={() => void hentFolk()}
+          onChange={(e) => {
+            const b = folk?.find((f) => f.id === e.target.value);
+            if (b) void leggTil(b.name, null);
+          }}
+        >
+          <option value="">Velg bruker i organisasjonen …</option>
+          {(folk ?? [])
+            .filter((f) => !deltakere.some((d) => d.name === f.name))
+            .map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+        </select>
+        <form
+          style={{ display: "flex", gap: "8px" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!eksternNavn.trim()) return;
+            void leggTil(eksternNavn.trim(), eksternRolle.trim() || null);
+            setEksternNavn("");
+            setEksternRolle("");
+          }}
+        >
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="Ekstern deltaker — navn"
+            aria-label="Ekstern deltaker, navn"
+            value={eksternNavn}
+            onChange={(e) => setEksternNavn(e.target.value)}
+          />
+          <input
+            className="input"
+            style={{ width: "120px" }}
+            placeholder="Rolle"
+            aria-label="Ekstern deltaker, rolle"
+            value={eksternRolle}
+            onChange={(e) => setEksternRolle(e.target.value)}
+          />
+          <button className="btn btn-ghost" disabled={!eksternNavn.trim()}>
+            ＋
+          </button>
+        </form>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button className="btn btn-primary" onClick={onLukk}>
+            Ferdig
+          </button>
         </div>
-      )}
-    </Kort>
+      </div>
+    </Modal>
   );
 }
