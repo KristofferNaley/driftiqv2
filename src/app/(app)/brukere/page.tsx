@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Feil, Tom, dagerSiden, initialer, siden, useOrgData } from "@/components/felles";
-import { Bryter, Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
+import { Bryter, Fanemodal, type Fanevalg, Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
+import { Bell, KeyRound, Settings, User } from "lucide-react";
 import { VARSLER, VARSEL_STANDARD } from "@/lib/varselvalg";
 import { brreg, brukere, type OrgBruker, type StyreSvar } from "@/lib/klient";
 import { formatOrgNr } from "@/lib/orgnr";
@@ -26,11 +27,11 @@ const VANLIGE_TITLER = ["Styreleder", "Styremedlem", "Varamedlem", "Forretningsf
  * ## To ulike krav på denne siden
  *
  * Å OPPRETTE brukere krever bare `redigering`: HMS-ansvaret ligger ofte hos et styremedlem
- * som må lage kontoer selv. Å ENDRE en eksisterende bruker krever `orgadmin` — derfor står
- * ⋯-knappen på `erAdmin`, mens knappene i toppen står på `kanOpprette`.
+ * som må lage kontoer selv. Å ENDRE en eksisterende bruker krever `orgadmin` — derfor er
+ * raden bare klikkbar på `erAdmin`, mens knappene i toppen står på `kanOpprette`.
  */
 export default function Brukere() {
-  const { aktivOrg } = useOkt();
+  const { aktivOrg, bruker: innlogget } = useOkt();
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => brukere.liste(o));
   // Ett startsteg, ikke to knapper: `null` = lukket, ellers hvilket steg modalen åpner på.
   const [legger, setLegger] = useState<Steg | null>(null);
@@ -45,8 +46,12 @@ export default function Brukere() {
       tittel="Brukere"
       handlinger={
         kanOpprette && (
-          <button className="btn btn-primary" onClick={() => setLegger("velg")}>
-            ＋ Legg til bruker
+          <button
+            className="btn btn-primary"
+            onClick={() => setLegger("velg")}
+            aria-label="Legg til bruker"
+          >
+            ＋<span className="skjul-mobil"> Legg til bruker</span>
           </button>
         )
       }
@@ -114,7 +119,7 @@ export default function Brukere() {
         <BrukerModal
           bruker={redigerer}
           orgId={orgId!}
-          erAdmin={erAdmin}
+          erMeg={redigerer.id === innlogget?.id}
           onLukk={() => setRedigerer(null)}
           onLagret={last}
           onFeil={setFeil}
@@ -165,7 +170,7 @@ function LeggTilBruker({
   }
   if (steg === "manuelt") {
     return (
-      <BrukerModal
+      <NyBrukerModal
         orgId={orgId}
         erAdmin={erAdmin}
         onTilbake={() => setSteg("velg")}
@@ -222,8 +227,10 @@ function Rad({
   const dager = dagerSiden(b.lastLoginAt);
   const fjernt = dager === null || dager > 90;
 
-  return (
-    <div className="list-item bruker-rad">
+  // Hele raden er knappen som åpner modalen — samme grep som risikoradene. ⋯-tegnet i
+  // enden er ren pekepinn (et span, ikke en knapp: knapp-i-knapp er ugyldig HTML).
+  const innhold = (
+    <>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
         <span className="avatar" style={{ opacity: b.active ? 1 : 0.4 }}>
           {initialer(b.name)}
@@ -262,211 +269,382 @@ function Rad({
       </span>
 
       {erAdmin ? (
-        <button className="ikon-btn" title="Rediger" onClick={() => onEndre(b)}>
+        <span className="ikon-btn" aria-hidden>
           ⋯
-        </button>
+        </span>
       ) : (
         <span />
+      )}
+    </>
+  );
+
+  return erAdmin ? (
+    <button className="list-item bruker-rad klikkbar" onClick={() => onEndre(b)}>
+      {innhold}
+    </button>
+  ) : (
+    <div className="list-item bruker-rad">{innhold}</div>
+  );
+}
+
+type Fane = "bruker" | "tilgang" | "varsler" | "konto";
+
+/**
+ * Tittelvalget — nedtrekk med «Annet …» som åpner fritekst. Én komponent for ny og
+ * eksisterende bruker, så de to skjemaene ikke drifter fra hverandre.
+ */
+function TittelFelt({
+  valg,
+  onValg,
+  egenTekst,
+  onEgenTekst,
+}: {
+  valg: string;
+  onValg: (v: string) => void;
+  egenTekst: string;
+  onEgenTekst: (v: string) => void;
+}) {
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor="tittel">
+        Tittel i organisasjonen
+      </label>
+      <select id="tittel" className="input" value={valg} onChange={(e) => onValg(e.target.value)}>
+        <option value="">Ingen tittel</option>
+        {VANLIGE_TITLER.map((v) => (
+          <option key={v} value={v}>
+            {v}
+          </option>
+        ))}
+        <option value="__egen__">Annet …</option>
+      </select>
+      {valg === "__egen__" && (
+        <input
+          className="input"
+          style={{ marginTop: "8px" }}
+          value={egenTekst}
+          placeholder="Skriv tittelen"
+          aria-label="Egen tittel"
+          onChange={(e) => onEgenTekst(e.target.value)}
+        />
+      )}
+      <div className="field-note">
+        Ren beskrivelse. Fram til 08.08.2026 utledet v1 tilgang av tittelen — nå styrer den
+        ingenting, og tilgangsnivået er det eneste som gjelder.
+      </div>
+    </div>
+  );
+}
+
+/** Nivåkortene. Kort, ikke nedtrekk: beskrivelsen må være synlig NÅR man velger — ikke etterpå. */
+function NivaaVelger({
+  nivaa,
+  onVelg,
+  erAdmin,
+}: {
+  nivaa: Nivaa;
+  onVelg: (n: Nivaa) => void;
+  erAdmin: boolean;
+}) {
+  // Ingen kan dele ut et nivå de ikke har selv: en `redigering`-bruker som oppretter en konto
+  // skal ikke kunne gjøre den til kontoadmin og logge inn som den. Håndheves i API-et — dette
+  // er bare speilingen i UI-et.
+  const valgbare = erAdmin ? TILGANGSNIVAER : TILGANGSNIVAER.filter((n) => n.verdi !== "orgadmin");
+  return (
+    <div className="field">
+      <span className="field-label">Tilgangsnivå</span>
+      {valgbare.map((n) => (
+        <button
+          key={n.verdi}
+          type="button"
+          className={`nivaa-kort${nivaa === n.verdi ? " valgt" : ""}`}
+          onClick={() => onVelg(n.verdi)}
+        >
+          <span className="nivaa-radio" />
+          <span style={{ minWidth: 0 }}>
+            <span className="nivaa-navn">
+              {n.etikett}
+              <span className={`nivaa-prikk ${n.verdi}`} />
+            </span>
+            <span className="nivaa-desc">{n.beskrivelse}</span>
+          </span>
+        </button>
+      ))}
+      {!erAdmin && (
+        <div className="field-note">Kontoadmin kan bare gis av en som selv er kontoadmin.</div>
       )}
     </div>
   );
 }
 
 /**
- * Én modal for både ny og eksisterende bruker — som i v1. To nesten like modaler drifter fra
- * hverandre; her er forskjellen bare hvilke seksjoner som vises.
+ * Ny bruker — vanlig modal med ETT skjema. Å opprette er fire felter og skal ikke gjemmes
+ * bak faner; redigeringen har fanemodalen under.
  */
-function BrukerModal({
-  bruker,
+function NyBrukerModal({
   orgId,
   erAdmin,
   onLukk,
   onLagret,
-  onFeil,
   onTilbake,
 }: {
-  bruker?: OrgBruker;
   orgId: string;
   erAdmin: boolean;
   onLukk: () => void;
   onLagret: () => Promise<void>;
-  onFeil?: (m: string) => void;
-  /** Satt når modalen er nådd via valgsteget — da skal «Avbryt» gå ETT steg tilbake. */
+  /** Satt når modalen er nådd via valgsteget — da skal knappen gå ETT steg tilbake. */
   onTilbake?: () => void;
 }) {
-  const endrer = !!bruker;
-  const egenTittel = !!bruker?.title && !VANLIGE_TITLER.includes(bruker.title);
-
-  const [navn, setNavn] = useState(bruker?.name ?? "");
-  const [epost, setEpost] = useState(bruker?.email ?? "");
-  const [nivaa, setNivaa] = useState<Nivaa>((bruker?.nivaa as Nivaa) ?? "redigering");
-  const [tittelValg, setTittelValg] = useState(egenTittel ? "__egen__" : (bruker?.title ?? ""));
-  const [egenTittelTekst, setEgenTittelTekst] = useState(egenTittel ? bruker!.title! : "");
-  const [bekrefterFjern, setBekrefterFjern] = useState(false);
-  const [sendtOppsett, setSendtOppsett] = useState(false);
-
-  // Varslene ligger på medlemskapet og lagres for seg (eget endepunkt) — de finnes ikke før
-  // brukeren gjør det, så seksjonen vises kun ved redigering.
-  const [varsler, setVarsler] = useState<Record<string, boolean> | null>(null);
-  useEffect(() => {
-    if (!endrer) return;
-    brukere
-      .varsler(orgId, bruker!.id)
-      .then((r) => setVarsler({ ...VARSEL_STANDARD, ...r.prefs }))
-      .catch(() => setVarsler({ ...VARSEL_STANDARD }));
-  }, [endrer, orgId, bruker]);
+  const [navn, setNavn] = useState("");
+  const [epost, setEpost] = useState("");
+  const [nivaa, setNivaa] = useState<Nivaa>("redigering");
+  const [tittelValg, setTittelValg] = useState("");
+  const [egenTittelTekst, setEgenTittelTekst] = useState("");
 
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
     onLukk();
   });
 
-  // Ingen kan dele ut et nivå de ikke har selv: en `redigering`-bruker som oppretter en konto
-  // skal ikke kunne gjøre den til kontoadmin og logge inn som den. Håndheves i API-et — dette
-  // er bare speilingen i UI-et.
-  const valgbare = erAdmin ? TILGANGSNIVAER : TILGANGSNIVAER.filter((n) => n.verdi !== "orgadmin");
   const tittel = tittelValg === "__egen__" ? egenTittelTekst.trim() || null : tittelValg || null;
 
-  async function lagre() {
-    // Varslene har sitt eget endepunkt, så de skrives for seg. Rekkefølgen er med vilje:
-    // feiler tilgangsendringen, skal varslene ikke allerede være lagret.
-    if (endrer) {
-      await brukere.endre(orgId, bruker!.id, { name: navn.trim(), role: nivaa, title: tittel });
-      if (varsler) await brukere.settVarsler(orgId, bruker!.id, varsler);
-    } else {
-      await brukere.inviter(orgId, { name: navn.trim(), email: epost.trim(), role: nivaa, title: tittel });
-    }
-  }
-
-  async function fjern() {
-    try {
-      await brukere.fjern(orgId, bruker!.id);
-      await onLagret();
-      onLukk();
-    } catch (e) {
-      // «Organisasjonen må ha minst én administrator» kommer hit.
-      onFeil?.(e instanceof Error ? e.message : "Kunne ikke fjerne tilgangen");
-      onLukk();
-    }
-  }
-
-  if (bekrefterFjern && bruker) {
-    return (
-      <Modal tittel="Fjern tilgang" onLukk={() => setBekrefterFjern(false)} bredde={380}>
-        <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
-          Fjern <strong>{bruker.name}</strong> sin tilgang til denne organisasjonen? Personen kan
-          ikke lenger logge inn her.
-        </p>
-        <div className="tips-stripe" style={{ margin: "12px 0" }}>
-          <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
-            🛡 Kontoen slettes ikke. Sitter personen i flere styrer, beholder de tilgangen der —
-            og alt de har kvittert ut her står igjen i historikken med navnet sitt.
-          </span>
-        </div>
-        <Knapperad
-          onAvbryt={() => setBekrefterFjern(false)}
-          sendEtikett="Fjern tilgang"
-          farlig
-          onSend={() => void fjern()}
-        />
-      </Modal>
-    );
-  }
-
   return (
-    <Modal tittel={endrer ? "Rediger bruker" : "Ny bruker"} onLukk={onLukk}>
+    <Modal tittel="Ny bruker" onLukk={onLukk}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void send(lagre);
+          void send(() =>
+            brukere.inviter(orgId, { name: navn.trim(), email: epost.trim(), role: nivaa, title: tittel }),
+          );
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
 
         <Tekstfelt etikett="Fullt navn *" verdi={navn} onEndre={setNavn} />
-
-        {/* E-posten er innloggingsnøkkelen og kan ikke endres her. Feltet vises likevel —
-            det er ofte det man leter etter når man åpner en bruker. */}
         <Tekstfelt
           etikett="E-postadresse *"
           type="email"
           verdi={epost}
           onEndre={setEpost}
-          laast={endrer}
-          notat={
-            endrer
-              ? "E-post kan ikke endres"
-              : "Finnes adressen fra før, får den kontoen bare tilgang hit — én person skal ha én konto, ikke to."
-          }
+          notat="Finnes adressen fra før, får den kontoen bare tilgang hit — én person skal ha én konto, ikke to."
         />
+        <TittelFelt valg={tittelValg} onValg={setTittelValg} egenTekst={egenTittelTekst} onEgenTekst={setEgenTittelTekst} />
+        <NivaaVelger nivaa={nivaa} onVelg={setNivaa} erAdmin={erAdmin} />
 
-        <div className="field">
-          <label className="field-label" htmlFor="tittel">
-            Tittel i organisasjonen
-          </label>
-          <select
-            id="tittel"
-            className="input"
-            value={tittelValg}
-            onChange={(e) => setTittelValg(e.target.value)}
+        <div className="field-note">
+          Brukeren får en e-post med en engangslenke der de setter sitt eget passord. Du
+          velger det ikke for dem — da ville to personer kjent det.
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button type="button" className="btn btn-ghost" onClick={onTilbake ?? onLukk}>
+            {onTilbake ? "Tilbake" : "Avbryt"}
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={sender || !navn.trim() || !epost.trim()}
           >
-            <option value="">Ingen tittel</option>
-            {VANLIGE_TITLER.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-            <option value="__egen__">Annet …</option>
-          </select>
-          {tittelValg === "__egen__" && (
-            <input
-              className="input"
-              style={{ marginTop: "8px" }}
-              value={egenTittelTekst}
-              placeholder="Skriv tittelen"
-              aria-label="Egen tittel"
-              onChange={(e) => setEgenTittelTekst(e.target.value)}
-            />
-          )}
-          <div className="field-note">
-            Ren beskrivelse. Fram til 08.08.2026 utledet v1 tilgang av tittelen — nå styrer den
-            ingenting, og nivået under er det eneste som gjelder.
-          </div>
+            {sender ? "Oppretter …" : "Opprett bruker"}
+          </button>
         </div>
+      </form>
+    </Modal>
+  );
+}
 
-        {/* Kort, ikke nedtrekk: nivået er sidens viktigste valg, og beskrivelsen må være
-            synlig NÅR man velger — ikke etterpå. */}
-        <div className="field">
-          <span className="field-label">Tilgangsnivå</span>
-          {valgbare.map((n) => (
-            <button
-              key={n.verdi}
-              type="button"
-              className={`nivaa-kort${nivaa === n.verdi ? " valgt" : ""}`}
-              onClick={() => setNivaa(n.verdi)}
-            >
-              <span className="nivaa-radio" />
-              <span style={{ minWidth: 0 }}>
-                <span className="nivaa-navn">
-                  {n.etikett}
-                  <span className={`nivaa-prikk ${n.verdi}`} />
-                </span>
-                <span className="nivaa-desc">{n.beskrivelse}</span>
-              </span>
+/**
+ * Rediger bruker — fanemodal med vertikale faner, samme form som «Min profil». Skuffen
+ * (13.08.2026, formiddag) holdt ikke: med varsler, kontohandlinger og tofaktor ble den én
+ * lang kolonne — nøyaktig formproblemet fanemodalen ble laget for. Én «Lagre» i bunnraden
+ * skriver alt som er endret, uansett fane; prikkene i fanerekken viser hvor det ligger noe.
+ *
+ * ## To sperrer som speiles her og håndheves i API-et
+ *
+ * **Eget nivå:** raden man redigerer kan være en selv, og da er nivåvalget låst — en
+ * kontoadmin som degraderer seg selv står i lesevisning i samme øyeblikk, og i verste fall
+ * har kunden låst seg ute. En annen kontoadmin må gjøre det.
+ *
+ * **Tofaktor:** admin kan bare NULLSTILLE den (mistet telefon), aldri sette den opp — og
+ * ikke sin egen herfra, for denne veien mangler passordbeviset profilen krever.
+ */
+function BrukerModal({
+  bruker: b,
+  orgId,
+  erMeg,
+  onLukk,
+  onLagret,
+  onFeil,
+}: {
+  bruker: OrgBruker;
+  orgId: string;
+  erMeg: boolean;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+  onFeil: (m: string) => void;
+}) {
+  const [fane, setFane] = useState<Fane>("bruker");
+
+  const egenTittel = !!b.title && !VANLIGE_TITLER.includes(b.title);
+  const [navn, setNavn] = useState(b.name);
+  const [tittelValg, setTittelValg] = useState(egenTittel ? "__egen__" : (b.title ?? ""));
+  const [egenTittelTekst, setEgenTittelTekst] = useState(egenTittel ? b.title! : "");
+  const [nivaa, setNivaa] = useState<Nivaa>(b.nivaa as Nivaa);
+
+  // Varslene ligger på medlemskapet og lagres for seg (eget endepunkt). Snapshotet av det
+  // HENTEDE trengs for endret-prikken: med faner ser man ikke endringen man står bak.
+  const [varsler, setVarsler] = useState<Record<string, boolean> | null>(null);
+  const [varslerStart, setVarslerStart] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    brukere
+      .varsler(orgId, b.id)
+      .then((r) => {
+        const verdier = { ...VARSEL_STANDARD, ...r.prefs };
+        setVarsler(verdier);
+        setVarslerStart(verdier);
+      })
+      .catch(() => {
+        setVarsler({ ...VARSEL_STANDARD });
+        setVarslerStart({ ...VARSEL_STANDARD });
+      });
+  }, [orgId, b.id]);
+
+  const [sendtOppsett, setSendtOppsett] = useState(false);
+  const [bekrefterFjern, setBekrefterFjern] = useState(false);
+  const [bekrefterTofaktor, setBekrefterTofaktor] = useState(false);
+  const [tofaktorNullstilt, setTofaktorNullstilt] = useState(false);
+
+  const { sender, feil, send } = useSending(async () => {
+    await onLagret();
+    onLukk();
+  });
+
+  const tittel = tittelValg === "__egen__" ? egenTittelTekst.trim() || null : tittelValg || null;
+  const brukerEndret = navn.trim() !== b.name || tittel !== (b.title ?? null);
+  const tilgangEndret = !erMeg && nivaa !== b.nivaa;
+  const varslerEndret =
+    varsler !== null &&
+    varslerStart !== null &&
+    VARSLER.some((v) => varsler[v.nokkel] !== varslerStart[v.nokkel]);
+
+  async function lagre() {
+    // Varslene har sitt eget endepunkt, så de skrives for seg. Rekkefølgen er med vilje:
+    // feiler tilgangsendringen, skal varslene ikke allerede være lagret.
+    await brukere.endre(orgId, b.id, {
+      name: navn.trim(),
+      // Eget nivå sendes ikke med: API-et avviser endringen uansett, og fanen har låst valget.
+      role: erMeg ? undefined : nivaa,
+      title: tittel,
+    });
+    if (varsler && varslerEndret) await brukere.settVarsler(orgId, b.id, varsler);
+  }
+
+  async function fjern() {
+    try {
+      await brukere.fjern(orgId, b.id);
+      await onLagret();
+      onLukk();
+    } catch (e) {
+      // «Organisasjonen må ha minst én administrator» kommer hit.
+      onFeil(e instanceof Error ? e.message : "Kunne ikke fjerne tilgangen");
+      onLukk();
+    }
+  }
+
+  async function nullstillTofaktor() {
+    try {
+      await brukere.resettTofaktor(orgId, b.id);
+      setTofaktorNullstilt(true);
+      setBekrefterTofaktor(false);
+      void onLagret();
+    } catch (e) {
+      onFeil(e instanceof Error ? e.message : "Kunne ikke nullstille tofaktor");
+      setBekrefterTofaktor(false);
+      onLukk();
+    }
+  }
+
+  const faner: ReadonlyArray<Fanevalg<Fane>> = [
+    { nokkel: "bruker", etikett: "Bruker", Ikon: User, endret: brukerEndret },
+    { nokkel: "tilgang", etikett: "Tilgang", Ikon: KeyRound, endret: tilgangEndret },
+    { nokkel: "varsler", etikett: "Varsler", Ikon: Bell, endret: varslerEndret },
+    { nokkel: "konto", etikett: "Konto", Ikon: Settings },
+  ];
+
+  return (
+    <>
+      <Fanemodal
+        tittel={b.name}
+        onLukk={onLukk}
+        faner={faner}
+        valgt={fane}
+        onVelg={setFane}
+        fot={
+          <div style={{ marginLeft: "auto", display: "flex", gap: "10px" }}>
+            <button type="button" className="btn btn-ghost" onClick={onLukk}>
+              Lukk
             </button>
-          ))}
-          {!erAdmin && (
-            <div className="field-note">Kontoadmin kan bare gis av en som selv er kontoadmin.</div>
-          )}
-        </div>
+            {/* Vanlig knapp, ikke `submit`: den står i bunnraden UTENFOR panelets skjema, og
+                skal virke også fra en fane som ikke har noe skjema i seg. */}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void send(lagre)}
+              disabled={sender || !navn.trim() || !(brukerEndret || tilgangEndret || varslerEndret)}
+            >
+              {sender ? "Lagrer …" : "Lagre"}
+            </button>
+          </div>
+        }
+      >
+        <Feil melding={feil} />
 
-        {endrer && (
+        {fane === "bruker" && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send(lagre);
+            }}
+            style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+          >
+            <Tekstfelt etikett="Fullt navn *" verdi={navn} onEndre={setNavn} />
+            {/* E-posten er innloggingsnøkkelen og kan ikke endres her. Feltet vises likevel —
+                det er ofte det man leter etter når man åpner en bruker. */}
+            <Tekstfelt
+              etikett="E-postadresse"
+              type="email"
+              verdi={b.email}
+              onEndre={() => {}}
+              laast
+              notat="E-post kan ikke endres"
+            />
+            <TittelFelt valg={tittelValg} onValg={setTittelValg} egenTekst={egenTittelTekst} onEgenTekst={setEgenTittelTekst} />
+          </form>
+        )}
+
+        {fane === "tilgang" &&
+          (erMeg ? (
+            <div className="field">
+              <span className="field-label">Tilgangsnivå</span>
+              <span className={`nivaa-badge ${b.nivaa}`} style={{ alignSelf: "flex-start" }}>
+                <span className={`nivaa-prikk ${b.nivaa}`} />
+                {TILGANGSNIVAER.find((n) => n.verdi === b.nivaa)?.etikett ?? b.nivaa}
+              </span>
+              <div className="field-note">
+                Ditt eget tilgangsnivå kan du ikke endre — da kunne laget stått uten kontoadmin
+                uten at noen mente det. Be en annen kontoadmin gjøre det.
+              </div>
+            </div>
+          ) : (
+            <NivaaVelger nivaa={nivaa} onVelg={setNivaa} erAdmin />
+          ))}
+
+        {fane === "varsler" && (
           <div className="field">
-            <span className="field-label">Varsler</span>
             <div className="field-note" style={{ marginBottom: "6px" }}>
-              Hvilke e-poster denne personen får, sendt til {bruker!.email}. Hver enkelt kan også
-              endre dette selv under Innstillinger.
+              Hvilke e-poster denne personen får, sendt til {b.email}. Hver enkelt kan også
+              endre dette selv under Min profil.
             </div>
             {varsler === null ? (
               <div className="field-note">Henter …</div>
@@ -484,49 +662,115 @@ function BrukerModal({
           </div>
         )}
 
-        {endrer ? (
-          <div className="field">
-            <span className="field-label">Kontohandlinger</span>
-            <button
-              type="button"
-              className="btn btn-ghost profil-handling"
-              disabled={sendtOppsett}
-              onClick={() => {
-                // Svaret er alltid «sendt». Om adressen tar imot den, vet vi først når
-                // brukeren logger inn — å love mer enn det ville vært å lyve.
-                void brukere.sendOppsett(orgId, bruker!.id).catch(() => {});
-                setSendtOppsett(true);
-              }}
-            >
-              {sendtOppsett ? "E-post sendt" : bruker!.harSattPassord ? "Send lenke for nytt passord" : "Send oppsett-e-post på nytt"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost profil-handling fjern-knapp"
-              onClick={() => setBekrefterFjern(true)}
-            >
-              Fjern tilgang
-            </button>
-            {/* «Sett passord manuelt» fra v1 er bevisst IKKE portert: det lar en admin velge
-                passordet til en annen person, og da kjenner to personer det. Engangslenken
-                over gjør samme jobb uten den bieffekten. */}
-          </div>
-        ) : (
-          <div className="field-note">
-            Brukeren får en e-post med en engangslenke der de setter sitt eget passord. Du
-            velger det ikke for dem — da ville to personer kjent det.
+        {fane === "konto" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+            <div className="field">
+              <span className="field-label">Kontohandlinger</span>
+              <button
+                type="button"
+                className="btn btn-ghost profil-handling"
+                disabled={sendtOppsett}
+                onClick={() => {
+                  // Svaret er alltid «sendt». Om adressen tar imot den, vet vi først når
+                  // brukeren logger inn — å love mer enn det ville vært å lyve.
+                  void brukere.sendOppsett(orgId, b.id).catch(() => {});
+                  setSendtOppsett(true);
+                }}
+              >
+                {sendtOppsett ? "E-post sendt" : b.harSattPassord ? "Send lenke for nytt passord" : "Send oppsett-e-post på nytt"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost profil-handling fjern-knapp"
+                onClick={() => setBekrefterFjern(true)}
+              >
+                Fjern tilgang
+              </button>
+              {/* «Sett passord manuelt» fra v1 er bevisst IKKE portert: det lar en admin velge
+                  passordet til en annen person, og da kjenner to personer det. Engangslenken
+                  over gjør samme jobb uten den bieffekten. */}
+            </div>
+
+            <div className="field">
+              <span className="field-label">Tofaktor</span>
+              {erMeg ? (
+                <div className="field-note">
+                  Din egen tofaktor styrer du under Min profil — der bekreftes endringen med
+                  passordet ditt.
+                </div>
+              ) : tofaktorNullstilt ? (
+                <div className="field-note">
+                  Tofaktor er nullstilt. {b.name} logger inn med bare passord og setter opp
+                  tofaktor på nytt selv under Min profil.
+                </div>
+              ) : b.tofaktor ? (
+                <>
+                  <div className="field-note">
+                    Tofaktor er på. Har {b.name} mistet telefonen, kan du nullstille den her —
+                    innlogging krever da bare passord til tofaktor er satt opp på nytt. Du kan
+                    bare fjerne sperren, aldri sette den opp for andre.
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost profil-handling"
+                    onClick={() => setBekrefterTofaktor(true)}
+                  >
+                    Nullstill tofaktor
+                  </button>
+                </>
+              ) : (
+                <div className="field-note">
+                  Ikke satt opp. Tofaktor er noe hver bruker slår på selv under Min profil — en
+                  kontoadmin kan bare nullstille den, aldri sette den opp for andre.
+                </div>
+              )}
+            </div>
           </div>
         )}
+      </Fanemodal>
 
-        <Knapperad
-          onAvbryt={onTilbake ?? onLukk}
-          avbrytEtikett={onTilbake ? "Tilbake" : "Avbryt"}
-          sendEtikett={endrer ? "Lagre endringer" : "Opprett bruker"}
-          sender={sender}
-          deaktivert={!navn.trim() || (!endrer && !epost.trim())}
-        />
-      </form>
-    </Modal>
+      {bekrefterFjern && (
+        <Modal tittel="Fjern tilgang" onLukk={() => setBekrefterFjern(false)} bredde={380}>
+          <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+            Fjern <strong>{b.name}</strong> sin tilgang til denne organisasjonen? Personen kan
+            ikke lenger logge inn her.
+          </p>
+          <div className="tips-stripe" style={{ margin: "12px 0" }}>
+            <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+              🛡 Kontoen slettes ikke. Sitter personen i flere styrer, beholder de tilgangen der —
+              og alt de har kvittert ut her står igjen i historikken med navnet sitt.
+            </span>
+          </div>
+          <Knapperad
+            onAvbryt={() => setBekrefterFjern(false)}
+            sendEtikett="Fjern tilgang"
+            farlig
+            onSend={() => void fjern()}
+          />
+        </Modal>
+      )}
+
+      {bekrefterTofaktor && (
+        <Modal tittel="Nullstill tofaktor" onLukk={() => setBekrefterTofaktor(false)} bredde={380}>
+          <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+            Nullstill tofaktor for <strong>{b.name}</strong>? Kontoen er da bare beskyttet av
+            passordet fram til tofaktor er satt opp på nytt.
+          </p>
+          <div className="tips-stripe" style={{ margin: "12px 0" }}>
+            <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+              🛡 Gjør dette bare når du vet hvem som spør — en oppringning om «mistet telefon»
+              er også slik kontoer kapres.
+            </span>
+          </div>
+          <Knapperad
+            onAvbryt={() => setBekrefterTofaktor(false)}
+            sendEtikett="Nullstill tofaktor"
+            farlig
+            onSend={() => void nullstillTofaktor()}
+          />
+        </Modal>
+      )}
+    </>
   );
 }
 

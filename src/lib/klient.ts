@@ -573,6 +573,7 @@ export const organisasjon = {
 export type OrgBruker = {
   id: string; name: string; email: string; active: boolean; lastLoginAt: string | null;
   platformRole: string; nivaa: string; title: string | null; harSattPassord: boolean;
+  tofaktor: boolean;
 };
 
 export const brukere = {
@@ -587,6 +588,8 @@ export const brukere = {
     api.endre(org(o, `/users/${id}/varsler`), { prefs }),
   /** Sender oppsett-/tilbakestillingslenken på nytt. */
   sendOppsett: (o: string, id: string) => api.send(org(o, `/users/${id}/oppsett-epost`), {}),
+  /** Nullstiller tofaktor for en ANNEN bruker — de setter den opp på nytt selv. Se lib/brukere.ts. */
+  resettTofaktor: (o: string, id: string) => api.slett(org(o, `/users/${id}/tofaktor`)),
   egneVarsler: (o: string) => api.hent<{ prefs: Record<string, boolean> }>(org(o, "/users/meg/varsler")),
   settEgneVarsler: (o: string, prefs: Record<string, boolean>) =>
     api.endre(org(o, "/users/meg/varsler"), { prefs }),

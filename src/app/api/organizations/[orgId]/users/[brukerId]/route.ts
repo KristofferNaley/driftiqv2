@@ -5,8 +5,8 @@ type P = { brukerId: string };
 
 export const PUT = orgRute<P>({
   nivaa: "admin",
-  handler: async ({ db, orgId, params, req }) =>
-    endreMedlemskap(db, orgId, params.brukerId, await lesKropp(req, medlemEndring)),
+  handler: async ({ db, orgId, bruker, params, req }) =>
+    endreMedlemskap(db, orgId, params.brukerId, await lesKropp(req, medlemEndring), bruker.id),
 });
 
 /** Fjerner tilgangen til DENNE org-en. Kontoen består — brukeren kan sitte i flere styrer. */

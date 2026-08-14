@@ -12,7 +12,7 @@ import { and, asc, count, eq, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { account } from "../db/schema/auth";
+import { account, twoFactor } from "../db/schema/auth";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { ikkeFunnet, ugyldig } from "./api";
 // Etikettene bor i en ren fil uten server-importer — se kommentaren der.
@@ -65,6 +65,8 @@ export async function hentBrukere(db: Db, orgId: string) {
     nivaa: r.medlemskap.role,
     title: r.medlemskap.title,
     harSattPassord: harPassord.has(r.bruker.id),
+    /** Bekreftet tofaktor. Admin kan nullstille den (mistet telefon), aldri sette den opp. */
+    tofaktor: r.bruker.twoFactorEnabled,
   }));
 }
 
@@ -156,6 +158,8 @@ export async function endreMedlemskap(
   orgId: string,
   brukerId: string,
   data: z.infer<typeof medlemEndring>,
+  /** Den innloggede — sperren mot å endre eget nivå trenger å vite hvem som spør. */
+  utfortAvId: string,
 ) {
   const rader = await db
     .select()
@@ -164,6 +168,13 @@ export async function endreMedlemskap(
     .limit(1);
   const medlemskap = rader[0];
   if (!medlemskap) throw ikkeFunnet("Bruker i denne organisasjonen");
+
+  // Sitt eget nivå kan ingen endre — en kontoadmin som degraderer seg selv står i
+  // lesevisning i samme øyeblikk, og er de to admins som gjør det samme, er kunden låst
+  // ute. En annen kontoadmin må gjøre det; sperren under tar i tillegg den siste.
+  if (data.role !== undefined && data.role !== medlemskap.role && brukerId === utfortAvId) {
+    throw ugyldig("Du kan ikke endre ditt eget tilgangsnivå — be en annen kontoadmin gjøre det.");
+  }
 
   // Den siste administratoren kan ikke degraderes. Uten sperren kan et styre låse seg selv
   // ute av kontosidene, og da må DriftIQ inn med support-modus for å rette det opp.
@@ -212,4 +223,29 @@ export async function fjernFraOrg(db: Db, orgId: string, brukerId: string) {
   await db
     .delete(userOrgMemberships)
     .where(and(eq(userOrgMemberships.userId, brukerId), eq(userOrgMemberships.orgId, orgId)));
+}
+
+/**
+ * Nullstiller tofaktor for en ANNEN bruker i org-en — for når telefonen er mistet og
+ * backup-kodene med den. Admin kan bare FJERNE sperren, aldri sette den opp: oppsettet
+ * krever hemmeligheten på brukerens egen telefon og bekreftes med brukerens eget passord
+ * (se Tofaktor-fanen i ProfilModal). Egen tofaktor styres av samme grunn kun derfra —
+ * denne veien har ikke passordbeviset, og skal derfor ikke virke på en selv.
+ */
+export async function resettTofaktor(db: Db, orgId: string, brukerId: string, utfortAvId: string) {
+  if (brukerId === utfortAvId) {
+    throw ugyldig("Din egen tofaktor styrer du under Min profil — der bekreftes endringen med passord.");
+  }
+
+  // Medlemskapet er tenantsjekken. `two_factor` står i UNNTATT og har ingen RLS, så uten
+  // denne kunne en kontoadmin nullstilt tofaktor for en hvilken som helst bruker-id.
+  const rader = await db
+    .select({ id: userOrgMemberships.id })
+    .from(userOrgMemberships)
+    .where(and(eq(userOrgMemberships.userId, brukerId), eq(userOrgMemberships.orgId, orgId)))
+    .limit(1);
+  if (!rader[0]) throw ikkeFunnet("Bruker i denne organisasjonen");
+
+  await db.delete(twoFactor).where(eq(twoFactor.userId, brukerId));
+  await db.update(users).set({ twoFactorEnabled: false }).where(eq(users.id, brukerId));
 }

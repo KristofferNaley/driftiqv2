@@ -7,10 +7,10 @@
  * nøyaktig det scenarioet RLS skal fange — en spørring som glemte org_id. Går de gjennom
  * ORM-en, tester de ORM-en og ikke policyen.
  *
- * Krever ekte Postgres. Kjøres i v2-containeren:
+ * Krever ekte Postgres. Kjøres i containeren — men først etter `--build`, ellers testes
+ * forrige image (containeren har ingen kildemount):
  *
- *     docker compose -p driftiq-v2 --env-file .env.v2 -f docker-compose.v2.yaml \
- *       exec app npm run test
+ *     docker compose up -d --build && docker compose exec app npm run test
  */
 
 import { randomUUID } from "node:crypto";
