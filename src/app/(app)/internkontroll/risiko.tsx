@@ -10,8 +10,9 @@
  * 2. Skalaen er 1–3, ikke v1s 1–5 — se `skala` i lib/internkontroll.ts. Ordene står PÅ
  *    knappene i stedet for i et nedtrekk: den som vurderer skal velge mellom tre utsagn,
  *    ikke oversette en tallverdi i hodet.
- * 3. Redigeringen skjer i en skuff fra høyre i stedet for modal — lista og matrisen står
- *    synlige bak, så man beholder oversikten mens man justerer én fare.
+ * 3. Redigeringen skjer i en skuff fra høyre i stedet for modal. Lista står til VENSTRE
+ *    og matrisen til høyre: skuffen dekker matrisen, ikke lista man klikket i — så
+ *    raden man redigerer er fortsatt synlig ved siden av skuffen.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -87,32 +88,6 @@ export function Risiko() {
       </div>
 
       <div className="rv-kolonner">
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Risikomatrise</div>
-            <span className="rv-hint">Klikk en rute for å filtrere</span>
-          </div>
-          <div className="rv-matrise-kropp">
-            <Matrise
-              liste={liste}
-              celle={celle}
-              onVelg={(s, k) =>
-                setCelle(celle && celle.s === s && celle.k === k ? null : { s, k })
-              }
-            />
-            <div className="rv-skala" aria-hidden>
-              {SANNSYNLIGHET.map((o) => (
-                <span key={o}>{o}</span>
-              ))}
-            </div>
-            <div className="rv-legende">
-              <div><i className="rv-prikk lav" /> Lav (1–2)</div>
-              <div><i className="rv-prikk middels" /> Middels (3–4)</div>
-              <div><i className="rv-prikk hoy" /> Høy (6–9)</div>
-            </div>
-          </div>
-        </div>
-
         <div className="card">
           <div className="card-header">
             <div className="card-title">Risikoer</div>
@@ -199,6 +174,32 @@ export function Risiko() {
               );
             })
           )}
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Risikomatrise</div>
+            <span className="rv-hint">Klikk en rute for å filtrere</span>
+          </div>
+          <div className="rv-matrise-kropp">
+            <Matrise
+              liste={liste}
+              celle={celle}
+              onVelg={(s, k) =>
+                setCelle(celle && celle.s === s && celle.k === k ? null : { s, k })
+              }
+            />
+            <div className="rv-skala" aria-hidden>
+              {SANNSYNLIGHET.map((o) => (
+                <span key={o}>{o}</span>
+              ))}
+            </div>
+            <div className="rv-legende">
+              <div><i className="rv-prikk lav" /> Lav (1–2)</div>
+              <div><i className="rv-prikk middels" /> Middels (3–4)</div>
+              <div><i className="rv-prikk hoy" /> Høy (6–9)</div>
+            </div>
+          </div>
         </div>
       </div>
 

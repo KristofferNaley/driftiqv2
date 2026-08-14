@@ -2665,7 +2665,9 @@ textarea.qr-input { resize: vertical; }
    Etter mockups/risikovurdering-mockup.html: matrisen til venstre er navigasjon (hver rute
    filtrerer lista), redigering skjer i en skuff fra høyre så oversikten står bak. */
 
-.rv-kolonner { display: grid; grid-template-columns: 390px 1fr; gap: 16px; align-items: start; }
+/* Lista til venstre, matrisen til høyre: skuffen glir inn fra høyre og skal dekke
+   matrisen — ikke lista man nettopp klikket i. */
+.rv-kolonner { display: grid; grid-template-columns: 1fr 390px; gap: 16px; align-items: start; }
 .rv-hint { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
 .rv-matrise-kropp { padding: 16px 18px 14px; }
 

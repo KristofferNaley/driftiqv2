@@ -8,12 +8,6 @@ import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, useSending } from "@/comp
 import { brukere, internkontroll, type HmsMal, type Sjekkliste } from "@/lib/klient";
 import { Risiko } from "./risiko";
 
-const OMRADE: Record<string, string> = {
-  brannvern: "Brannvern",
-  el_sikkerhet: "El-sikkerhet",
-  utearealer: "Utearealer",
-};
-
 function Vernerunder() {
   const router = useRouter();
   const { data, feil, laster, last, orgId } = useOrgData((o) => internkontroll.runder(o));
@@ -619,43 +613,11 @@ function SjekklisteSkuff({
   );
 }
 
-function Ansvar() {
-  const { data, feil, laster } = useOrgData((o) => internkontroll.ansvar(o));
-  const liste = data ?? [];
-
-  return (
-    <>
-      <Feil melding={feil} />
-      <Kort tittel="Ansvarsfordeling (§ 5 pkt. 5)">
-        {laster ? (
-          <Tom tekst="Henter …" />
-        ) : (
-          // Alle områdene vises, også de tomme — et manglende område er nettopp det
-          // kunden skal se at mangler.
-          liste.map((a) => (
-            <Rad
-              key={a.area}
-              tittel={OMRADE[a.area] ?? a.area}
-              meta={a.note ?? undefined}
-              hoyre={
-                a.personName ? (
-                  <span className="badge ok">{a.personName}</span>
-                ) : (
-                  <span className="badge warn">Ikke fordelt</span>
-                )
-              }
-            />
-          ))
-        )}
-      </Kort>
-    </>
-  );
-}
-
 export default function Internkontroll() {
-  // «Oversikt» (§ 5-status + HMS-mål) er tatt ut i påvente av redesign — fokus er
-  // risikovurdering og vernerunde. Kommer tilbake som egen fane senere.
-  const [fane, setFane] = useState<"risiko" | "runder" | "ansvar">("risiko");
+  // «Oversikt» (§ 5-status + HMS-mål) og «Ansvar» (§ 5 pkt. 5) er tatt ut i påvente av
+  // redesign — fokus er risikovurdering og vernerunde. De kommer tilbake senere;
+  // API-ene og lib-laget deres står urørt.
+  const [fane, setFane] = useState<"risiko" | "runder">("risiko");
   return (
     <Layout
       tittel="Internkontroll"
@@ -666,7 +628,6 @@ export default function Internkontroll() {
           faner={[
             { nokkel: "risiko", etikett: "Risikovurdering" },
             { nokkel: "runder", etikett: "Vernerunder" },
-            { nokkel: "ansvar", etikett: "Ansvar" },
           ]}
         />
       }
@@ -674,7 +635,6 @@ export default function Internkontroll() {
       <div className="page-content">
         {fane === "risiko" && <Risiko />}
         {fane === "runder" && <Vernerunder />}
-        {fane === "ansvar" && <Ansvar />}
       </div>
     </Layout>
   );
