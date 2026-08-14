@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
+import { DeltakerVelger } from "@/components/deltakervelger";
 import { internkontroll, type Fare, type HmsMal } from "@/lib/klient";
 import {
   FARESTATUS_ETIKETT,
@@ -31,6 +32,12 @@ import {
 } from "@/lib/risikoord";
 
 const FARESTATUS = Object.entries(FARESTATUS_ETIKETT).map(([verdi, etikett]) => ({ verdi, etikett }));
+
+/** Tooltip på statusmerket i lista — merket alene sa ikke hvorfor raden fortsatt står der. */
+const STATUSFORKLARING: Record<string, string> = {
+  mitigated: "Under kontroll — tiltakene virker, dere lever med restrisikoen. Står i lista som dokumentasjon.",
+  closed: "Lukket — ikke lenger aktuell. Står i lista som dokumentasjon på at den ER vurdert.",
+};
 const TILTAKSSTATUS = [
   { verdi: "not_started", etikett: "Ikke startet" },
   { verdi: "in_progress", etikett: "Pågår" },
@@ -210,7 +217,7 @@ export function Risiko() {
                   </div>
                   <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
                     {f.status !== "open" && (
-                      <span className="badge muted">
+                      <span className="badge muted" title={STATUSFORKLARING[f.status]}>
                         {FARESTATUS.find((s) => s.verdi === f.status)?.etikett ?? f.status}
                       </span>
                     )}
@@ -218,14 +225,23 @@ export function Risiko() {
                       <>
                         {/* Vurderingen er over tolv måneder gammel — den årlige runden
                             sikres av at forfallet maser her, øverst i lista. */}
-                        {f.trengerVurdering && <span className="badge warn">Vurder på nytt</span>}
-                        <span className={`badge ${NIVAMERKE[f.niva]}`}>
+                        {f.trengerVurdering && (
+                          <span className="badge warn" title="Vurderingen er over tolv måneder gammel — åpne faren og lagre en ny.">
+                            Vurder på nytt
+                          </span>
+                        )}
+                        <span
+                          className={`badge ${NIVAMERKE[f.niva]}`}
+                          title={`Risikotall ${f.risiko} = sannsynlighet ${f.probability} (${SANNSYNLIGHET[f.probability! - 1]}) × konsekvens ${f.consequence} (${KONSEKVENS[f.consequence! - 1]})`}
+                        >
                           {NIVATEKST[f.niva]} {f.risiko}
                         </span>
                       </>
                     ) : (
                       // Uvurdert skal SE uferdig ut — det er en oppfordring, ikke et nivå.
-                      <span className="badge warn">Ikke vurdert</span>
+                      <span className="badge warn" title="Sannsynlighet og konsekvens er ikke satt ennå — åpne faren og ta stilling.">
+                        Ikke vurdert
+                      </span>
                     )}
                   </div>
                 </button>
@@ -353,7 +369,7 @@ function GjennomgangModal({
   onLagret: (avsluttet: boolean) => Promise<void>;
 }) {
   const [datoVerdi, setDatoVerdi] = useState(new Date().toISOString().slice(0, 10));
-  const [deltakere, setDeltakere] = useState("");
+  const [deltakere, setDeltakere] = useState<Array<{ name: string; role: string | null }>>([]);
   const [konklusjon, setKonklusjon] = useState("");
   const { sender, feil, send } = useSending(() => {});
   const navnet = kontekst ?? HOVEDVURDERING;
@@ -370,7 +386,10 @@ function GjennomgangModal({
           void send(async () => {
             await internkontroll.nyGjennomgang(orgId, {
               reviewDate: datoVerdi,
-              participants: deltakere.trim() || null,
+              // Protokollen lagrer navnene som tekst — den skal lese likt om ti år,
+              // også etter navnebytte eller slettet konto (samme tanke som Aktor).
+              participants:
+                deltakere.map((d) => (d.role ? `${d.name} (${d.role})` : d.name)).join(", ") || null,
               conclusion: konklusjon.trim() || null,
               context: kontekst,
               avsluttProsjekt: avslutt,
@@ -402,12 +421,7 @@ function GjennomgangModal({
           </div>
         )}
         <Tekstfelt etikett="Dato for gjennomgangen" type="date" verdi={datoVerdi} onEndre={setDatoVerdi} />
-        <Tekstfelt
-          etikett="Deltakere"
-          verdi={deltakere}
-          onEndre={setDeltakere}
-          plassholder="For eksempel: hele styret, vaktmester"
-        />
+        <DeltakerVelger orgId={orgId} deltakere={deltakere} onEndre={setDeltakere} etikett="Deltakere i gjennomgangen" />
         <Tekstomrade
           etikett="Konklusjon"
           verdi={konklusjon}

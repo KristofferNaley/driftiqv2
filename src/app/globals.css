@@ -2761,12 +2761,15 @@ textarea.qr-input { resize: vertical; }
   font-family: var(--font-sans); font-size: var(--fs-label); color: var(--accent); text-decoration: underline;
 }
 
-/* Risikoradene — kolonnetabell som kontraktlista: tittel eier bredden. */
+/* Risikoradene — kolonnetabell som kontraktlista: tittel eier bredden.
+   minmax(0, 1fr), ikke 1fr: grid-kolonner har min-width auto, og en lang tittel uten
+   brekkpunkt presset område- og fristkolonnene ut av raden (kjent felle, jf. .bruker-rad). */
 .rv-rad {
-  display: grid; grid-template-columns: 1fr 120px 90px auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px auto; gap: 12px; align-items: center;
   width: 100%; padding: 12px 20px; border: none; border-bottom: 1px solid var(--border);
   background: none; text-align: left; cursor: pointer; font-family: var(--font-sans); color: var(--text);
 }
+.rv-rad > * { min-width: 0; }
 .rv-rad:hover { background: var(--surface2); }
 .rv-rad:last-child { border-bottom: none; }
 .rv-rad-omrade { font-size: var(--fs-label); color: var(--muted); }
