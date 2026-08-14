@@ -260,6 +260,13 @@
       "when": 1786710412583,
       "tag": "0036_slippery_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786710976496,
+      "tag": "0037_youthful_puck",
+      "breakpoints": true
     }
   ]
 }

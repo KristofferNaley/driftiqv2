@@ -54,23 +54,31 @@ export function Risiko() {
   const [seeder, setSeeder] = useState(false);
   const [omrade, setOmrade] = useState<string | null>(null);
   const [celle, setCelle] = useState<{ s: number; k: number } | null>(null);
+  /** null = den løpende driften (standardbildet); ellers et prosjektnavn. */
+  const [kontekst, setKontekst] = useState<string | null>(null);
   const liste = data ?? [];
 
-  const idag = new Date().toISOString().slice(0, 10);
-  const hoye = liste.filter((f) => f.status === "open" && f.niva === "hoy").length;
-  const forfalte = liste
-    .filter((f) => f.status === "open")
-    .flatMap((f) => f.tiltak)
-    .filter((t) => t.status !== "done" && t.dueDate && t.dueDate < idag).length;
-  const handtert = liste.filter((f) => f.status !== "open").length;
-
-  const omrader = useMemo(
-    () => [...new Set((data ?? []).map((f) => f.category).filter((k): k is string => Boolean(k)))],
+  const kontekster = useMemo(
+    () => [...new Set((data ?? []).map((f) => f.context).filter((k): k is string => Boolean(k)))],
     [data],
   );
 
-  // Serveren sorterer alt på risiko synkende — filtrene bevarer den rekkefølgen.
-  const synlige = liste.filter(
+  // Kontekstfilteret er GRUNNLAGET: matrise, KPI-er og liste viser én vurdering isolert —
+  // driftsbildet som standard, ett prosjekt når det er valgt.
+  const grunnlag = liste.filter((f) => (kontekst === null ? !f.context : f.context === kontekst));
+
+  const idag = new Date().toISOString().slice(0, 10);
+  const hoye = grunnlag.filter((f) => f.status === "open" && f.niva === "hoy").length;
+  const forfalte = grunnlag
+    .filter((f) => f.status === "open")
+    .flatMap((f) => f.tiltak)
+    .filter((t) => t.status !== "done" && t.dueDate && t.dueDate < idag).length;
+  const handtert = grunnlag.filter((f) => f.status !== "open").length;
+
+  const omrader = [...new Set(grunnlag.map((f) => f.category).filter((k): k is string => Boolean(k)))];
+
+  // Serveren sorterer (trenger vurdering først, så risiko synkende) — filtrene bevarer det.
+  const synlige = grunnlag.filter(
     (f) =>
       (!omrade || f.category === omrade) &&
       (!celle || (f.probability === celle.s && f.consequence === celle.k)),
@@ -80,8 +88,38 @@ export function Risiko() {
     <>
       <Feil melding={feil} />
 
+      {/* Vurderingsvelgeren: driftsbildet er standard, hvert prosjekt er sin egen
+          avgrensede vurdering — matrise, KPI-er og liste følger valget. */}
+      {kontekster.length > 0 && (
+        <div className="rv-chips" style={{ padding: 0 }}>
+          <button
+            className={`rv-chip${kontekst === null ? " valgt" : ""}`}
+            onClick={() => {
+              setKontekst(null);
+              setOmrade(null);
+              setCelle(null);
+            }}
+          >
+            Løpende drift
+          </button>
+          {kontekster.map((k) => (
+            <button
+              key={k}
+              className={`rv-chip${kontekst === k ? " valgt" : ""}`}
+              onClick={() => {
+                setKontekst(kontekst === k ? null : k);
+                setOmrade(null);
+                setCelle(null);
+              }}
+            >
+              {k}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="kpi-grid">
-        <Kpi farge="blaa" etikett="Registrerte risikoer" verdi={liste.length} />
+        <Kpi farge="blaa" etikett="Registrerte risikoer" verdi={grunnlag.length} />
         <Kpi farge="roed" etikett="Høy risiko" verdi={hoye} under="åpne farer" />
         <Kpi farge="gul" etikett="Forfalte tiltak" verdi={forfalte} under="frist passert" />
         <Kpi farge="gronn" etikett="Håndtert" verdi={handtert} under="under kontroll eller lukket" />
@@ -167,9 +205,14 @@ export function Risiko() {
                       </span>
                     )}
                     {f.niva ? (
-                      <span className={`badge ${NIVAMERKE[f.niva]}`}>
-                        {NIVATEKST[f.niva]} {f.risiko}
-                      </span>
+                      <>
+                        {/* Vurderingen er over tolv måneder gammel — den årlige runden
+                            sikres av at forfallet maser her, øverst i lista. */}
+                        {f.trengerVurdering && <span className="badge warn">Vurder på nytt</span>}
+                        <span className={`badge ${NIVAMERKE[f.niva]}`}>
+                          {NIVATEKST[f.niva]} {f.risiko}
+                        </span>
+                      </>
                     ) : (
                       // Uvurdert skal SE uferdig ut — det er en oppfordring, ikke et nivå.
                       <span className="badge warn">Ikke vurdert</span>
@@ -188,7 +231,7 @@ export function Risiko() {
           </div>
           <div className="rv-matrise-kropp">
             <Matrise
-              liste={liste}
+              liste={grunnlag}
               celle={celle}
               onVelg={(s, k) =>
                 setCelle(celle && celle.s === s && celle.k === k ? null : { s, k })
@@ -212,6 +255,7 @@ export function Risiko() {
         <FareSkuff
           orgId={orgId}
           fare={skuff.fare}
+          aktivKontekst={kontekst}
           onLukk={() => setSkuff(null)}
           onEndret={async () => {
             await last();
@@ -327,16 +371,20 @@ function Nivavelger({
 function FareSkuff({
   orgId,
   fare,
+  aktivKontekst,
   onLukk,
   onEndret,
 }: {
   orgId: string;
   fare: Fare | null;
+  /** Kontekstchipen som var valgt da skuffen åpnet — en ny fare havner i samme vurdering. */
+  aktivKontekst: string | null;
   onLukk: () => void;
   onEndret: () => Promise<void>;
 }) {
   const [tittel, setTittel] = useState(fare?.title ?? "");
   const [kategori, setKategori] = useState(fare?.category ?? "");
+  const [prosjekt, setProsjekt] = useState(fare ? (fare.context ?? "") : (aktivKontekst ?? ""));
   const [beskrivelse, setBeskrivelse] = useState(fare?.description ?? "");
   // Ny fare starter uten valg — å måtte velge ER vurderingen, 2/2 som forvalg hadde
   // gitt en liste der alt står på middels uten at noen har ment det.
@@ -366,6 +414,7 @@ function FareSkuff({
       consequence: k,
       owner: eier.trim() || null,
       status,
+      context: prosjekt.trim() || null,
     };
     try {
       if (fare) await internkontroll.endreFare(orgId, fare.id, data);
@@ -457,8 +506,23 @@ function FareSkuff({
           <Tekstfelt etikett="Ansvarlig" verdi={eier} onEndre={setEier} plassholder="Navn" />
         </div>
 
+        <Tekstfelt
+          etikett="Gjelder prosjekt"
+          verdi={prosjekt}
+          onEndre={setProsjekt}
+          plassholder="Tomt = løpende drift"
+          notat="Sett et prosjektnavn («Takrehabilitering 2027») for en avgrenset vurdering — den får sin egen fane over risikobildet."
+        />
+
         <Nivavelger etikett="Sannsynlighet" ord={SANNSYNLIGHET} verdi={s} onVelg={setS} />
         <Nivavelger etikett="Konsekvens" ord={KONSEKVENS} verdi={k} onVelg={setK} />
+
+        {fare?.lastAssessedAt && (
+          <div className="field-note">
+            Sist vurdert {dato(fare.lastAssessedAt)}
+            {fare.trengerVurdering ? " — over tolv måneder siden; lagre en ny vurdering." : "."}
+          </div>
+        )}
 
         <div className="rv-resultat">
           <div>

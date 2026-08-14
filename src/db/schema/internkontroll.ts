@@ -82,6 +82,18 @@ export const hazards = pgTable("hazards", {
   consequence: integer("consequence"),
   owner: varchar("owner"),
   status: varchar("status").notNull().default("open"),
+  /**
+   * Sist noen tok stilling til sannsynlighet/konsekvens. Det årlige sikres ikke av en
+   * kalenderhendelse, men av at farer over tolv måneder gamle flagges og løftes opp i
+   * lista — samme modell som rutinenes `lastReviewedAt`. NULL = aldri vurdert.
+   */
+  lastAssessedAt: timestamp("last_assessed_at", { withTimezone: true }),
+  /**
+   * Hvilken vurdering faren hører til: NULL = den løpende driften (standardbildet),
+   * ellers et prosjektnavn («Takrehabilitering 2027»). Én avgrenset vurdering — bygging,
+   * nytt anlegg — er bare farer med en annen kontekst, ikke et eget dokument.
+   */
+  context: varchar("context"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -79,6 +79,8 @@ export const fareInn = z.object({
   consequence: skala,
   owner: tekst,
   status: z.enum(FARESTATUSER).default("open"),
+  /** NULL = løpende drift; ellers prosjektnavnet vurderingen hører til. */
+  context: tekst,
 });
 export const fareEndring = fareInn.partial();
 
@@ -315,10 +317,31 @@ export function risiko(h: { probability: number | null; consequence: number | nu
   return h.probability != null && h.consequence != null ? h.probability * h.consequence : null;
 }
 
-/** Raden slik API-et leverer den: med utledet risikotall og nivå. */
-function medRisiko<T extends { probability: number | null; consequence: number | null }>(h: T) {
+/** Grensa for «Vurder på nytt» — tolv måneder, som rutinenes gjennomgangsregel. */
+export const VURDERINGSFRIST_MND = 12;
+
+/**
+ * Det årlige sikres her: en fare uten vurdering, eller med en vurdering eldre enn tolv
+ * måneder, flagges og løftes øverst i lista. Ingen kalenderjobb å glemme — forfallet MASER.
+ */
+export function trengerVurdering(lastAssessedAt: Date | null, naa: Date): boolean {
+  if (!lastAssessedAt) return true;
+  const frist = new Date(lastAssessedAt);
+  frist.setMonth(frist.getMonth() + VURDERINGSFRIST_MND);
+  return frist <= naa;
+}
+
+/** Raden slik API-et leverer den: med utledet risikotall, nivå og forfallsflagg. */
+function medRisiko<
+  T extends { probability: number | null; consequence: number | null; lastAssessedAt: Date | null },
+>(h: T, naa: Date = new Date()) {
   const tall = risiko(h);
-  return { ...h, risiko: tall, niva: tall === null ? null : risikoniva(tall) };
+  return {
+    ...h,
+    risiko: tall,
+    niva: tall === null ? null : risikoniva(tall),
+    trengerVurdering: trengerVurdering(h.lastAssessedAt, naa),
+  };
 }
 
 /**
@@ -331,7 +354,7 @@ export function risikoniva(tall: number): "lav" | "middels" | "hoy" {
   return "hoy";
 }
 
-export async function hentFarer(db: Db, orgId: string) {
+export async function hentFarer(db: Db, orgId: string, naa: Date = new Date()) {
   const rader = await db.select().from(hazards).where(eq(hazards.orgId, orgId));
   const tiltak = await db
     .select()
@@ -340,10 +363,14 @@ export async function hentFarer(db: Db, orgId: string) {
     .orderBy(asc(hazardActions.dueDate));
 
   return rader
-    .map((h) => ({ ...medRisiko(h), tiltak: tiltak.filter((t) => t.hazardId === h.id) }))
-    // Ikke vurderte ØVERST — de roper «her må det vurderes» — deretter høyest risiko
-    // først: den listen skal leses ovenfra og ned.
-    .sort((a, b) => (b.risiko ?? 99) - (a.risiko ?? 99));
+    .map((h) => ({ ...medRisiko(h, naa), tiltak: tiltak.filter((t) => t.hazardId === h.id) }))
+    // De som trenger vurdering ØVERST (aldri vurdert før forfalne), deretter høyest
+    // risiko først: den listen skal leses ovenfra og ned.
+    .sort(
+      (a, b) =>
+        Number(b.trengerVurdering) - Number(a.trengerVurdering) ||
+        (b.risiko ?? 99) - (a.risiko ?? 99),
+    );
 }
 
 async function hentFare(db: Db, orgId: string, hazardId: string) {
@@ -357,15 +384,25 @@ async function hentFare(db: Db, orgId: string, hazardId: string) {
 }
 
 export async function opprettFare(db: Db, orgId: string, data: z.infer<typeof fareInn>) {
-  const [ny] = await db.insert(hazards).values({ id: randomUUID(), orgId, ...data }).returning();
+  // fareInn krever sannsynlighet og konsekvens — en manuelt opprettet fare ER vurdert nå.
+  const [ny] = await db
+    .insert(hazards)
+    .values({ id: randomUUID(), orgId, ...data, lastAssessedAt: new Date() })
+    .returning();
   return medRisiko(ny!);
 }
 
 export async function endreFare(db: Db, orgId: string, hazardId: string, data: z.infer<typeof fareEndring>) {
   await hentFare(db, orgId, hazardId);
+  // «Sist vurdert» flyttes bare når noen faktisk tar stilling til nivåene — en endret
+  // tittel eller ansvarlig er ingen ny vurdering.
+  const patch: Record<string, unknown> = { ...data };
+  if (data.probability !== undefined || data.consequence !== undefined) {
+    patch.lastAssessedAt = new Date();
+  }
   const [endret] = await db
     .update(hazards)
-    .set(data)
+    .set(patch)
     .where(and(eq(hazards.id, hazardId), eq(hazards.orgId, orgId)))
     .returning();
   return medRisiko(endret!);

@@ -419,6 +419,11 @@ export type Fare = {
   /** null = ikke vurdert — seedede farer starter slik til noen tar stilling. */
   probability: number | null; consequence: number | null;
   status: string; owner: string | null;
+  /** null = løpende drift; ellers prosjektet vurderingen hører til. */
+  context: string | null;
+  lastAssessedAt: string | null;
+  /** Aldri vurdert, eller vurderingen er over tolv måneder gammel. */
+  trengerVurdering: boolean;
   risiko: number | null; niva: "lav" | "middels" | "hoy" | null;
   tiltak: Array<{ id: string; title: string; status: string; dueDate: string | null; owner: string | null }>;
 };

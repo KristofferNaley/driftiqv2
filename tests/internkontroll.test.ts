@@ -15,6 +15,7 @@ import type { ApiFeil } from "../src/lib/api";
 import { opprettAvvik } from "../src/lib/avvik";
 import {
   ANSVARSOMRADER,
+  endreFare,
   endrePunkt,
   endreSjekklistepunkt,
   fjernSignatur,
@@ -372,9 +373,52 @@ describe("vernerunde", () => {
     expect(farer.map((f) => f.category)).toEqual(["Brannvern", "Brannvern"]);
     // Uvurdert, ikke et forvalg: 2/2 så ut som en gjennomført vurdering ingen hadde gjort.
     expect(farer.every((f) => f.probability === null && f.consequence === null && f.niva === null)).toBe(true);
+    expect(farer.every((f) => f.trengerVurdering)).toBe(true);
 
     const igjen = await i(org, (db) => seedFarer(db, org, mal.id));
     expect(igjen).toEqual({ opprettet: 0, hoppetOver: 2 });
+  });
+});
+
+describe("årlig vurdering og prosjektkontekst", () => {
+  const fareData = { title: "Fare", probability: 2, consequence: 2, status: "open" as const };
+
+  it("flagger farer som ikke er vurdert på tolv måneder, og løfter dem øverst", async () => {
+    const org = await oppsett();
+    const gammel = await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Gammel", probability: 1, consequence: 1 }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Fersk", probability: 3, consequence: 3 }));
+    await eier.query("UPDATE hazards SET last_assessed_at = now() - interval '13 months' WHERE id = $1", [gammel.id]);
+
+    const farer = await i(org, (db) => hentFarer(db, org));
+    // Forfalt vurdering trumfer risikotall i sorteringen — det er den som skal ropes om.
+    expect(farer.map((f) => f.title)).toEqual(["Gammel", "Fersk"]);
+    expect(farer[0]!.trengerVurdering).toBe(true);
+    expect(farer[1]!.trengerVurdering).toBe(false);
+  });
+
+  it("flytter «sist vurdert» bare når noen tar stilling til nivåene", async () => {
+    const org = await oppsett();
+    const fare = await i(org, (db) => opprettFare(db, org, fareData));
+    expect(fare.trengerVurdering).toBe(false);
+    await eier.query("UPDATE hazards SET last_assessed_at = now() - interval '13 months' WHERE id = $1", [fare.id]);
+
+    // En omdøpt fare er ingen ny vurdering …
+    const omdopt = await i(org, (db) => endreFare(db, org, fare.id, { title: "Nytt navn" }));
+    expect(omdopt.trengerVurdering).toBe(true);
+
+    // … men et nytt nivåvalg er det.
+    const vurdert = await i(org, (db) => endreFare(db, org, fare.id, { probability: 3, consequence: 2 }));
+    expect(vurdert.trengerVurdering).toBe(false);
+  });
+
+  it("lar en fare høre til et prosjekt i stedet for driften", async () => {
+    const org = await oppsett();
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Fallende materialer", context: "Takrehabilitering 2027" }));
+    await i(org, (db) => opprettFare(db, org, { ...fareData, title: "Isglatte trapper" }));
+
+    const farer = await i(org, (db) => hentFarer(db, org));
+    expect(farer.find((f) => f.title === "Fallende materialer")?.context).toBe("Takrehabilitering 2027");
+    expect(farer.find((f) => f.title === "Isglatte trapper")?.context).toBeNull();
   });
 });
 
