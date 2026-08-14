@@ -18,7 +18,7 @@
  * er to ulike ting, og bare den andre er inngripende.
  */
 
-import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, max, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -28,9 +28,17 @@ import { aiUsageDaily } from "../db/schema/ai";
 import { deviations } from "../db/schema/avvik";
 import { completions, tasks } from "../db/schema/tasks";
 import { userOrgMemberships, users } from "../db/schema/users";
+import { annualEvents } from "../db/schema/arshjul";
+import { contracts } from "../db/schema/kontrakter";
+import { documents } from "../db/schema/dokumenter";
+import { routines } from "../db/schema/rutiner";
+import { units } from "../db/schema/units";
+import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { SUPPORT_SESJON_MAKS_TIMER, supportSesjonUtlop } from "./tilgang";
 import { PLATTFORMADMIN } from "./nivaer";
+import { ALLE_MODULER, modulErAktivert } from "./moduler";
+import { onboardingProsent, onboardingPunkter } from "./kundedetalj";
 
 export const supportStart = z.object({
   orgId: z.string().min(1),
@@ -122,41 +130,157 @@ export async function hentSesjoner(db: Db, kunGjeldende = false) {
     .limit(100);
 }
 
-/** Kundeoversikten. Tallene er kundeforhold, ikke innhold. */
+export type Kundestatus = "Aktiv" | "Pilot" | "Onboarding" | "Inaktiv";
+
+/**
+ * Kundeoversikten — tallene er kundeforhold, ikke innhold. Alt regnes i grupperte
+ * spørringer, aldri én runde per kunde (v1s felle: 120 rundturer for én side).
+ *
+ * `status` er UTLEDET, ikke et felt: Inaktiv (skrudd av) > Pilot (100 % rabatt) >
+ * Onboarding (< 100 %) > Aktiv. `oppfolging` er grunnene panelet skal mase om — ingen
+ * av dem krever innsyn i kundens data.
+ */
 export async function hentKunder(db: Db) {
-  const orger = await db
-    .select({
-      id: organizations.id,
-      navn: organizations.name,
-      orgNr: organizations.orgNr,
-      orgForm: organizations.orgForm,
-      kommune: organizations.municipality,
-      antallEnheter: organizations.unitCount,
-      aktiv: organizations.active,
-      moduler: organizations.enabledModules,
-      opprettet: organizations.createdAt,
-    })
-    .from(organizations)
-    .orderBy(organizations.name);
+  const [orger, brukereAlle, brukereEkte, sistInnlogget, apneSesjoner, avtaler,
+    enheter, leverandorer, kontrakter, arshjul, rutiner, dokumenter] = await Promise.all([
+    db.select().from(organizations).orderBy(organizations.name),
+    // Alle medlemskap (vises som brukertall) …
+    db
+      .select({ orgId: userOrgMemberships.orgId, n: count() })
+      .from(userOrgMemberships)
+      .groupBy(userOrgMemberships.orgId),
+    // … men onboarding og «sist aktiv» teller bare EKTE brukere: plattformadmins
+    // medlemskap er supportinnganger, ikke kundens styre (reell v1-feil).
+    db
+      .select({ orgId: userOrgMemberships.orgId, n: count() })
+      .from(userOrgMemberships)
+      .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+      .where(and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig")))
+      .groupBy(userOrgMemberships.orgId),
+    db
+      .select({ orgId: userOrgMemberships.orgId, siste: max(users.lastLoginAt) })
+      .from(userOrgMemberships)
+      .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+      .where(and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig")))
+      .groupBy(userOrgMemberships.orgId),
+    db
+      .select({ orgId: supportAccessLog.orgId })
+      .from(supportAccessLog)
+      .where(and(isNull(supportAccessLog.endedAt), sql`${supportAccessLog.expiresAt} > now()`)),
+    db.select().from(platformContracts),
+    db
+      .select({ orgId: units.orgId, n: count() })
+      .from(units)
+      .where(ne(units.type, "fellesareal"))
+      .groupBy(units.orgId),
+    db
+      .select({ orgId: vendors.orgId, n: count() })
+      .from(vendors)
+      .where(eq(vendors.active, true))
+      .groupBy(vendors.orgId),
+    db.select({ orgId: contracts.orgId, n: count() }).from(contracts).groupBy(contracts.orgId),
+    db.select({ orgId: annualEvents.orgId, n: count() }).from(annualEvents).groupBy(annualEvents.orgId),
+    db.select({ orgId: routines.orgId, n: count() }).from(routines).groupBy(routines.orgId),
+    db.select({ orgId: documents.orgId, n: count() }).from(documents).groupBy(documents.orgId),
+  ]);
 
-  // Ett oppslag for alle kunder, ikke ett per kunde.
-  const brukere = await db
-    .select({ orgId: userOrgMemberships.orgId, n: count() })
-    .from(userOrgMemberships)
-    .groupBy(userOrgMemberships.orgId);
-  const perOrg = new Map(brukere.map((r) => [r.orgId, r.n]));
-
-  const apneSesjoner = await db
-    .select({ orgId: supportAccessLog.orgId })
-    .from(supportAccessLog)
-    .where(and(isNull(supportAccessLog.endedAt), sql`${supportAccessLog.expiresAt} > now()`));
+  const kart = (rader: Array<{ orgId: string; n: number }>) =>
+    new Map(rader.map((r) => [r.orgId, r.n]));
+  const alleBrukere = kart(brukereAlle);
+  const ekteBrukere = kart(brukereEkte);
+  const kEnheter = kart(enheter);
+  const kLeverandorer = kart(leverandorer);
+  const kKontrakter = kart(kontrakter);
+  const kArshjul = kart(arshjul);
+  const kRutiner = kart(rutiner);
+  const kDokumenter = kart(dokumenter);
+  const sist = new Map(sistInnlogget.map((r) => [r.orgId, r.siste]));
   const medSesjon = new Set(apneSesjoner.map((r) => r.orgId));
+  const avtalePerOrg = new Map(avtaler.map((a) => [a.orgId, a]));
 
-  return orger.map((o) => ({
-    ...o,
-    antallBrukere: perOrg.get(o.id) ?? 0,
-    harAktivSupport: medSesjon.has(o.id),
-  }));
+  const naa = Date.now();
+  const dag = 86_400_000;
+
+  return orger.map((o) => {
+    const avtale = avtalePerOrg.get(o.id);
+    let moduler: Array<{ price?: number }> = [];
+    try {
+      const t = JSON.parse(avtale?.modules ?? "[]");
+      if (Array.isArray(t)) moduler = t;
+    } catch {
+      // Ødelagt JSON teller som ingen moduler — lista skal ikke velte av én rad.
+    }
+    const brutto = avtale
+      ? (avtale.baseFee ?? avtale.annualFee ?? 0) + moduler.reduce((n, m) => n + (m.price ?? 0), 0)
+      : null;
+    const rabatt = avtale?.discountPercent ?? 0;
+    const netto = brutto === null ? null : Math.round(brutto * (1 - rabatt / 100));
+
+    const punkter = onboardingPunkter(o, {
+      enheter: kEnheter.get(o.id) ?? 0,
+      brukere: ekteBrukere.get(o.id) ?? 0,
+      leverandorer: kLeverandorer.get(o.id) ?? 0,
+      kontrakter: kKontrakter.get(o.id) ?? 0,
+      arshjul: kArshjul.get(o.id) ?? 0,
+      rutiner: kRutiner.get(o.id) ?? 0,
+      dokumenter: kDokumenter.get(o.id) ?? 0,
+      abonnement: avtale ? 1 : 0,
+    });
+    const onboarding = onboardingProsent(punkter);
+
+    const sistAktiv = sist.get(o.id) ?? null;
+    const dagerSidenAktiv = sistAktiv ? Math.floor((naa - new Date(sistAktiv).getTime()) / dag) : null;
+
+    const status: Kundestatus = !o.active
+      ? "Inaktiv"
+      : rabatt === 100
+        ? "Pilot"
+        : onboarding < 100
+          ? "Onboarding"
+          : "Aktiv";
+
+    // Grunnene panelet skal mase om. Kundene ringer ikke og sier fra selv.
+    const oppfolging: string[] = [];
+    if (o.active && avtale?.endDate && rabatt > 0) {
+      const dager = Math.ceil((new Date(avtale.endDate).getTime() - naa) / dag);
+      if (dager > 0 && dager <= 90) {
+        oppfolging.push(`Rabatten (${rabatt} %) utløper ${new Date(avtale.endDate).toLocaleDateString("nb-NO")} — om ${dager} dager.`);
+      }
+    }
+    // Ukjent opprettelsesdato regnes som gammel — heller mase én gang for mye.
+    const eldreEnn30Dager = o.createdAt ? naa - new Date(o.createdAt).getTime() > 30 * dag : true;
+    if (o.active && onboarding < 60 && eldreEnn30Dager) {
+      oppfolging.push(`Onboarding står på ${onboarding} % etter mer enn 30 dager.`);
+    }
+    if (o.active && (dagerSidenAktiv === null || dagerSidenAktiv > 30)) {
+      oppfolging.push(
+        dagerSidenAktiv === null
+          ? "Ingen brukere har logget inn ennå."
+          : `Ingen innlogging på ${dagerSidenAktiv} dager.`,
+      );
+    }
+
+    return {
+      id: o.id,
+      navn: o.name,
+      orgNr: o.orgNr,
+      orgForm: o.orgForm,
+      kommune: o.municipality,
+      andeler: o.unitCount,
+      aktiv: o.active,
+      opprettet: o.createdAt,
+      antallBrukere: alleBrukere.get(o.id) ?? 0,
+      harAktivSupport: medSesjon.has(o.id),
+      antallModuler: ALLE_MODULER.filter((m) => modulErAktivert(o.enabledModules, m)).length,
+      totaltModuler: ALLE_MODULER.length,
+      onboarding,
+      prisAar: netto,
+      prisNotat: rabatt === 100 ? "Pilot" : rabatt > 0 ? `${rabatt} % rabatt` : null,
+      sistAktiv,
+      status,
+      oppfolging,
+    };
+  });
 }
 
 /** Én kunde, med litt mer kontekst — fortsatt uten å vise selve innholdet. */

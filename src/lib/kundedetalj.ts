@@ -224,6 +224,90 @@ type Punkt = { nokkel: string; etikett: string; ok: boolean; detalj?: string | n
 const tall = (n: number, entall: string, flertall: string) =>
   n === 0 ? null : `${n} ${n === 1 ? entall : flertall}`;
 
+/** Tellingene punktene regnes fra — samme form enten de kommer per kunde eller gruppert. */
+export type OnboardingTellinger = {
+  enheter: number;
+  brukere: number;
+  leverandorer: number;
+  kontrakter: number;
+  arshjul: number;
+  rutiner: number;
+  dokumenter: number;
+  abonnement: number;
+};
+
+/**
+ * De ti punktene som REN funksjon — kundelista (gruppert per org) og kundedetaljen (én org)
+ * skal regne identisk, og v1 lærte oss hva kopier gjør: de driver.
+ */
+export function onboardingPunkter(
+  org: { unitCount: number | null; buildingInfo: string | null },
+  t: OnboardingTellinger,
+): Punkt[] {
+  return [
+    { nokkel: "abonnement", etikett: "Abonnement registrert", ok: t.abonnement > 0 },
+    {
+      nokkel: "andeler",
+      etikett: "Antall andeler satt",
+      ok: Boolean(org.unitCount),
+      detalj: tall(org.unitCount ?? 0, "andel", "andeler"),
+    },
+    {
+      nokkel: "enheter",
+      etikett: "Enhetsregisteret fylt",
+      ok: t.enheter > 0,
+      detalj: tall(t.enheter, "enhet", "enheter"),
+    },
+    {
+      nokkel: "om_bygget",
+      etikett: "«Om bygget» utfylt",
+      ok: Boolean(org.buildingInfo && org.buildingInfo.trim() && org.buildingInfo !== "{}"),
+    },
+    {
+      // Én bruker er kontoen vi opprettet for dem. Styret er først inne når flere har
+      // tilgang — det er da systemet slutter å være én persons ansvar.
+      nokkel: "styret",
+      etikett: "Styret lagt inn (minst 2 brukere)",
+      ok: t.brukere >= 2,
+      detalj: tall(t.brukere, "bruker", "brukere"),
+    },
+    {
+      nokkel: "leverandorer",
+      etikett: "Leverandører registrert",
+      ok: t.leverandorer > 0,
+      detalj: tall(t.leverandorer, "leverandør", "leverandører"),
+    },
+    {
+      nokkel: "kontrakter",
+      etikett: "Kontrakter lagt inn",
+      ok: t.kontrakter > 0,
+      detalj: tall(t.kontrakter, "kontrakt", "kontrakter"),
+    },
+    {
+      nokkel: "arshjul",
+      etikett: "Årshjul i bruk",
+      ok: t.arshjul > 0,
+      detalj: tall(t.arshjul, "hendelse", "hendelser"),
+    },
+    {
+      nokkel: "rutiner",
+      etikett: "Rutiner opprettet",
+      ok: t.rutiner > 0,
+      detalj: tall(t.rutiner, "rutine", "rutiner"),
+    },
+    {
+      nokkel: "dokumenter",
+      etikett: "Dokumenter i arkivet",
+      ok: t.dokumenter > 0,
+      detalj: tall(t.dokumenter, "dokument", "dokumenter"),
+    },
+  ];
+}
+
+export function onboardingProsent(punkter: Punkt[]): number {
+  return Math.round((100 * punkter.filter((p) => p.ok).length) / punkter.length);
+}
+
 /**
  * Hvor langt kunden er kommet med å ta systemet i bruk.
  *
@@ -281,67 +365,18 @@ export async function hentOnboarding(db: Db, orgId: string) {
 
   const n = (r: Array<{ n: number }>) => r[0]?.n ?? 0;
 
-  const punkter: Punkt[] = [
-    { nokkel: "abonnement", etikett: "Abonnement registrert", ok: n(abonnement) > 0 },
-    {
-      nokkel: "andeler",
-      etikett: "Antall andeler satt",
-      ok: Boolean(org.unitCount),
-      detalj: tall(org.unitCount ?? 0, "andel", "andeler"),
-    },
-    {
-      nokkel: "enheter",
-      etikett: "Enhetsregisteret fylt",
-      ok: n(enheter) > 0,
-      detalj: tall(n(enheter), "enhet", "enheter"),
-    },
-    {
-      nokkel: "om_bygget",
-      etikett: "«Om bygget» utfylt",
-      ok: Boolean(org.buildingInfo && org.buildingInfo.trim() && org.buildingInfo !== "{}"),
-    },
-    {
-      // Én bruker er kontoen vi opprettet for dem. Styret er først inne når flere har
-      // tilgang — det er da systemet slutter å være én persons ansvar.
-      nokkel: "styret",
-      etikett: "Styret lagt inn (minst 2 brukere)",
-      ok: n(brukere) >= 2,
-      detalj: tall(n(brukere), "bruker", "brukere"),
-    },
-    {
-      nokkel: "leverandorer",
-      etikett: "Leverandører registrert",
-      ok: n(leverandorer) > 0,
-      detalj: tall(n(leverandorer), "leverandør", "leverandører"),
-    },
-    {
-      nokkel: "kontrakter",
-      etikett: "Kontrakter lagt inn",
-      ok: n(kontrakter) > 0,
-      detalj: tall(n(kontrakter), "kontrakt", "kontrakter"),
-    },
-    {
-      nokkel: "arshjul",
-      etikett: "Årshjul i bruk",
-      ok: n(arshjul) > 0,
-      detalj: tall(n(arshjul), "hendelse", "hendelser"),
-    },
-    {
-      nokkel: "rutiner",
-      etikett: "Rutiner opprettet",
-      ok: n(rutiner) > 0,
-      detalj: tall(n(rutiner), "rutine", "rutiner"),
-    },
-    {
-      nokkel: "dokumenter",
-      etikett: "Dokumenter i arkivet",
-      ok: n(dokumenter) > 0,
-      detalj: tall(n(dokumenter), "dokument", "dokumenter"),
-    },
-  ];
+  const punkter = onboardingPunkter(org, {
+    enheter: n(enheter),
+    brukere: n(brukere),
+    leverandorer: n(leverandorer),
+    kontrakter: n(kontrakter),
+    arshjul: n(arshjul),
+    rutiner: n(rutiner),
+    dokumenter: n(dokumenter),
+    abonnement: n(abonnement),
+  });
 
-  const fullfort = punkter.filter((p) => p.ok).length;
-  return { prosent: Math.round((100 * fullfort) / punkter.length), punkter };
+  return { prosent: onboardingProsent(punkter), punkter };
 }
 
 // ---------------------------------------------------------------------------------------

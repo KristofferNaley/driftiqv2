@@ -12,11 +12,12 @@ import { formatOrgNr } from "@/lib/orgnr";
 import { arssum, grunnpakke, kroner, type Trinn } from "@/lib/prisregler";
 
 /**
- * Kundedetaljen — DriftIQs bilde av ÉN kunde.
+ * Kundedetaljen — DriftIQs bilde av ÉN kunde. Etter `mockups/kundeside-v3-mockup.html`:
+ * vertikal fane-skinne i tre grupper (kundeforhold, abonnement, tilgang og sikkerhet),
+ * sammendraget først — det svarer på «hvordan står det til» uten å åpne noe.
  *
- * Fem faner. Oversikten svarer på «hvem er dette og er de i gang?», de andre er der man
- * faktisk endrer noe. Support-modus står øverst på alle fanene med vilje: det er den mest
- * inngripende handlingen i panelet, og den skal ikke ligge nederst der man scroller forbi.
+ * Support-modus står som stripe øverst på ALLE fanene med vilje: det er den mest
+ * inngripende handlingen i panelet, og den skal ikke ligge bak en fane man må huske.
  */
 
 type Kunde = {
@@ -99,22 +100,39 @@ type Detalj = {
   grunnpakkeNaa: number;
 };
 
-const FANER = [
-  { nokkel: "oversikt", etikett: "Oversikt" },
-  { nokkel: "moduler", etikett: "Moduler" },
-  { nokkel: "fakturering", etikett: "Fakturering" },
-  { nokkel: "brukere", etikett: "Brukere" },
-  { nokkel: "innsyn", etikett: "Innsynslogg" },
+const GRUPPER = [
+  {
+    navn: "Kundeforhold",
+    faner: [
+      { nokkel: "sammendrag", etikett: "Sammendrag" },
+      { nokkel: "organisasjon", etikett: "Organisasjon" },
+      { nokkel: "onboarding", etikett: "Onboarding" },
+    ],
+  },
+  {
+    navn: "Abonnement",
+    faner: [
+      { nokkel: "moduler", etikett: "Moduler" },
+      { nokkel: "fakturering", etikett: "Fakturering" },
+    ],
+  },
+  {
+    navn: "Tilgang og sikkerhet",
+    faner: [
+      { nokkel: "brukere", etikett: "Brukere" },
+      { nokkel: "innsyn", etikett: "Innsynslogg" },
+    ],
+  },
 ] as const;
 
-type Fane = (typeof FANER)[number]["nokkel"];
+type Fane = (typeof GRUPPER)[number]["faner"][number]["nokkel"];
 
 export default function Kundedetalj({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const [kunde, setKunde] = useState<Kunde | null>(null);
   const [detalj, setDetalj] = useState<Detalj | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
-  const [fane, setFane] = useState<Fane>("oversikt");
+  const [fane, setFane] = useState<Fane>("sammendrag");
 
   const last = useCallback(async () => {
     try {
@@ -141,36 +159,71 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
     );
   }
 
+  const { org, onboarding } = detalj;
+  const merker: Record<Fane, string | null> = {
+    sammendrag: null,
+    organisasjon: null,
+    onboarding: `${onboarding.prosent} %`,
+    moduler: `${detalj.moduler.length}/${ALLE_MODULER.length}`,
+    fakturering: null,
+    brukere: String(kunde.brukere.length),
+    innsyn: null,
+  };
+
   return (
     <Ramme tittel={kunde.name}>
       <Link href="/plattform/kunder" className="tilbake-lenke">
         ← Alle kunder
       </Link>
+
+      {/* Merkene under tittelen — det man trenger for å vite HVEM man står i. */}
+      <div className="pf-tags">
+        <span className={`badge ${org.active ? "ok" : "danger"}`}>{org.active ? "Aktiv" : "Inaktiv"}</span>
+        {org.orgForm && <span className="pf-tagg">{org.orgForm}</span>}
+        {org.unitCount !== null && <span className="pf-tagg">{org.unitCount} andeler</span>}
+        {org.createdAt && <span className="pf-tagg">Kunde siden {dato(org.createdAt)}</span>}
+        <span className="pf-tagg">{formatOrgNr(org.orgNr) ?? "org.nr ikke satt"}</span>
+      </div>
+
       {feil && <div className="feilmelding">{feil}</div>}
 
       <Support kunde={kunde} orgId={orgId} onEndret={last} onFeil={setFeil} />
 
-      <div className="pf-faner">
-        {FANER.map((f) => (
-          <button
-            key={f.nokkel}
-            className={`pf-fane${fane === f.nokkel ? " valgt" : ""}`}
-            onClick={() => setFane(f.nokkel)}
-          >
-            {f.etikett}
-          </button>
-        ))}
-      </div>
+      <div className="pf-skinne-layout">
+        <nav className="pf-skinne" aria-label="Kundeseksjoner">
+          {GRUPPER.map((g) => (
+            <div key={g.navn} className="pf-skinne-gruppe">
+              <h3>{g.navn}</h3>
+              {g.faner.map((f) => (
+                <button
+                  key={f.nokkel}
+                  className={`pf-skinnefane${fane === f.nokkel ? " valgt" : ""}`}
+                  onClick={() => setFane(f.nokkel)}
+                >
+                  {f.etikett}
+                  {merker[f.nokkel] && (
+                    <span className={`badge ${f.nokkel === "onboarding" && onboarding.prosent < 100 ? "warn" : "muted"}`}>
+                      {merker[f.nokkel]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
 
-      {fane === "oversikt" && (
-        <Oversikt detalj={detalj} kunde={kunde} onEndret={last} onGaTil={setFane} />
-      )}
-      {fane === "moduler" && <ModulFane detalj={detalj} orgId={orgId} onEndret={last} />}
-      {fane === "fakturering" && (
-        <Fakturering detalj={detalj} orgId={orgId} onEndret={last} onFeil={setFeil} />
-      )}
-      {fane === "brukere" && <Brukere kunde={kunde} />}
-      {fane === "innsyn" && <Innsynslogg kunde={kunde} />}
+        <div style={{ minWidth: 0 }}>
+          {fane === "sammendrag" && <Sammendrag detalj={detalj} kunde={kunde} onGaTil={setFane} />}
+          {fane === "organisasjon" && <Organisasjon detalj={detalj} onEndret={last} />}
+          {fane === "onboarding" && <OnboardingFane detalj={detalj} />}
+          {fane === "moduler" && <ModulFane detalj={detalj} orgId={orgId} onEndret={last} />}
+          {fane === "fakturering" && (
+            <Fakturering detalj={detalj} orgId={orgId} onEndret={last} onFeil={setFeil} />
+          )}
+          {fane === "brukere" && <Brukere kunde={kunde} />}
+          {fane === "innsyn" && <Innsynslogg kunde={kunde} />}
+        </div>
+      </div>
     </Ramme>
   );
 }
@@ -271,29 +324,129 @@ function Support({
   );
 }
 
-// ── Oversikt ────────────────────────────────────────────────────────────────────────────
+// ── Sammendrag ──────────────────────────────────────────────────────────────────────────
 
-function Oversikt({
+/** Svarer på «hvordan står det til med denne kunden» uten å gå inn i kundens data. */
+function Sammendrag({
   detalj,
   kunde,
-  onEndret,
   onGaTil,
 }: {
   detalj: Detalj;
   kunde: Kunde;
-  onEndret: () => Promise<void>;
   onGaTil: (f: Fane) => void;
 }) {
+  const { org, abonnement, onboarding } = detalj;
+  const gjenstaar = onboarding.punkter.filter((p) => !p.ok).length;
+  // Listeprisen for dagens modulvalg — det abonnementet VILLE kostet uten rabatt.
+  const listepris =
+    detalj.grunnpakkeNaa +
+    detalj.moduler
+      .filter((n) => TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number]))
+      .reduce((n, m) => n + (detalj.prismodell.modulpriser[m] ?? 0), 0);
+
+  return (
+    <>
+      <div className="pf-grid">
+        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("fakturering")}>
+          <span className="pf-snarvei-tittel">Abonnement</span>
+          {abonnement ? (
+            <>
+              <span className="pf-snarvei-tall gronn">
+                {kroner(
+                  arssum({
+                    grunnpakke: abonnement.baseFee,
+                    arsavgift: abonnement.annualFee,
+                    moduler: abonnement.moduler.map((m) => ({ pris: m.price })),
+                    rabattProsent: abonnement.discountPercent,
+                  }),
+                )}
+              </span>
+              <span className="pf-under">
+                per år
+                {abonnement.discountPercent > 0 &&
+                  ` — ${abonnement.discountPercent} % rabatt${abonnement.endDate ? ` til ${dato(abonnement.endDate)}` : ""}`}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="pf-snarvei-tall">—</span>
+              <span className="pf-under">ingen avtale registrert — opprett →</span>
+            </>
+          )}
+        </button>
+
+        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("moduler")}>
+          <span className="pf-snarvei-tittel">Aktive moduler</span>
+          <span className="pf-snarvei-tall">
+            {detalj.moduler.length} / {ALLE_MODULER.length}
+          </span>
+          <span className="pf-under">listepris {kroner(listepris)}/år</span>
+        </button>
+
+        <button className="pf-kort pf-snarvei" onClick={() => onGaTil("onboarding")}>
+          <span className="pf-snarvei-tittel">Onboarding</span>
+          <span className={`pf-snarvei-tall${onboarding.prosent === 100 ? " gronn" : ""}`}>
+            {onboarding.prosent} %
+          </span>
+          <span className="pf-under">
+            {gjenstaar === 0 ? "alt på plass" : `${gjenstaar} ${gjenstaar === 1 ? "punkt" : "punkter"} gjenstår`}
+          </span>
+        </button>
+      </div>
+
+      <div className="pf-grid">
+        <div className="pf-kort">
+          <div className="pf-kort-hode">
+            <span>Nøkkelinfo</span>
+            <button className="btn btn-ghost" onClick={() => onGaTil("organisasjon")}>
+              Se alt
+            </button>
+          </div>
+          <div className="pf-kort-kropp">
+            <Felt etikett="Selskapsform" verdi={org.orgForm ?? "—"} />
+            <Felt etikett="Kommune" verdi={org.municipality ?? "—"} />
+            <Felt etikett="Antall andeler" verdi={org.unitCount?.toString() ?? "—"} />
+            <Felt etikett="Har ansatte" verdi={org.hasEmployees ? "Ja" : "Nei"} />
+            <Felt
+              etikett="Boligbyggelag"
+              verdi={org.affiliationType === "tilknyttet" ? (org.bblNavn ?? "Tilknyttet") : org.affiliationType === "frittstaende" ? "Frittstående" : "Ikke kartlagt"}
+            />
+            <Felt etikett="Forretningsfører" verdi={forretningsforer(org)} />
+          </div>
+        </div>
+
+        <div className="pf-kort">
+          <div className="pf-kort-hode">
+            <span>Bruk</span>
+          </div>
+          <div className="pf-kort-kropp">
+            <Felt etikett="Oppgaver" verdi={String(kunde.antallOppgaver)} />
+            <Felt etikett="Avvik" verdi={String(kunde.antallAvvik)} />
+            <Felt etikett="Brukere" verdi={String(kunde.brukere.length)} />
+            <p className="field-note" style={{ marginTop: "10px" }}>
+              Antall, ikke innhold. Innholdet krever support-modus.
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Organisasjon ────────────────────────────────────────────────────────────────────────
+
+function Organisasjon({ detalj, onEndret }: { detalj: Detalj; onEndret: () => Promise<void> }) {
   const [redigerer, setRedigerer] = useState(false);
   const [tilknytning, setTilknytning] = useState(false);
-  const { org, abonnement, onboarding } = detalj;
+  const { org } = detalj;
 
   return (
     <>
       <div className="pf-grid">
         <div className="pf-kort">
           <div className="pf-kort-hode">
-            <span>Organisasjon</span>
+            <span>Identitet og kontakt</span>
             <button className="btn btn-ghost" onClick={() => setRedigerer(true)}>
               Rediger
             </button>
@@ -310,93 +463,35 @@ function Oversikt({
             <Felt etikett="Har ansatte" verdi={org.hasEmployees ? "Ja" : "Nei"} />
             <Felt etikett="Kunde siden" verdi={dato(org.createdAt)} />
             <Felt etikett="Status" verdi={org.active ? "Aktiv" : "Inaktiv"} />
-          </div>
-        </div>
-
-        <div>
-          <button className="pf-kort pf-snarvei" onClick={() => onGaTil("moduler")}>
-            <span className="pf-snarvei-tittel">Moduler</span>
-            <span className="pf-snarvei-tall">
-              {detalj.moduler.length} / {ALLE_MODULER.length}
-            </span>
-            <span className="pf-under">aktive moduler — se detaljer →</span>
-          </button>
-
-          <div className="pf-kort">
-            <div className="pf-kort-hode">
-              <span>Tilknytning</span>
-              <button className="btn btn-ghost" onClick={() => setTilknytning(true)}>
-                Rediger
-              </button>
-            </div>
-            <div className="pf-kort-kropp">
-              <Felt
-                etikett="Tilknytning"
-                verdi={
-                  org.affiliationType === "tilknyttet"
-                    ? `Tilknyttet${org.bblNavn ? ` — ${org.bblNavn}` : ""}`
-                    : org.affiliationType === "frittstaende"
-                      ? "Frittstående"
-                      : "Ikke kartlagt"
-                }
-              />
-              <Felt etikett="Forretningsfører" verdi={forretningsforer(org)} />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <button className="pf-kort pf-snarvei" onClick={() => onGaTil("fakturering")}>
-            <span className="pf-snarvei-tittel">Abonnement</span>
-            {abonnement ? (
-              <>
-                <span className="pf-snarvei-tall gronn">
-                  {kroner(
-                    arssum({
-                      grunnpakke: abonnement.baseFee,
-                      arsavgift: abonnement.annualFee,
-                      moduler: abonnement.moduler.map((m) => ({ pris: m.price })),
-                      rabattProsent: abonnement.discountPercent,
-                    }),
-                  )}
-                </span>
-                <span className="pf-under">per år — se detaljer →</span>
-              </>
-            ) : (
-              <>
-                <span className="pf-snarvei-tall">—</span>
-                <span className="pf-under">ingen avtale registrert — opprett →</span>
-              </>
+            {!org.contactEmail && (
+              <p className="field-note" style={{ marginTop: "10px", color: "var(--warn)" }}>
+                Uten e-post kan systemet ikke sende varsler eller faktura til kunden.
+              </p>
             )}
-          </button>
-
-          <div className="pf-kort">
-            <div className="pf-kort-hode">
-              <span>Onboarding</span>
-              <span className="pf-tall">{onboarding.prosent} %</span>
-            </div>
-            <div className="pf-kort-kropp">
-              <div className="pf-stolpe">
-                <div className="pf-stolpe-fyll" style={{ width: `${onboarding.prosent}%` }} />
-              </div>
-              {onboarding.punkter.map((p) => (
-                <div key={p.nokkel} className="pf-punkt">
-                  <span className={p.ok ? "pf-hake ok" : "pf-hake"} aria-hidden>
-                    {p.ok ? "✓" : "○"}
-                  </span>
-                  <span className={p.ok ? undefined : "pf-dempet"}>{p.etikett}</span>
-                  {p.detalj && <span className="pf-under">{p.detalj}</span>}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
-      </div>
 
-      <div className="pf-grid">
-        <Nokkeltall etikett="Oppgaver" verdi={kunde.antallOppgaver} />
-        <Nokkeltall etikett="Avvik" verdi={kunde.antallAvvik} />
-        <Nokkeltall etikett="Brukere" verdi={kunde.brukere.length} />
+        <div className="pf-kort">
+          <div className="pf-kort-hode">
+            <span>Tilknytning</span>
+            <button className="btn btn-ghost" onClick={() => setTilknytning(true)}>
+              Rediger
+            </button>
+          </div>
+          <div className="pf-kort-kropp">
+            <Felt
+              etikett="Tilknytning"
+              verdi={
+                org.affiliationType === "tilknyttet"
+                  ? `Tilknyttet${org.bblNavn ? ` — ${org.bblNavn}` : ""}`
+                  : org.affiliationType === "frittstaende"
+                    ? "Frittstående"
+                    : "Ikke kartlagt"
+              }
+            />
+            <Felt etikett="Forretningsfører" verdi={forretningsforer(org)} />
+          </div>
+        </div>
       </div>
 
       {redigerer && (
@@ -423,22 +518,43 @@ function Oversikt({
   );
 }
 
+// ── Onboarding ──────────────────────────────────────────────────────────────────────────
+
+function OnboardingFane({ detalj }: { detalj: Detalj }) {
+  const { onboarding } = detalj;
+  return (
+    <div className="pf-kort">
+      <div className="pf-kort-hode">
+        <span>Fremdrift</span>
+        <span className="pf-tall">{onboarding.prosent} %</span>
+      </div>
+      <div className="pf-kort-kropp">
+        <div className="pf-stolpe">
+          <div className="pf-stolpe-fyll" style={{ width: `${onboarding.prosent}%` }} />
+        </div>
+        {onboarding.punkter.map((p) => (
+          <div key={p.nokkel} className="pf-punkt">
+            <span className={p.ok ? "pf-hake ok" : "pf-hake"} aria-hidden>
+              {p.ok ? "✓" : "○"}
+            </span>
+            <span className={p.ok ? undefined : "pf-dempet"}>{p.etikett}</span>
+            {p.detalj && <span className="pf-under">{p.detalj}</span>}
+          </div>
+        ))}
+        <p className="field-note" style={{ marginTop: "10px" }}>
+          Punktene teller kundens rader — hvor mange, aldri hva. De som gjenstår, er som
+          regel de kunden må gjøre selv.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function forretningsforer(org: Org): string {
   if (org.managerType === "selvadministrert") return "Selvadministrert";
   if (org.managerType === "bbl") return org.managerBblNavn ?? "Boligbyggelag";
   if (org.managerType === "ekstern") return org.managerName ?? "Ekstern";
   return "Ikke kartlagt";
-}
-
-function Nokkeltall({ etikett, verdi }: { etikett: string; verdi: number }) {
-  return (
-    <div className="pf-kort">
-      <div className="pf-kort-kropp">
-        <span className="pf-snarvei-tittel">{etikett}</span>
-        <div className="pf-snarvei-tall">{verdi}</div>
-      </div>
-    </div>
-  );
 }
 
 // ── Moduler ─────────────────────────────────────────────────────────────────────────────
@@ -472,44 +588,70 @@ function ModulFane({
     }
   }
 
+  // Listeprisen for VALGET slik det står nå — den som lagrer skal se hva det betyr for
+  // neste faktura før de trykker, ikke etter.
+  const listepris =
+    detalj.grunnpakkeNaa +
+    valgte
+      .filter((n) => TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number]))
+      .reduce((sum, n) => sum + (detalj.prismodell.modulpriser[n] ?? 0), 0);
+
+  // Gruppene fra menyen — samme inndeling som kunden ser i sidemenyen sin.
+  const grupper = new Map<string, typeof ALLE_MODULER[number][]>();
+  for (const n of ALLE_MODULER) {
+    const meny = MENY[n];
+    if (!meny) continue;
+    if (!grupper.has(meny.gruppe)) grupper.set(meny.gruppe, []);
+    grupper.get(meny.gruppe)!.push(n);
+  }
+
   return (
     <div className="pf-kort">
       <div className="pf-kort-hode">
         <span>Moduler</span>
-        <button className="btn btn-primary" disabled={!endret || lagrer} onClick={() => void lagre()}>
-          {lagrer ? "Lagrer …" : "Lagre modulvalg"}
-        </button>
+        <span style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <span className="pf-under">Listepris {kroner(listepris)}/år</span>
+          <button className="btn btn-primary" disabled={!endret || lagrer} onClick={() => void lagre()}>
+            {lagrer ? "Lagrer …" : "Lagre modulvalg"}
+          </button>
+        </span>
       </div>
       {feil && <div className="feilmelding">{feil}</div>}
 
-      {ALLE_MODULER.filter((n) => MENY[n]).map((n) => {
-        const alltidPa = ALLTID_PA.has(n);
-        const betalt = TILLEGGSMODULER.includes(n);
-        return (
-          <label key={n} className="pf-modul-valg">
-            <input
-              type="checkbox"
-              checked={alltidPa || valgte.includes(n)}
-              // Dashboard kan ikke slås av — det er ikke en modul man selger, det er forsiden.
-              disabled={alltidPa}
-              onChange={(e) =>
-                setValgte(e.target.checked ? [...valgte, n] : valgte.filter((v) => v !== n))
-              }
-            />
-            <span style={{ minWidth: 0 }}>
-              <span className="pf-navn">{MENY[n]!.etikett}</span>
-              <span className="pf-under">{MENY[n]!.gruppe}</span>
-            </span>
-            <span>
-              {betalt && (
-                <span className="pf-merkelapp">
-                  {kroner(detalj.prismodell.modulpriser[n] ?? 0)}/år
+      {[...grupper.entries()].map(([gruppe, moduler]) => (
+        <div key={gruppe}>
+          <div className="pf-modulgruppe">{gruppe}</div>
+          {moduler.map((n) => {
+            const alltidPa = ALLTID_PA.has(n);
+            const betalt = TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number]);
+            return (
+              <label key={n} className="pf-modul-valg">
+                <input
+                  type="checkbox"
+                  checked={alltidPa || valgte.includes(n)}
+                  // Dashboard kan ikke slås av — det er ikke en modul man selger, det er forsiden.
+                  disabled={alltidPa}
+                  onChange={(e) =>
+                    setValgte(e.target.checked ? [...valgte, n] : valgte.filter((v) => v !== n))
+                  }
+                />
+                <span style={{ minWidth: 0 }}>
+                  <span className="pf-navn">{MENY[n]!.etikett}</span>
                 </span>
-              )}
-            </span>
-          </label>
-        );
-      })}
+                <span>
+                  {alltidPa ? (
+                    <span className="pf-under">Alltid på</span>
+                  ) : betalt ? (
+                    <span className="pf-merkelapp">{kroner(detalj.prismodell.modulpriser[n] ?? 0)}/år</span>
+                  ) : (
+                    <span className="pf-under">Inkludert</span>
+                  )}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      ))}
 
       <p className="field-note" style={{ padding: "12px 16px" }}>
         Modulvalget styres bare herfra. Kundens egne innstillinger har ingen bryter — en

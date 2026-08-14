@@ -1992,6 +1992,99 @@ textarea.qr-input { resize: vertical; }
   letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
 }
 .pf-stat-rad.hode .pf-sorter:not(:first-child) { text-align: right; }
+
+/* ── Kundesiden (v3) ──
+   Etter mockups/kundeside-v3-mockup.html: merker under tittelen, og vertikal fane-skinne
+   i grupper — kundeforhold, abonnement, tilgang og sikkerhet. */
+.pf-tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pf-tagg {
+  font-size: var(--fs-label); padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
+}
+
+.pf-skinne-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
+.pf-skinne { position: sticky; top: 12px; }
+.pf-skinne-gruppe { margin-bottom: 16px; }
+.pf-skinne-gruppe h3 {
+  font-size: var(--fs-label); letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--muted); font-weight: 700; margin: 0 0 6px 12px;
+}
+.pf-skinnefane {
+  width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;
+  background: none; border: none; border-left: 2px solid transparent;
+  border-radius: 0 8px 8px 0; padding: 8px 12px; color: var(--muted);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+}
+.pf-skinnefane:hover { background: var(--surface2); color: var(--text); }
+.pf-skinnefane.valgt {
+  background: rgba(var(--accent-rgb), 0.12); border-left-color: var(--accent);
+  color: var(--text); font-weight: 600;
+}
+.pf-skinnefane .badge { margin-left: auto; }
+
+.pf-modulgruppe {
+  padding: 10px 16px 4px; font-size: var(--fs-label); font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  /* Skinnen blir en horisontal faner-rad — samme grep som mockupen. */
+  .pf-skinne-layout { grid-template-columns: 1fr; }
+  .pf-skinne { position: static; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+  .pf-skinne-gruppe { display: flex; gap: 4px; margin: 0; }
+  .pf-skinne-gruppe h3 { display: none; }
+  .pf-skinnefane { width: auto; white-space: nowrap; border-left: none; border-radius: 8px; }
+}
+
+/* ── Kundelista (v3) ──
+   Etter mockups/kundeliste-v3-mockup.html: KPI-rad, oppfølgingskort med grunnene,
+   verktøylinje med søk/chips/gruppering, og sorterbar kolonnetabell. */
+.pf-kpi-varsel { border-color: rgba(245, 166, 35, 0.4); background: rgba(245, 166, 35, 0.06); }
+.pf-kpi-varsel .pf-kpi-verdi { color: var(--warn); }
+
+.pf-oppfolging {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px;
+  align-items: center; width: 100%; padding: 11px 18px; text-align: left;
+  border: none; border-bottom: 1px solid var(--border); background: none;
+  color: var(--text); font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer;
+}
+.pf-oppfolging:last-child { border-bottom: none; }
+.pf-oppfolging:hover { background: var(--surface2); }
+.pf-oppfolging-prikk { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+
+.pf-verktoylinje { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pf-sok { max-width: 320px; flex: 1; min-width: 200px; }
+.pf-chip {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 6px 12px; font-size: var(--fs-label); font-weight: 500;
+  cursor: pointer; font-family: var(--font-sans); white-space: nowrap;
+}
+.pf-chip:hover { color: var(--text); }
+.pf-chip.valgt {
+  background: rgba(var(--accent-rgb), 0.14); border-color: var(--accent); color: var(--text);
+}
+
+/* Kolonnene deler definisjon mellom hode og rad — minmax(0, …) er den kjente grid-fella. */
+.pf-kunderad {
+  display: grid; gap: 12px; align-items: center; width: 100%;
+  grid-template-columns: minmax(180px, 2fr) 90px 60px 70px 140px 100px 110px 100px;
+  padding: 11px 18px; border: none; border-bottom: 1px solid var(--border);
+  background: none; text-align: left; color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer;
+}
+.pf-kunderad:hover:not(.hode):not(.gruppe) { background: var(--surface2); }
+.pf-kunderad.hode {
+  background: var(--bg); cursor: default;
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+}
+.pf-kunderad.gruppe {
+  background: var(--bg); cursor: default; padding: 7px 18px;
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.5px; color: var(--muted);
+}
+.pf-kunderad .pf-celle.tall { font-variant-numeric: tabular-nums; }
+.pf-prog { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pf-listefot { padding: 11px 18px; color: var(--muted); font-size: var(--fs-label); }
 .pf-sorter:hover { color: var(--text); }
 .pf-sorter.valgt { color: var(--pf-accent, var(--accent)); }
 .pf-navn-lenke { color: inherit; text-decoration: none; font-weight: 600; }
