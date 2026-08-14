@@ -20,7 +20,7 @@ import Link from "next/link";
 import { Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { DeltakerVelger } from "@/components/deltakervelger";
-import { internkontroll, type Fare, type HmsMal } from "@/lib/klient";
+import { brukere, internkontroll, type Fare, type HmsMal } from "@/lib/klient";
 import {
   FARESTATUS_ETIKETT,
   HOVEDVURDERING,
@@ -312,6 +312,7 @@ export function Risiko() {
           orgId={orgId}
           fare={skuff.fare}
           aktivKontekst={kontekst}
+          omrader={[...new Set(liste.map((f) => f.category).filter((k): k is string => Boolean(k)))]}
           onLukk={() => setSkuff(null)}
           onEndret={async () => {
             await last();
@@ -538,10 +539,14 @@ function Nivavelger({
  * Skuffen — redigerer én fare, eller oppretter en ny når `fare` er null.
  * Tiltakene lagres UMIDDELBART (egne rader); resten lagres samlet med «Lagre».
  */
+/** Sentinel i område-nedtrekket: «legg til et nytt» — kan ikke kollidere med et navn. */
+const NYTT_OMRADE = "__nytt__";
+
 function FareSkuff({
   orgId,
   fare,
   aktivKontekst,
+  omrader,
   onLukk,
   onEndret,
 }: {
@@ -549,13 +554,24 @@ function FareSkuff({
   fare: Fare | null;
   /** Kontekstchipen som var valgt da skuffen åpnet — en ny fare havner i samme vurdering. */
   aktivKontekst: string | null;
+  /** Lagets eksisterende områder — nedtrekk, ikke fritekst: «El-sikkerhet» og
+      «El sikkerhet» skal ikke bli to chips på grunn av en skrivefeil. */
+  omrader: string[];
   onLukk: () => void;
   onEndret: () => Promise<void>;
 }) {
   const [tittel, setTittel] = useState(fare?.title ?? "");
   const [kategori, setKategori] = useState(fare?.category ?? "");
+  const [egetOmrade, setEgetOmrade] = useState("");
   const [prosjekt, setProsjekt] = useState(fare ? (fare.context ?? "") : (aktivKontekst ?? ""));
   const [beskrivelse, setBeskrivelse] = useState(fare?.description ?? "");
+  // Ansvarlig kobles til brukerlista — fritekst ga «Ola», «ola h» og «Ola Hansen» som
+  // tre forskjellige ansvarlige. Navnet lagres fortsatt som tekst i raden.
+  const [folk, setFolk] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    brukere.liste(orgId).then(setFolk).catch(() => setFolk([]));
+  }, [orgId]);
   // Ny fare starter uten valg — å måtte velge ER vurderingen, 2/2 som forvalg hadde
   // gitt en liste der alt står på middels uten at noen har ment det.
   const [s, setS] = useState<number | null>(fare ? fare.probability : null);
@@ -578,11 +594,11 @@ function FareSkuff({
     setFeil(null);
     const data = {
       title: tittel.trim(),
-      category: kategori.trim() || null,
+      category: (kategori === NYTT_OMRADE ? egetOmrade.trim() : kategori.trim()) || null,
       description: beskrivelse.trim() || null,
       probability: s,
       consequence: k,
-      owner: eier.trim() || null,
+      owner: eier || null,
       status,
       context: prosjekt.trim() || null,
     };
@@ -655,7 +671,7 @@ function FareSkuff({
             <button
               className="btn btn-primary"
               onClick={() => void lagre()}
-              disabled={lagrer || !tittel.trim() || !s || !k}
+              disabled={lagrer || !tittel.trim() || !s || !k || (kategori === NYTT_OMRADE && !egetOmrade.trim())}
             >
               {lagrer ? "Lagrer …" : "Lagre"}
             </button>
@@ -664,17 +680,52 @@ function FareSkuff({
       >
         <Feil melding={feil} />
 
-        {/* Tekstområde, ikke énlinjesfelt: lange titler skal kunne LESES, ikke scrolles. */}
+        {/* Tekstområde, ikke énlinjesfelt: lange titler skal kunne LESES, ikke scrolles.
+            To rader — full tekstområdehøyde så ut som et beskrivelsesfelt. */}
         <Tekstomrade
           etikett="Hva kan gå galt? *"
           verdi={tittel}
           onEndre={setTittel}
+          rader={2}
           plassholder="For eksempel: rømningsvei blokkert av sykler"
         />
         <div className="field-row">
-          <Tekstfelt etikett="Område" verdi={kategori} onEndre={setKategori} plassholder="Brannvern, el-sikkerhet …" />
-          <Tekstfelt etikett="Ansvarlig" verdi={eier} onEndre={setEier} plassholder="Navn" />
+          <Nedtrekk
+            etikett="Område"
+            verdi={kategori}
+            onEndre={setKategori}
+            valg={[
+              { verdi: "", etikett: "Uten område" },
+              // Farens lagrede område skal alltid kunne vises, også om det er alene om navnet.
+              ...[...new Set([...omrader, ...(fare?.category ? [fare.category] : [])])].map((o) => ({
+                verdi: o,
+                etikett: o,
+              })),
+              { verdi: NYTT_OMRADE, etikett: "+ Nytt område …" },
+            ]}
+          />
+          <Nedtrekk
+            etikett="Ansvarlig"
+            verdi={eier}
+            onEndre={setEier}
+            valg={[
+              { verdi: "", etikett: "Ingen" },
+              // Et lagret navn utenfor brukerlista (ekstern, sluttet) skal fortsatt vises.
+              ...[...new Set([...folk.map((f) => f.name), ...(fare?.owner ? [fare.owner] : [])])].map(
+                (n) => ({ verdi: n, etikett: n }),
+              ),
+            ]}
+          />
         </div>
+
+        {kategori === NYTT_OMRADE && (
+          <Tekstfelt
+            etikett="Nytt område *"
+            verdi={egetOmrade}
+            onEndre={setEgetOmrade}
+            plassholder="For eksempel: Garasjeanlegg"
+          />
+        )}
 
         <Tekstfelt
           etikett="Gjelder prosjekt"

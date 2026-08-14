@@ -4,7 +4,8 @@ import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Lock, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { Feil, Tom, initialer, useOrgData } from "@/components/felles";
+import { useOkt } from "@/components/OktProvider";
+import { Feil, Tom, dato, initialer, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "@/lib/klient";
 
@@ -38,6 +39,7 @@ import { avvik as avvikKlient, brukere, internkontroll, type Rundepunkt } from "
  */
 export default function Vernerunde({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { aktivOrg } = useOkt();
   const { data, setData, feil, setFeil, last, orgId } = useOrgData(
     (o) => internkontroll.hentRunde(o, id),
     [id],
@@ -149,14 +151,31 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
       }
     >
       <div className="page-content">
-        <Link href="/internkontroll" className="list-meta" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+        <Link href="/internkontroll" className="list-meta print-skjul" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
           <ArrowLeft size={14} strokeWidth={2} aria-hidden /> Internkontroll
         </Link>
 
         <Feil melding={feil} />
 
+        {/* Rapporthodet — finnes KUN på papiret. Skjermen har tittelen i toppbaren og
+            deltakerne som chips; utskriften trenger dem samlet øverst som en rapport. */}
+        <div className="vr-print-hode">
+          <div className="vr-print-tittel">{data.title}</div>
+          <div className="vr-print-meta">
+            {aktivOrg?.name}
+            {data.roundDate && <> · befaring {dato(data.roundDate)}</>}
+            {data.deltakere.length > 0 && (
+              <> · {data.deltakere.map((d) => (d.role ? `${d.name} (${d.role})` : d.name)).join(", ")}</>
+            )}
+          </div>
+          <div className="vr-print-meta">
+            {besvarte} av {data.punkter.length} punkter vurdert · {antallOk} i orden ·{" "}
+            {antallAvvik} avvik{laast && " · Fullført og låst"}
+          </div>
+        </div>
+
         {/* Deltakerne øverst — befaringen er planlagt med folk og dato før punktene gås gjennom. */}
-        <div className="vr-folk">
+        <div className="vr-folk print-skjul">
           {data.deltakere.map((d) => (
             <span key={d.id} className="vr-person">
               <span className="vr-avatar" aria-hidden>{initialer(d.name)}</span>
@@ -189,7 +208,7 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
         </div>
 
         {laast && (
-          <div className="card">
+          <div className="card print-skjul">
             <div className="card-body" style={{ color: "var(--muted)", fontSize: "var(--fs-sm)" }}>
               Runden er fullført og låst. Den dokumenterer hva som ble observert den dagen —
               kunne den redigeres i ettertid, dokumenterte den ingenting.
@@ -198,7 +217,7 @@ export default function Vernerunde({ params }: { params: Promise<{ id: string }>
         )}
 
         {/* Klebrig fremdrift — brøken følger med nedover lista. */}
-        <div className="vr-fremdrift">
+        <div className="vr-fremdrift print-skjul">
           <div className="vr-fremdrift-rad">
             <span>
               <b>{besvarte}</b> av <b>{data.punkter.length}</b> punkter vurdert

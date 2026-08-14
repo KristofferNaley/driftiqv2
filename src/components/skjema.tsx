@@ -386,12 +386,15 @@ export function Tekstomrade({
   onEndre,
   notat,
   plassholder,
+  rader,
 }: {
   etikett: string;
   verdi: string;
   onEndre: (v: string) => void;
   notat?: string;
   plassholder?: string;
+  /** Kompakt variant: for korte tekster (en tittel) er standardhøyden et gap i skjemaet. */
+  rader?: number;
 }) {
   return (
     <Felt etikett={etikett} notat={notat}>
@@ -399,6 +402,8 @@ export function Tekstomrade({
         className="textarea"
         value={verdi}
         placeholder={plassholder}
+        rows={rader}
+        style={rader ? { minHeight: "unset" } : undefined}
         onChange={(e) => onEndre(e.target.value)}
       />
     </Felt>
