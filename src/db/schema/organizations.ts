@@ -19,6 +19,11 @@ export const organizations = pgTable("organizations", {
   unitCount: integer("unit_count"),
   active: boolean("active").notNull().default(true),
   /**
+   * Demo-, test- og kopikunder. De skal finnes (salgsdemoer, prod-kopier til feilsøk),
+   * men statistikken skal kunne holde dem utenfor — ellers lyver hvert eneste tall.
+   */
+  demo: boolean("demo").notNull().default(false),
+  /**
    * JSON-liste med modulnøkler kunden har aktivert. NULL/tom = ingen egen liste ⇒
    * standardsettet i lib/moduler.ts. Se `modulErAktivert()` for hvorfor en ødelagt verdi
    * faller tilbake til standard og ikke til «alt av».

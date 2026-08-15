@@ -1964,18 +1964,60 @@ textarea.qr-input { resize: vertical; }
 }
 .pf-modul-valg:last-of-type { border-bottom: none; }
 
-/* --- Statistikk og system --------------------------------------------------------- */
-.pf-stat-rad {
-  display: grid; grid-template-columns: 2fr repeat(5, 1fr); gap: 12px;
-  align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border);
+/* --- Statistikk (v3) og system ----------------------------------------------------- */
+/* Etter mockups/statistikk-v3-mockup.html: KPI-er med sparklines, bruk over tid,
+   leads-trakt, modulbruk mot aktivering, og kundehelse sortert etter risiko. */
+.pf-st-grid2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: 14px; align-items: start; }
+
+.pf-st-trakt { display: flex; flex-direction: column; gap: 9px; }
+.pf-st-trinn { display: flex; align-items: center; gap: 12px; }
+.pf-st-trinn .lbl { width: 90px; flex: 0 0 90px; color: var(--muted); font-size: var(--fs-sm); }
+.pf-st-trinn .bar {
+  height: 30px; border-radius: 6px; background: var(--accent); color: #fff;
+  display: flex; align-items: center; padding: 0 11px;
+  font-weight: 600; font-size: var(--fs-sm); min-width: 40px;
 }
-.pf-stat-rad.hode { padding: 12px 16px; }
+.pf-st-trinn.siste .bar { background: var(--ok); color: #06251a; }
+.pf-st-trinn .pct { color: var(--muted); font-size: var(--fs-label); }
+
+.pf-st-mod { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
+.pf-st-mod:last-child { border-bottom: none; }
+.pf-st-mod .nm { width: 130px; flex: 0 0 130px; font-weight: 500; }
+.pf-st-spor { flex: 1; height: 18px; border-radius: 5px; background: var(--surface2); position: relative; overflow: hidden; }
+.pf-st-spor .akt { position: absolute; top: 0; bottom: 0; left: 0; background: rgba(var(--accent-rgb), 0.28); }
+.pf-st-spor .bruk { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); }
+.pf-st-spor .bruk.svak { background: var(--warn); }
+.pf-st-mod .n { width: 72px; flex: 0 0 72px; text-align: right; color: var(--muted); font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+.pf-st-mod .kr { width: 88px; flex: 0 0 88px; text-align: right; font-variant-numeric: tabular-nums; }
+.pf-st-tegn { display: flex; gap: 16px; margin-top: 14px; color: var(--muted); font-size: var(--fs-label); flex-wrap: wrap; }
+.pf-st-tegn i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+
+.pf-st-note {
+  font-size: var(--fs-label); color: var(--muted); line-height: 1.6;
+  background: rgba(var(--accent-rgb), 0.07); border: 1px solid rgba(var(--accent-rgb), 0.25);
+  border-radius: 8px; padding: 10px 12px; margin-top: 14px;
+}
+.pf-st-note b { color: var(--accent); }
+
+.pf-st-rad {
+  display: grid; grid-template-columns: minmax(170px, 2fr) 70px 120px 110px 120px 90px 84px;
+  gap: 12px; align-items: center; padding: 10px 18px;
+  border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
+}
+.pf-st-rad:last-child { border-bottom: none; }
+.pf-st-rad.hode {
+  background: var(--bg); font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);
+}
+.pf-st-rad .tall { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) { .pf-st-grid2 { grid-template-columns: 1fr; } }
+
 .pf-sorter {
   border: none; background: none; cursor: pointer; padding: 0; text-align: left;
   font-family: var(--font-sans); font-size: var(--fs-label); font-weight: 700;
   letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
 }
-.pf-stat-rad.hode .pf-sorter:not(:first-child) { text-align: right; }
 
 /* ── Kundesiden (v3) ──
    Etter mockups/kundeside-v3-mockup.html: vertikal fane-skinne i grupper —
@@ -2237,10 +2279,6 @@ textarea.qr-input { resize: vertical; }
 }
 .pf-sak-fot .hint { color: var(--muted); font-size: var(--fs-label); }
 
-@media (max-width: 900px) {
-  .pf-stat-rad { grid-template-columns: 1fr auto; }
-  .pf-stat-rad.hode { display: none; }
-}
 
 /* --- HMS-maler -------------------------------------------------------------------- */
 .pf-mal-layout { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }

@@ -49,6 +49,8 @@ export const kundeEndring = z.object({
   website: z.string().trim().nullish(),
   hasEmployees: z.boolean().optional(),
   active: z.boolean().optional(),
+  /** Demo-/testkunde — holdes utenfor statistikken. */
+  demo: z.boolean().optional(),
   /** Lagringskvote i BYTES. Skjemaet regner om fra GB — se kommentaren på feltet. */
   storageQuota: z.number().int().min(0).nullish(),
 });

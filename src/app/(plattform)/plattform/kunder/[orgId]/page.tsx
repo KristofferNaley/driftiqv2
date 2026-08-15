@@ -58,6 +58,7 @@ type Org = {
   municipality: string | null;
   unitCount: number | null;
   active: boolean;
+  demo: boolean;
   hasEmployees: boolean;
   phone: string | null;
   contactEmail: string | null;
@@ -939,6 +940,7 @@ function OrgModal({
   const [nettside, setNettside] = useState(org.website ?? "");
   const [ansatte, setAnsatte] = useState(org.hasEmployees);
   const [aktiv, setAktiv] = useState(org.active);
+  const [demo, setDemo] = useState(org.demo);
   // Kvoten lagres i bytes, men ingen tenker i bytes. Skjemaet er i GB.
   const [kvoteGb, setKvoteGb] = useState(
     org.storageQuota ? String(org.storageQuota / 1024 / 1024 / 1024) : "",
@@ -962,6 +964,7 @@ function OrgModal({
               website: nettside.trim() || null,
               hasEmployees: ansatte,
               active: aktiv,
+              demo,
               storageQuota: kvoteGb.trim()
                 ? Math.round(parseFloat(kvoteGb) * 1024 * 1024 * 1024)
                 : null,
@@ -1005,6 +1008,13 @@ function OrgModal({
         <label className="pf-modul-valg">
           <input type="checkbox" checked={aktiv} onChange={(e) => setAktiv(e.target.checked)} />
           <span className="pf-navn">Aktiv kunde</span>
+        </label>
+        <label className="pf-modul-valg">
+          <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} />
+          <span style={{ minWidth: 0 }}>
+            <span className="pf-navn">Demo- eller testkunde</span>
+            <span className="pf-under">Holdes utenfor statistikken og forretningstallene.</span>
+          </span>
         </label>
 
         <Knapperad onAvbryt={onLukk} sender={sender} deaktivert={!navn.trim()} />

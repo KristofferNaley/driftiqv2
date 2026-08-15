@@ -37,7 +37,8 @@ import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { SUPPORT_SESJON_MAKS_TIMER, supportSesjonUtlop } from "./tilgang";
 import { PLATTFORMADMIN } from "./nivaer";
-import { ALLE_MODULER, modulErAktivert } from "./moduler";
+import { ALLE_MODULER, GAMLE_ALIASER, modulErAktivert, type ModulNokkel } from "./moduler";
+import { leads } from "../db/schema/leads";
 import { onboardingProsent, onboardingPunkter } from "./kundedetalj";
 
 export const supportStart = z.object({
@@ -521,55 +522,132 @@ export async function endrePlattformbruker(
 // Statistikk på tvers av kunder
 // ---------------------------------------------------------------------------------------
 
+/** Kontraktenes modulnøkler kan være gamle aliaser — normaliser til dagens nøkkel. */
+const ALIAS_TIL_MODUL: ReadonlyMap<string, ModulNokkel> = new Map(
+  (Object.entries(GAMLE_ALIASER) as Array<[ModulNokkel, readonly string[]]>).flatMap(
+    ([ny, gamle]) => (gamle ?? []).map((g) => [g, ny] as [string, ModulNokkel]),
+  ),
+);
+
+/** Modulene statistikken måler — dashboard og brukere er ikke produkter kunden velger. */
+const MALTE_MODULER = ALLE_MODULER.filter((m) => m !== "dashboard" && m !== "brukere");
+
 /**
- * Nøkkeltall per kunde. Port av v1s `/superadmin/stats`.
+ * «Hendelser»: registreringer i modulene mockupen kaller bruk — avvik, utkvitteringer,
+ * driftslogg, kontrakter og dokumentarkiv. Én UNION i stedet for fem rundturer; `fra`
+ * bindes som parameter i hvert ledd.
+ */
+const hendelseKilder = (fra: Date) => sql`
+  SELECT org_id, reported_at AS tid FROM deviations WHERE reported_at > ${fra}
+  UNION ALL SELECT t.org_id, c.completed_at FROM completions c JOIN tasks t ON t.id = c.task_id WHERE c.completed_at > ${fra}
+  UNION ALL SELECT org_id, created_at FROM log_entries WHERE created_at > ${fra}
+  UNION ALL SELECT org_id, created_at FROM contracts WHERE created_at > ${fra}
+  UNION ALL SELECT org_id, uploaded_at FROM documents WHERE uploaded_at > ${fra}`;
+
+/**
+ * Forretnings- og bruksstatistikken — etter statistikk-v3-mockupen.
  *
- * v1 kjørte fire tellespørringer PER kunde inne i en løkke — med 30 kunder er det 120
- * rundturer for én side. Her er det én gruppert spørring per tall, uansett hvor mange
- * kunder som finnes.
+ * Dette er fortsatt ikke innsyn i kundedata: et antall hendelser sier at de bruker
+ * systemet, ikke hva de skrev. Demo-kunder (`organizations.demo`) er MED i `kunder`-lista
+ * (flagget følger raden, panelet filtrerer), men holdes UTENFOR ukesaktiviteten og
+ * modultallene — de regnes på tvers i databasen og kan ikke filtreres i etterkant.
  *
- * Dette er fortsatt ikke innsyn i kundedata: et antall avvik sier at de bruker systemet,
- * ikke hva avvikene handler om.
+ * v1-porten av denne kjørte fire tellespørringer per kunde i en løkke; her er hvert tall
+ * én gruppert spørring uansett antall kunder.
  */
 export async function hentStatistikk(db: Db) {
-  const [orger, oppgaver, apneAvvik, utkvitteringer, avtaler] = await Promise.all([
-    db
-      .select({
-        id: organizations.id,
-        navn: organizations.name,
-        aktiv: organizations.active,
-        antallAndeler: organizations.unitCount,
-      })
-      .from(organizations)
-      .orderBy(organizations.name),
-    db
-      .select({ orgId: tasks.orgId, n: count() })
-      .from(tasks)
-      .where(eq(tasks.active, true))
-      .groupBy(tasks.orgId),
-    db
-      .select({ orgId: deviations.orgId, n: count() })
-      .from(deviations)
-      .where(ne(deviations.status, "lukket"))
-      .groupBy(deviations.orgId),
-    // Utkvitteringer henger på oppgaven, ikke på org-en — derfor en join.
-    db
-      .select({ orgId: tasks.orgId, n: count() })
-      .from(completions)
-      .innerJoin(tasks, eq(tasks.id, completions.taskId))
-      .groupBy(tasks.orgId),
-    db.select().from(platformContracts),
+  const dag = 86_400_000;
+  const d30 = new Date(Date.now() - 30 * dag);
+  const d365 = new Date(Date.now() - 365 * dag);
+
+  // Ekte brukere = uten plattformadmin og kontoansvarlig: supportinnganger er ikke styret.
+  const ekteMedlem = and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig"));
+
+  const [orger, brukere, aktiveBrukere, aldriInnlogget, sistInnlogget, avtaler, leadRader] =
+    await Promise.all([
+      db
+        .select({
+          id: organizations.id,
+          navn: organizations.name,
+          aktiv: organizations.active,
+          demo: organizations.demo,
+          andeler: organizations.unitCount,
+          opprettet: organizations.createdAt,
+          enabledModules: organizations.enabledModules,
+        })
+        .from(organizations)
+        .orderBy(organizations.name),
+      db
+        .select({ orgId: userOrgMemberships.orgId, n: count() })
+        .from(userOrgMemberships)
+        .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+        .where(ekteMedlem)
+        .groupBy(userOrgMemberships.orgId),
+      db
+        .select({ orgId: userOrgMemberships.orgId, n: count() })
+        .from(userOrgMemberships)
+        .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+        .where(and(ekteMedlem, sql`${users.lastLoginAt} > ${d30}`))
+        .groupBy(userOrgMemberships.orgId),
+      db
+        .select({ orgId: userOrgMemberships.orgId, n: count() })
+        .from(userOrgMemberships)
+        .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+        .where(and(ekteMedlem, isNull(users.lastLoginAt)))
+        .groupBy(userOrgMemberships.orgId),
+      db
+        .select({ orgId: userOrgMemberships.orgId, siste: max(users.lastLoginAt) })
+        .from(userOrgMemberships)
+        .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+        .where(ekteMedlem)
+        .groupBy(userOrgMemberships.orgId),
+      db.select().from(platformContracts),
+      db
+        .select({ status: leads.status })
+        .from(leads)
+        .where(sql`${leads.createdAt} > ${d365}`),
+    ]);
+
+  // Hendelser: per uke siste 12 måneder (grafen) og eksakt siste 30 dager (helsetabellen).
+  const [perUke, per30, modulbruk] = await Promise.all([
+    db.execute(sql`
+      SELECT date_trunc('week', tid)::date::text AS uke, org_id AS "orgId", count(*)::int AS n
+      FROM (${hendelseKilder(d365)}) k GROUP BY 1, 2`),
+    db.execute(sql`
+      SELECT org_id AS "orgId", count(*)::int AS n
+      FROM (${hendelseKilder(d30)}) k GROUP BY 1`),
+    // Én rad per (modul, org) med aktivitet siste 30 dager — «brukt» i modulkortet.
+    db.execute(sql`
+      SELECT DISTINCT modul, org_id AS "orgId" FROM (
+        SELECT 'tasks' AS modul, t.org_id FROM completions c JOIN tasks t ON t.id = c.task_id WHERE c.completed_at > ${d30}
+        UNION SELECT 'avvik', org_id FROM deviations WHERE reported_at > ${d30}
+        UNION SELECT 'kontrakter', org_id FROM contracts WHERE created_at > ${d30}
+        UNION SELECT 'internkontroll', org_id FROM hazards WHERE created_at > ${d30}
+        UNION SELECT 'driftslogg', org_id FROM log_entries WHERE created_at > ${d30}
+        UNION SELECT 'parkering', org_id FROM parking_leases WHERE created_at > ${d30}
+        UNION SELECT 'arshjul', org_id FROM annual_events WHERE created_at > ${d30}
+        UNION SELECT 'dokumentarkiv', org_id FROM documents WHERE uploaded_at > ${d30}
+        UNION SELECT 'vedlikehold', org_id FROM building_elements WHERE created_at > ${d30}
+        UNION SELECT 'ai_radgiver', org_id FROM ai_conversations WHERE created_at > ${d30}
+        UNION SELECT 'rutiner', org_id FROM routines WHERE created_at > ${d30}
+        UNION SELECT 'leverandorer', org_id FROM vendors WHERE created_at > ${d30}
+      ) m`),
   ]);
 
   const kart = (rader: Array<{ orgId: string; n: number }>) =>
     new Map(rader.map((r) => [r.orgId, r.n]));
-  const o = kart(oppgaver);
-  const a = kart(apneAvvik);
-  const u = kart(utkvitteringer);
+  const kBrukere = kart(brukere);
+  const kAktive = kart(aktiveBrukere);
+  const kAldri = kart(aldriInnlogget);
+  const kSist = new Map(sistInnlogget.map((r) => [r.orgId, r.siste]));
+  const kHendelser30 = kart(per30.rows as Array<{ orgId: string; n: number }>);
 
+  // Årssum og avtalestart per org — samme regel som kundelista.
   const arssummer = new Map<string, number>();
+  const avtaleStart = new Map<string, string | null>();
+  const modulInntektRaa: Array<{ orgId: string; key: string; pris: number }> = [];
   for (const k of avtaler) {
-    let moduler: Array<{ price?: number }> = [];
+    let moduler: Array<{ key?: string; price?: number }> = [];
     try {
       const t = JSON.parse(k.modules ?? "[]");
       if (Array.isArray(t)) moduler = t;
@@ -578,14 +656,70 @@ export async function hentStatistikk(db: Db) {
     }
     const brutto =
       (k.baseFee ?? k.annualFee ?? 0) + moduler.reduce((n, m) => n + (m.price ?? 0), 0);
-    arssummer.set(k.orgId, Math.round(brutto * (1 - (k.discountPercent ?? 0) / 100)));
+    const rabatt = 1 - (k.discountPercent ?? 0) / 100;
+    arssummer.set(k.orgId, Math.round(brutto * rabatt));
+    avtaleStart.set(k.orgId, k.startDate ?? (k.createdAt ? k.createdAt.toISOString().slice(0, 10) : null));
+    for (const m of moduler) {
+      if (m.key) {
+        // Modulprisen vises uten kontraktens rabatt — det er modulens pris som er poenget.
+        modulInntektRaa.push({ orgId: k.orgId, key: m.key, pris: m.price ?? 0 });
+      }
+    }
   }
 
-  return orger.map((org) => ({
-    ...org,
-    antallOppgaver: o.get(org.id) ?? 0,
-    antallApneAvvik: a.get(org.id) ?? 0,
-    antallUtkvitteringer: u.get(org.id) ?? 0,
-    arssum: arssummer.get(org.id) ?? null,
+  // «Ekte» kunder: aktive og ikke demo. Aggregatene under regnes kun over disse.
+  const ekteIds = new Set(orger.filter((o) => o.aktiv && !o.demo).map((o) => o.id));
+
+  const ukeSum = new Map<string, number>();
+  for (const r of perUke.rows as Array<{ uke: string; orgId: string; n: number }>) {
+    if (!ekteIds.has(r.orgId)) continue;
+    ukeSum.set(r.uke, (ukeSum.get(r.uke) ?? 0) + r.n);
+  }
+  const ukesaktivitet = [...ukeSum.entries()]
+    .map(([uke, n]) => ({ uke, n }))
+    .sort((a, b) => a.uke.localeCompare(b.uke));
+
+  const bruktPerModul = new Map<string, Set<string>>();
+  for (const r of modulbruk.rows as Array<{ modul: string; orgId: string }>) {
+    if (!ekteIds.has(r.orgId)) continue;
+    if (!bruktPerModul.has(r.modul)) bruktPerModul.set(r.modul, new Set());
+    bruktPerModul.get(r.modul)!.add(r.orgId);
+  }
+  const moduler = MALTE_MODULER.map((m) => {
+    const aktivert = orger.filter(
+      (o) => ekteIds.has(o.id) && modulErAktivert(o.enabledModules, m),
+    ).length;
+    const inntekt = modulInntektRaa
+      .filter((r) => ekteIds.has(r.orgId) && (ALIAS_TIL_MODUL.get(r.key) ?? r.key) === m)
+      .reduce((n, r) => n + r.pris, 0);
+    return { nokkel: m, aktivert, brukt: bruktPerModul.get(m)?.size ?? 0, inntekt };
+  });
+
+  // Trakten er en kohort på DAGENS status: «kontaktet» = kommet minst dit. Avslåtte teller
+  // bare i totalen — vi vet ikke hvilket ledd de falt fra i.
+  const minst = (statuser: string[]) => leadRader.filter((l) => statuser.includes(l.status)).length;
+  const trakt = {
+    leads: leadRader.length,
+    kontaktet: minst(["kontaktet", "kvalifisert", "konvertert"]),
+    kvalifisert: minst(["kvalifisert", "konvertert"]),
+    kunder: minst(["konvertert"]),
+  };
+
+  const kunder = orger.map((o) => ({
+    id: o.id,
+    navn: o.navn,
+    aktiv: o.aktiv,
+    demo: o.demo,
+    andeler: o.andeler,
+    opprettet: o.opprettet,
+    avtaleStart: avtaleStart.get(o.id) ?? null,
+    arssum: arssummer.get(o.id) ?? null,
+    brukere: kBrukere.get(o.id) ?? 0,
+    aktive30: kAktive.get(o.id) ?? 0,
+    aldriInnlogget: kAldri.get(o.id) ?? 0,
+    sistInnlogget: kSist.get(o.id) ?? null,
+    hendelser30: kHendelser30.get(o.id) ?? 0,
   }));
+
+  return { kunder, ukesaktivitet, moduler, trakt };
 }
