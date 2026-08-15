@@ -3469,10 +3469,9 @@ textarea.qr-input { resize: vertical; }
 .prk-kpi-strek { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
 
 /* ── RUTINEBYGGEREN ──
-   Port av v1s rutinebygger (.rb-): steg som kollapsbare, sorterbare bokser; kategori-chips
-   i stedet for nedtrekk; callout-bygger inne i steget; brytere og notater i sidepanelet. */
-.rb-tittel-input { font-size: var(--fs-lg); font-weight: 700; padding: 12px 13px; }
-
+   Etter mockups/rutinebygger-mockup.html: alltid åpne steg (overskrift i stegets topplinje,
+   forklaring rett under), faseindikator, og live forhåndsvisning av beboervisningen og
+   oppslaget i høyrekolonnen. Kategori-chips og brytere er beholdt fra første utgave. */
 .rb-chip-rad { display: flex; gap: 7px; flex-wrap: wrap; }
 .rb-chip {
   padding: 7px 13px; border-radius: 8px; font-size: var(--fs-label); font-weight: 700;
@@ -3481,69 +3480,74 @@ textarea.qr-input { resize: vertical; }
 }
 .rb-chip.valgt { border-color: currentColor; }
 
-.rb-steg {
-  border: 1px solid var(--border); border-radius: 11px; margin-bottom: 9px;
-  background: var(--surface2); overflow: hidden;
+.rb-faser { display: flex; gap: 4px; flex-wrap: wrap; }
+.rb-fase {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid transparent; color: var(--muted); font-size: var(--fs-label); font-weight: 500;
 }
-.rb-steg.redigerer { border-color: var(--accent); }
-.rb-steg.drar { opacity: 0.45; }
-/* Innsettingsmarkør under dra-operasjonen — viser hvor steget havner om du slipper nå. */
-.rb-steg.over { border-top: 2px solid var(--accent); }
-.rb-steg-linje { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
-.rb-dra {
-  color: var(--muted); font-size: var(--fs-md); cursor: grab; letter-spacing: -2px;
-  flex-shrink: 0; background: none; border: none; padding: 0;
+.rb-fase.naa { background: rgba(var(--accent-rgb), 0.14); border-color: rgba(var(--accent-rgb), 0.4); color: var(--text); }
+.rb-fase.ferdig { color: var(--accent2, var(--ok)); }
+.rb-fase .n {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10.5px; background: var(--surface2);
 }
+.rb-fase.naa .n { background: var(--accent); color: #fff; }
+.rb-fase.ferdig .n { background: rgba(15, 186, 129, 0.18); color: var(--ok); }
+
+/* Steg: alltid åpne — overskriften ER inputfeltet i topplinjen. */
+.rb-steg { border: 1px solid var(--border); border-radius: 9px; background: var(--surface2); margin-bottom: 8px; overflow: hidden; }
+.rb-steg.drar { opacity: 0.4; }
+.rb-steg.over { border-color: var(--accent); }
+.rb-steg-linje { display: flex; align-items: center; gap: 11px; padding: 11px 13px; }
+.rb-dra { color: var(--muted); cursor: grab; font-size: var(--fs-md); line-height: 1; letter-spacing: -2px; background: none; border: none; padding: 0; }
 .rb-dra:active { cursor: grabbing; }
 .rb-steg-nr {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  background: rgba(var(--accent-rgb), 0.12); border: 1px solid var(--accent); color: var(--accent);
-  font-size: var(--fs-label); font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
+  width: 23px; height: 23px; border-radius: 50%; flex: 0 0 23px;
+  display: grid; place-items: center; font-size: var(--fs-label); font-weight: 600;
+  background: rgba(var(--accent-rgb), 0.18); color: var(--accent);
 }
-.rb-steg-nr.kritisk { background: rgba(240, 64, 64, 0.12); border-color: var(--danger); color: var(--danger); }
-.rb-steg-tittel { flex: 1; font-size: var(--fs-sm); font-weight: 600; min-width: 0; }
-.rb-steg-tittel.tom { color: var(--muted); font-weight: 400; font-style: italic; }
-.rb-merke { font-size: var(--fs-label); font-weight: 700; padding: 2px 8px; border-radius: 7px; white-space: nowrap; }
-.rb-merke.krit { background: rgba(240, 64, 64, 0.12); color: var(--danger); }
-.rb-merke.call { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
-.rb-verktoy { display: flex; gap: 5px; flex-shrink: 0; }
-.rb-miniknapp {
-  background: transparent; border: 1px solid var(--border); color: var(--muted);
-  width: 26px; height: 26px; border-radius: 7px; font-size: var(--fs-label); cursor: pointer;
+.rb-steg.kritisk .rb-steg-nr { background: rgba(240, 64, 64, 0.18); color: var(--danger); }
+.rb-steg-inn {
+  flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text);
+  font-weight: 600; padding: 2px 0; font-family: var(--font-sans); font-size: var(--fs-sm);
 }
-.rb-miniknapp:hover { border-color: var(--accent); color: var(--accent); }
-.rb-miniknapp.fare:hover { border-color: var(--danger); color: var(--danger); }
-.rb-steg-editor { padding: 4px 14px 15px 52px; border-top: 1px solid var(--border); }
-
-.rb-callout-valg { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
-.rb-callout-chip {
-  display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
-  font-size: var(--fs-label); font-weight: 600; border: 1px dashed var(--border);
-  background: transparent; color: var(--muted); cursor: pointer; font-family: var(--font-sans);
+.rb-steg-inn:focus { outline: none; }
+.rb-steg-inn::placeholder { color: var(--muted); font-weight: 400; }
+.rb-verktoy { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.rb-verktoyknapp {
+  background: transparent; border: 0; color: var(--muted); padding: 5px 7px;
+  border-radius: 6px; font-size: var(--fs-label); cursor: pointer; font-family: var(--font-sans);
 }
-.rb-callout-chip:hover { border-color: var(--accent); color: var(--accent); }
-.rb-callout-chip.paa { border-style: solid; border-color: var(--danger); color: var(--danger); }
-.rb-callout {
-  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 12px;
+.rb-verktoyknapp:hover { color: var(--text); background: var(--surface); }
+.rb-verktoyknapp.paa { color: var(--danger); }
+.rb-steg-kropp { padding: 0 13px 13px 47px; }
+.rb-steg-kropp textarea {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px;
+  padding: 10px 12px; width: 100%; min-height: 62px; resize: vertical; line-height: 1.55;
+  font-family: var(--font-sans); font-size: var(--fs-sm);
+}
+.rb-meta { display: flex; gap: 8px; margin-top: 8px; align-items: center; color: var(--muted); font-size: var(--fs-label); }
+.rb-advarsel-inn {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 12px;
   border-radius: 9px; font-size: var(--fs-label);
   background: rgba(240, 64, 64, 0.1); border: 1px solid rgba(240, 64, 64, 0.3); color: var(--danger);
 }
-.rb-callout.kontakt {
-  background: rgba(var(--accent-rgb), 0.1); border-color: rgba(var(--accent-rgb), 0.3); color: var(--accent);
+.rb-advarsel-inn input {
+  background: transparent; border: none; padding: 0; color: inherit; flex: 1; min-width: 0;
+  font-size: var(--fs-label); font-family: var(--font-sans);
 }
-.rb-callout input {
-  background: transparent; border: none; padding: 0; color: inherit;
-  font-size: var(--fs-label); font-family: var(--font-sans); flex: 1; min-width: 0;
-}
-.rb-callout input:focus { outline: none; }
-.rb-callout .fjern { margin-left: auto; cursor: pointer; background: none; border: none; color: inherit; }
+.rb-advarsel-inn input:focus { outline: none; }
 .rb-legg-til {
-  width: 100%; padding: 12px; border-radius: 10px; border: 1px dashed var(--border);
+  width: 100%; padding: 11px; border-radius: 9px; border: 1px dashed var(--border);
   background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600;
   cursor: pointer; font-family: var(--font-sans);
 }
 .rb-legg-til:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Knytt til: rad med forklaring til venstre, nedtrekk til høyre. */
+.rb-knytt { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.rb-knytt:last-child { border-bottom: none; }
+.rb-knytt .velger { margin-left: auto; width: 210px; flex-shrink: 0; }
 
 .rb-bryter-rad { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .rb-bryter-rad:last-child { border-bottom: none; }
@@ -3563,17 +3567,81 @@ textarea.qr-input { resize: vertical; }
 
 .rb-note {
   background: rgba(245, 166, 35, 0.1); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 9px;
-  padding: 11px 13px; font-size: var(--fs-label); color: var(--warn); line-height: 1.55;
+  padding: 11px 13px; font-size: var(--fs-label); color: var(--warn); line-height: 1.55; margin-top: 10px;
 }
-.rb-lenke-rad {
-  display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; font-size: var(--fs-label);
+.rb-note.blaa {
+  background: rgba(var(--accent-rgb), 0.07); border-color: rgba(var(--accent-rgb), 0.25); color: var(--muted);
 }
-.rb-lenke-rad .fjern { margin-left: auto; cursor: pointer; background: none; border: none; color: var(--muted); }
+.rb-note.blaa b { color: var(--accent); }
 
-/* ── Utskrift av appsider (vernerunderapporten er første bruker) ─────────────────────────
-   Papiret får innholdet: meny, faner og knapper hører til skjermen. Kortene beholder
-   kantene sine så seksjonene er lesbare i svart-hvitt. */
+/* Forhåndsvisningen. Telefonrammen er pynt; innholdet er det samme som QR-siden viser. */
+.rb-pv-faner { display: flex; gap: 6px; margin-bottom: 12px; }
+.rb-pv-fane {
+  flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 7px; border-radius: 8px; font-size: var(--fs-label); font-weight: 500;
+  cursor: pointer; font-family: var(--font-sans);
+}
+.rb-pv-fane.valgt { background: rgba(var(--accent-rgb), 0.16); border-color: var(--accent); color: var(--text); }
+.rb-telefon {
+  border: 8px solid var(--surface2); border-radius: 26px; background: var(--bg);
+  overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+.rb-pv { max-height: 560px; overflow: auto; }
+.rb-pv-hode { padding: 16px 16px 14px; }
+.rb-pv-kat { font-size: var(--fs-label); letter-spacing: 0.12em; font-weight: 600; }
+.rb-pv-hode h4 { margin: 5px 0 4px; font-size: var(--fs-lg); font-weight: 600; }
+.rb-pv-naar { color: var(--muted); font-size: var(--fs-label); }
+.rb-nod {
+  display: block; margin: 12px 16px 0; background: var(--danger); color: #fff; text-align: center;
+  padding: 12px; border-radius: 9px; font-weight: 600; text-decoration: none;
+}
+.rb-pv-steg-liste { padding: 14px 16px 4px; }
+.rb-pv-steg { display: flex; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.rb-pv-steg:last-child { border-bottom: none; }
+.rb-pv-steg .n {
+  width: 22px; height: 22px; border-radius: 50%; flex: 0 0 22px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 600;
+  background: rgba(var(--accent-rgb), 0.2); color: var(--accent);
+}
+.rb-pv-steg.kritisk .n { background: var(--danger); color: #fff; }
+.rb-pv-steg .t { font-weight: 600; font-size: var(--fs-sm); }
+.rb-pv-steg .d { color: var(--muted); font-size: var(--fs-label); margin-top: 2px; line-height: 1.5; }
+.rb-pv-advarsel {
+  margin-top: 6px; padding: 7px 10px; border-radius: 7px; font-size: var(--fs-label);
+  background: rgba(240, 64, 64, 0.1); border: 1px solid rgba(240, 64, 64, 0.3); color: var(--danger);
+}
+.rb-pv-kontakt { margin: 8px 16px 0; padding: 11px 13px; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; }
+.rb-pv-kontakt .l { font-size: var(--fs-label); letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.rb-pv-kontakt .r { display: flex; justify-content: space-between; padding: 3px 0; font-size: var(--fs-label); }
+.rb-pv-fot { padding: 12px 16px 18px; color: var(--muted); font-size: var(--fs-label); line-height: 1.6; }
+
+/* Oppslaget: alltid hvitt — det forhåndsviser et ARK, ikke et skjermbilde. */
+.rb-plakat { background: #fff; color: #111; border-radius: 8px; padding: 22px 20px; font-size: var(--fs-sm); }
+.rb-plakat h4 { margin: 0 0 2px; font-size: 22px; color: #111; }
+.rb-plakat .k { font-size: var(--fs-label); letter-spacing: 0.12em; font-weight: 700; }
+.rb-plakat .naar { color: #555; margin-top: 2px; }
+.rb-plakat ol { margin: 12px 0 0; padding-left: 19px; }
+.rb-plakat ol li { margin-bottom: 7px; line-height: 1.5; }
+.rb-plakat ol li b { color: #111; }
+.rb-plakat .em { background: #c02b3f; color: #fff; text-align: center; padding: 9px; border-radius: 6px; font-weight: 700; margin: 12px 0 0; }
+.rb-plakat .qrwrap { text-align: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid #e3e3e3; color: #555; font-size: var(--fs-label); }
+
+/* Publiseringssjekklista og malvalget i modalene. */
+.rb-sjekk { display: flex; gap: 11px; align-items: flex-start; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.rb-sjekk:last-of-type { border-bottom: none; }
+.rb-sjekk .m {
+  width: 19px; height: 19px; border-radius: 50%; flex: 0 0 19px;
+  display: grid; place-items: center; font-size: 11px; margin-top: 1px;
+}
+.rb-sjekk .m.ok { background: rgba(15, 186, 129, 0.15); color: var(--ok); }
+.rb-sjekk .m.mangler { background: rgba(245, 166, 35, 0.15); color: var(--warn); }
+.rb-mal {
+  display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
+  padding: 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px;
+  cursor: pointer; background: var(--surface2); color: var(--text); font-family: var(--font-sans);
+}
+.rb-mal:hover { border-color: var(--accent); }
+
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
   .vr-bunn, .vr-leggtil, .vr-valg, .print-skjul,

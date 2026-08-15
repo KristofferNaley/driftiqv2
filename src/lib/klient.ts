@@ -424,6 +424,8 @@ export const rutiner = {
     api.hent<Rutine & { steg: Array<{ id: string; title: string; description: string | null; isCritical: boolean; calloutType: string | null; calloutText: string | null; kontakt: { name: string; phone: string | null } | null }>; versjoner: Array<{ id: string; versionNumber: number; changedBy: string; changedAt: string }> }>(org(o, `/routines/${id}`)),
   ny: (o: string, d: unknown) => api.send<Rutine>(org(o, "/routines"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Rutine>(org(o, `/routines/${id}`), d),
+  /** Fryser dagens kladd som versjon i historikken og setter status publisert. */
+  publiser: (o: string, id: string) => api.send<Rutine>(org(o, `/routines/${id}/publiser`), {}),
   slett: (o: string, id: string) => api.slett(org(o, `/routines/${id}`)),
   markerGjennomgatt: (o: string, id: string) => api.send(org(o, `/routines/${id}/review`), {}),
 };

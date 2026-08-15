@@ -147,17 +147,58 @@ export async function opprettRutine(db: Db, orgId: string, data: z.infer<typeof 
 }
 
 /**
- * Tar vare på rutinens tilstand FØR endringen som er på vei inn, og teller opp versjonen.
+ * Endrer rutinen — uten å røre versjonshistorikken.
  *
- * Historikk skal ikke kunne endres i ettertid. Ved tilsyn må styret kunne vise hvilken
- * rutine som gjaldt på et gitt tidspunkt, og det går bare hvis snapshotet tas før og ikke
- * etter.
+ * Kladding er fri: byggeren autolagrer mens man skriver, og en versjon per tastepause
+ * hadde druknet historikken i støy. Det som fryses ved tilsynsbehov er det som GJALDT —
+ * altså det som var publisert — og det skjer i `publiserRutine`. Samme modell som v1.
  */
-async function snapshotOgBump(db: Db, rutine: Routine, endretAv: string) {
+export async function endreRutine(
+  db: Db,
+  orgId: string,
+  routineId: string,
+  data: z.infer<typeof rutineEndring>,
+) {
+  const rader = await db
+    .select({ id: routines.id })
+    .from(routines)
+    .where(and(eq(routines.id, routineId), eq(routines.orgId, orgId)))
+    .limit(1);
+  if (!rader[0]) throw ikkeFunnet("Rutine");
+
+  const { steps, ...felter } = data;
+  if (Object.keys(felter).length > 0) {
+    await db
+      .update(routines)
+      .set(felter)
+      .where(and(eq(routines.id, routineId), eq(routines.orgId, orgId)));
+  }
+  if (steps) await skrivSteg(db, routineId, steps);
+
+  return hentRutine(db, orgId, routineId);
+}
+
+/**
+ * Publiserer rutinen og FRYSER dagens kladd som versjon N i historikken. Videre
+ * redigering kladdes mot versjon N+1.
+ *
+ * Historikk skal ikke kunne endres i ettertid: ved tilsyn må styret kunne vise hvilken
+ * rutine som gjaldt på et gitt tidspunkt — og det som gjaldt er det som var publisert,
+ * ikke hvert mellomlagrede utkast.
+ */
+export async function publiserRutine(db: Db, orgId: string, routineId: string, av: string) {
+  const rader = await db
+    .select()
+    .from(routines)
+    .where(and(eq(routines.id, routineId), eq(routines.orgId, orgId)))
+    .limit(1);
+  const rutine = rader[0];
+  if (!rutine) throw ikkeFunnet("Rutine");
+
   const steg = await db
     .select()
     .from(routineSteps)
-    .where(eq(routineSteps.routineId, rutine.id))
+    .where(eq(routineSteps.routineId, routineId))
     .orderBy(asc(routineSteps.order));
 
   await db.insert(routineVersions).values({
@@ -174,36 +215,16 @@ async function snapshotOgBump(db: Db, rutine: Routine, endretAv: string) {
       isCritical: rutine.isCritical,
       reviewIntervalMonths: rutine.reviewIntervalMonths,
       internkontrollNote: rutine.internkontrollNote,
-      status: rutine.status,
+      status: "publisert",
       steps: steg,
     }),
-    changedBy: endretAv,
+    changedBy: av,
   });
-}
 
-export async function endreRutine(
-  db: Db,
-  orgId: string,
-  routineId: string,
-  endretAv: string,
-  data: z.infer<typeof rutineEndring>,
-) {
-  const rader = await db
-    .select()
-    .from(routines)
-    .where(and(eq(routines.id, routineId), eq(routines.orgId, orgId)))
-    .limit(1);
-  const rutine = rader[0];
-  if (!rutine) throw ikkeFunnet("Rutine");
-
-  await snapshotOgBump(db, rutine, endretAv);
-
-  const { steps, ...felter } = data;
   await db
     .update(routines)
-    .set({ ...felter, version: rutine.version + 1 })
+    .set({ status: "publisert", version: rutine.version + 1 })
     .where(and(eq(routines.id, routineId), eq(routines.orgId, orgId)));
-  if (steps) await skrivSteg(db, routineId, steps);
 
   return hentRutine(db, orgId, routineId);
 }

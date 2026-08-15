@@ -18,6 +18,7 @@ import {
   hentViaQr,
   markerGjennomgatt,
   opprettRutine,
+  publiserRutine,
 } from "../src/lib/rutiner";
 import {
   endreMal,
@@ -154,23 +155,28 @@ describe("effektiv status", () => {
 });
 
 describe("versjonshistorikk", () => {
-  it("tar snapshot av tilstanden FØR endringen", async () => {
-    // Ved tilsyn må styret kunne vise hvilken rutine som gjaldt på et gitt tidspunkt. Tas
-    // snapshotet etterpå, dokumenterer det den nye teksten og ikke den gamle.
+  it("kladding lager ingen versjon — publisering fryser dagens kladd", async () => {
+    // Byggeren autolagrer mens man skriver; en versjon per tastepause hadde druknet
+    // historikken. Det som fryses ved tilsynsbehov er det som GJALDT: det publiserte.
     const { orgId } = await oppsett();
     const r = await i(orgId, (db) =>
       opprettRutine(db, orgId, { ...rutine, title: "Opprinnelig tittel" }),
     );
 
-    await i(orgId, (db) => endreRutine(db, orgId, r.id, "Kari", { title: "Ny tittel" }));
+    await i(orgId, (db) => endreRutine(db, orgId, r.id, { title: "Ny tittel" }));
+    let etter = await i(orgId, (db) => hentRutine(db, orgId, r.id));
+    expect(etter.version, "kladding skal ikke telle opp versjonen").toBe(1);
+    expect(etter.versjoner).toHaveLength(0);
 
-    const etter = await i(orgId, (db) => hentRutine(db, orgId, r.id));
-    expect(etter.title).toBe("Ny tittel");
-    expect(etter.version).toBe(2);
+    await i(orgId, (db) => publiserRutine(db, orgId, r.id, "Kari"));
+    etter = await i(orgId, (db) => hentRutine(db, orgId, r.id));
+    expect(etter.status).toBe("publisert");
+    expect(etter.version, "videre redigering kladdes mot neste versjon").toBe(2);
     expect(etter.versjoner).toHaveLength(1);
 
     const snapshot = JSON.parse(etter.versjoner[0]!.contentSnapshot);
-    expect(snapshot.title, "Snapshotet fanget den NYE teksten").toBe("Opprinnelig tittel");
+    expect(snapshot.title, "snapshotet er kladden som ble publisert").toBe("Ny tittel");
+    expect(etter.versjoner[0]!.versionNumber).toBe(1);
     expect(etter.versjoner[0]!.changedBy).toBe("Kari");
   });
 
@@ -179,11 +185,12 @@ describe("versjonshistorikk", () => {
     const r = await i(orgId, (db) =>
       opprettRutine(db, orgId, { ...rutine, steps: [{ title: "Steng hovedkran", isCritical: true }] }),
     );
-    await i(orgId, (db) => endreRutine(db, orgId, r.id, "Kari", { steps: [{ title: "Noe helt annet", isCritical: false }] }));
+    await i(orgId, (db) => publiserRutine(db, orgId, r.id, "Kari"));
+    await i(orgId, (db) => endreRutine(db, orgId, r.id, { steps: [{ title: "Noe helt annet", isCritical: false }] }));
 
     const etter = await i(orgId, (db) => hentRutine(db, orgId, r.id));
     const snapshot = JSON.parse(etter.versjoner[0]!.contentSnapshot);
-    expect(snapshot.steps[0].title).toBe("Steng hovedkran");
+    expect(snapshot.steps[0].title, "historikken beholder det publiserte steget").toBe("Steng hovedkran");
     expect(etter.steg[0]!.title).toBe("Noe helt annet");
   });
 });

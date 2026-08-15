@@ -69,7 +69,8 @@ export const routineSteps = pgTable("routine_steps", {
 });
 
 /**
- * Snapshot av rutinens forrige tilstand, tatt FØR en innholdsendring skrives.
+ * Snapshot av rutinen slik den ble PUBLISERT — tatt av `publiserRutine`, aldri av vanlig
+ * lagring. Kladding er fri (byggeren autolagrer); det som fryses er det som gjaldt.
  *
  * Viktig for HMS-dokumentasjon: ved tilsyn kan styret vise hvilken rutine som gjaldt på et
  * gitt tidspunkt. Derfor er raden uforanderlig — ingen endre- eller slett-funksjon.
