@@ -123,6 +123,7 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // Plattformens singleton-rad med satser og trappetrinn. Har ingen org_id i det hele tatt
   // — dette er DriftIQs egne priser, ikke noe som tilhører en kunde.
   pricing_config: "plattformens prismodell, singleton uten org_id",
+  pricing_versions: "prismodellens versjonshistorikk, samme begrunnelse",
   // Kjøringslogg for bakgrunnsjobbene — plattformdata uten org_id, kun plattformpanelet leser.
   job_runs: "plattformtabell (kjøringslogg for bakgrunnsjobber), ingen org_id",
 

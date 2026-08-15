@@ -113,6 +113,28 @@ export type PricingConfig = typeof pricingConfig.$inferSelect;
  * docker-prune) logger til filer på verten og har ingen rader her; registeret i
  * `lib/jobber.ts` er stedet som kjenner dem.
  */
+/**
+ * Versjonshistorikken til prismodellen. `pricing_config` er alltid GJELDENDE modell —
+ * dette er kvitteringene: hvert lagre-trykk blir en rad med snapshot av hele modellen,
+ * et autogenerert notat om hva som endret seg, og datoen nye kunder prises etter den.
+ * Eksisterende kunder følger kontraktens snapshot til neste fornyelse uansett.
+ */
+export const pricingVersions = pgTable("pricing_versions", {
+  id: varchar("id").primaryKey(),
+  version: integer("version").notNull(),
+  floorPrice: integer("floor_price").notNull(),
+  /** Samme JSON-former som `pricing_config` — leses med de samme funksjonene. */
+  tiers: text("tiers").notNull(),
+  moduleDefaults: text("module_defaults").notNull(),
+  /** Autogenerert diff mot forrige versjon — «Gulvpris hevet fra 6 000 til 8 000 kr». */
+  note: text("note"),
+  /** Nye kunder prises etter denne fra og med datoen. */
+  validFrom: date("valid_from"),
+  /** Navnet kopieres inn, som ellers i historikk (se lib/aktor.ts). */
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const jobRuns = pgTable("job_runs", {
   id: varchar("id").primaryKey(),
   /** Nøkkelen fra `JOBBER` i lib/jobber.ts. */

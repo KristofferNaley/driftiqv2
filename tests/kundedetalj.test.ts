@@ -347,26 +347,37 @@ describe("prismodell", () => {
 
   it("lagrer og leser tilbake endrede satser", async () => {
     const forrige = await i((db) => hentPrismodell(db));
+    const aktor = { navn: "Kundedetaljtest", brukerId: null };
     try {
       const ny = await i((db) =>
-        settPrismodell(db, {
-          gulvpris: 9500,
-          trinn: [{ fra: 1, til: 100, sats: 200 }],
-          modulpriser: { parkering: 7000 },
-        }),
+        settPrismodell(
+          db,
+          {
+            gulvpris: 9500,
+            trinn: [{ fra: 1, til: 100, sats: 200 }],
+            modulpriser: { parkering: 7000 },
+          },
+          aktor,
+        ),
       );
       expect(ny.gulvpris).toBe(9500);
       expect(ny.trinn).toEqual([{ fra: 1, til: 100, sats: 200 }]);
       expect(ny.modulpriser).toEqual({ parkering: 7000 });
     } finally {
-      // Raden er en singleton og deles med resten av testbasen — sett den tilbake.
+      // Raden er en singleton og deles med resten av testbasen — sett den tilbake, og
+      // fjern versjonsradene lagringene la igjen (hver lagring blir en versjon).
       await i((db) =>
-        settPrismodell(db, {
-          gulvpris: forrige.gulvpris,
-          trinn: forrige.trinn,
-          modulpriser: forrige.modulpriser,
-        }),
+        settPrismodell(
+          db,
+          {
+            gulvpris: forrige.gulvpris,
+            trinn: forrige.trinn,
+            modulpriser: forrige.modulpriser,
+          },
+          aktor,
+        ),
       );
+      await eier.query("DELETE FROM pricing_versions WHERE created_by = $1", [aktor.navn]);
     }
   });
 });
