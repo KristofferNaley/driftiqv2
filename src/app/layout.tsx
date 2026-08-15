@@ -8,6 +8,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "DriftIQ",
   description: "Drift og internkontroll for borettslag og sameier",
+  // iOS gjør tekst som LIGNER adresser og telefonnumre om til trykkbare lenker — og
+  // borettslag heter ting som «Håsteinsgate 9», så kundenavnet i dashbordbanneret ble av
+  // og til en kartlenke i v1. Alt slås av: appen lager sine egne lenker der de skal være.
+  formatDetection: { telephone: false, address: false, email: false, date: false, url: false },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -175,19 +175,16 @@ export default function Dashbord() {
         ) : (
           <>
             {/* Dashbordbanneret fra Innstillinger → Generelt. Bare et bilde, aldri et krav:
-                uten banner starter siden rett på widgetene. */}
+                uten banner starter siden rett på widgetene. Navnet ligger oppå som i v1 —
+                en ren span, aldri en lenke: lag som heter noe adresseaktig
+                («Håsteinsgate 9») ble av og til gjort trykkbare av iOS i v1. Beltet er
+                formatDetection i rot-layouten; bukseselene er pointer-events i CSS-en. */}
             {data.banner && orgId && (
-              <img
-                src={`/api/organizations/${orgId}/banner/file`}
-                alt=""
-                style={{
-                  width: "100%",
-                  maxHeight: "220px",
-                  objectFit: "cover",
-                  borderRadius: "14px",
-                  display: "block",
-                }}
-              />
+              <div className="dash-banner">
+                <img src={`/api/organizations/${orgId}/banner/file`} alt="" />
+                <div className="dash-banner-skygge" aria-hidden />
+                <span className="dash-banner-navn">{aktivOrg?.name}</span>
+              </div>
             )}
             {redigerer && (
               <div className="tips-stripe">
