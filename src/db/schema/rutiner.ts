@@ -40,6 +40,8 @@ export const routines = pgTable("routines", {
   contractId: varchar("contract_id").references(() => contracts.id),
   documentId: varchar("document_id").references(() => documents.id),
   taskId: varchar("task_id").references(() => tasks.id),
+  /** Fri referanse til internkontrollen — «Internkontroll: Vann og avløp». Som i v1. */
+  internkontrollNote: varchar("internkontroll_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

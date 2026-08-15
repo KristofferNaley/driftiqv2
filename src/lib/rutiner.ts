@@ -42,6 +42,7 @@ export const rutineInn = z.object({
   contractId: z.string().nullish(),
   documentId: z.string().nullish(),
   taskId: z.string().nullish(),
+  internkontrollNote: tekst,
   steps: z.array(stegInn).optional(),
 });
 
@@ -172,6 +173,7 @@ async function snapshotOgBump(db: Db, rutine: Routine, endretAv: string) {
       appliesTo: rutine.appliesTo,
       isCritical: rutine.isCritical,
       reviewIntervalMonths: rutine.reviewIntervalMonths,
+      internkontrollNote: rutine.internkontrollNote,
       status: rutine.status,
       steps: steg,
     }),

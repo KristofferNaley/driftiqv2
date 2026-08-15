@@ -399,8 +399,12 @@ export type Arshjulsdata = {
 
 export type Rutine = {
   id: string; title: string; description: string | null; category: string | null;
-  responsible: string | null; isCritical: boolean; status: string; version: number;
-  lastReviewedAt: string | null; effektivStatus: "utkast" | "aktiv" | "trenger_gjennomgang";
+  responsible: string | null; appliesTo: string | null; isCritical: boolean;
+  reviewIntervalMonths: number | null; status: string; version: number;
+  lastReviewedAt: string | null;
+  vendorId: string | null; contractId: string | null; documentId: string | null;
+  taskId: string | null; internkontrollNote: string | null;
+  effektivStatus: "utkast" | "aktiv" | "trenger_gjennomgang";
 };
 
 export const rutiner = {

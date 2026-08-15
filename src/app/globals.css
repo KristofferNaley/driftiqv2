@@ -3437,6 +3437,110 @@ textarea.qr-input { resize: vertical; }
    krympet små nok til å få plass sluttet de å si noe. Vekk, ikke krympet. */
 @media (max-width: 640px) { .lev-kpi { display: none; } }
 
+
+/* ── RUTINEBYGGEREN ──
+   Port av v1s rutinebygger (.rb-): steg som kollapsbare, sorterbare bokser; kategori-chips
+   i stedet for nedtrekk; callout-bygger inne i steget; brytere og notater i sidepanelet. */
+.rb-tittel-input { font-size: var(--fs-lg); font-weight: 700; padding: 12px 13px; }
+
+.rb-chip-rad { display: flex; gap: 7px; flex-wrap: wrap; }
+.rb-chip {
+  padding: 7px 13px; border-radius: 8px; font-size: var(--fs-label); font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--muted); font-family: var(--font-sans);
+}
+.rb-chip.valgt { border-color: currentColor; }
+
+.rb-steg {
+  border: 1px solid var(--border); border-radius: 11px; margin-bottom: 9px;
+  background: var(--surface2); overflow: hidden;
+}
+.rb-steg.redigerer { border-color: var(--accent); }
+.rb-steg.drar { opacity: 0.45; }
+/* Innsettingsmarkør under dra-operasjonen — viser hvor steget havner om du slipper nå. */
+.rb-steg.over { border-top: 2px solid var(--accent); }
+.rb-steg-linje { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+.rb-dra {
+  color: var(--muted); font-size: var(--fs-md); cursor: grab; letter-spacing: -2px;
+  flex-shrink: 0; background: none; border: none; padding: 0;
+}
+.rb-dra:active { cursor: grabbing; }
+.rb-steg-nr {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(var(--accent-rgb), 0.12); border: 1px solid var(--accent); color: var(--accent);
+  font-size: var(--fs-label); font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.rb-steg-nr.kritisk { background: rgba(240, 64, 64, 0.12); border-color: var(--danger); color: var(--danger); }
+.rb-steg-tittel { flex: 1; font-size: var(--fs-sm); font-weight: 600; min-width: 0; }
+.rb-steg-tittel.tom { color: var(--muted); font-weight: 400; font-style: italic; }
+.rb-merke { font-size: var(--fs-label); font-weight: 700; padding: 2px 8px; border-radius: 7px; white-space: nowrap; }
+.rb-merke.krit { background: rgba(240, 64, 64, 0.12); color: var(--danger); }
+.rb-merke.call { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
+.rb-verktoy { display: flex; gap: 5px; flex-shrink: 0; }
+.rb-miniknapp {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  width: 26px; height: 26px; border-radius: 7px; font-size: var(--fs-label); cursor: pointer;
+}
+.rb-miniknapp:hover { border-color: var(--accent); color: var(--accent); }
+.rb-miniknapp.fare:hover { border-color: var(--danger); color: var(--danger); }
+.rb-steg-editor { padding: 4px 14px 15px 52px; border-top: 1px solid var(--border); }
+
+.rb-callout-valg { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+.rb-callout-chip {
+  display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
+  font-size: var(--fs-label); font-weight: 600; border: 1px dashed var(--border);
+  background: transparent; color: var(--muted); cursor: pointer; font-family: var(--font-sans);
+}
+.rb-callout-chip:hover { border-color: var(--accent); color: var(--accent); }
+.rb-callout-chip.paa { border-style: solid; border-color: var(--danger); color: var(--danger); }
+.rb-callout {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 12px;
+  border-radius: 9px; font-size: var(--fs-label);
+  background: rgba(240, 64, 64, 0.1); border: 1px solid rgba(240, 64, 64, 0.3); color: var(--danger);
+}
+.rb-callout.kontakt {
+  background: rgba(var(--accent-rgb), 0.1); border-color: rgba(var(--accent-rgb), 0.3); color: var(--accent);
+}
+.rb-callout input {
+  background: transparent; border: none; padding: 0; color: inherit;
+  font-size: var(--fs-label); font-family: var(--font-sans); flex: 1; min-width: 0;
+}
+.rb-callout input:focus { outline: none; }
+.rb-callout .fjern { margin-left: auto; cursor: pointer; background: none; border: none; color: inherit; }
+.rb-legg-til {
+  width: 100%; padding: 12px; border-radius: 10px; border: 1px dashed var(--border);
+  background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600;
+  cursor: pointer; font-family: var(--font-sans);
+}
+.rb-legg-til:hover { border-color: var(--accent); color: var(--accent); }
+
+.rb-bryter-rad { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.rb-bryter-rad:last-child { border-bottom: none; }
+.rb-bryter {
+  width: 34px; height: 20px; border-radius: 11px; background: var(--surface2);
+  border: 1px solid var(--border); position: relative; flex-shrink: 0; margin-top: 2px;
+  cursor: pointer; padding: 0;
+}
+.rb-bryter.paa { background: var(--danger); border-color: var(--danger); }
+.rb-bryter::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: left 0.15s;
+}
+.rb-bryter.paa::after { left: 16px; }
+.rb-bryter-tittel { font-size: var(--fs-sm); font-weight: 600; }
+.rb-bryter-sub { font-size: var(--fs-label); color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+.rb-note {
+  background: rgba(245, 166, 35, 0.1); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 9px;
+  padding: 11px 13px; font-size: var(--fs-label); color: var(--warn); line-height: 1.55;
+}
+.rb-lenke-rad {
+  display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; font-size: var(--fs-label);
+}
+.rb-lenke-rad .fjern { margin-left: auto; cursor: pointer; background: none; border: none; color: var(--muted); }
+
 /* ── Utskrift av appsider (vernerunderapporten er første bruker) ─────────────────────────
    Papiret får innholdet: meny, faner og knapper hører til skjermen. Kortene beholder
    kantene sine så seksjonene er lesbare i svart-hvitt. */

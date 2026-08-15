@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Feil, Hurtigskjema, Kort, Nokkeltall, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { rutiner } from "@/lib/klient";
+import { kategoriInfo } from "@/lib/rutinekonstanter";
 
 const MERKE: Record<string, string> = { utkast: "muted", aktiv: "ok", trenger_gjennomgang: "warn" };
 const ETIKETT: Record<string, string> = {
@@ -25,11 +26,13 @@ export default function Rutiner() {
   const liste = data ?? [];
   const trengerGjennomgang = liste.filter((r) => r.effektivStatus === "trenger_gjennomgang");
 
+  // Ny rutine lander rett i byggeren — en tittel alene er ikke en rutine, og stegene,
+  // kategorien og revisjonsintervallet ligger der.
   async function nyRutine(tittel: string) {
     if (!orgId) return;
     try {
-      await rutiner.ny(orgId, { title: tittel });
-      await last();
+      const ny = await rutiner.ny(orgId, { title: tittel });
+      router.push(`/rutiner/${ny.id}/rediger`);
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Kunne ikke opprette rutinen");
     }
@@ -79,7 +82,7 @@ export default function Rutiner() {
                 }
                 meta={[
                   r.responsible,
-                  r.category,
+                  r.category ? kategoriInfo(r.category).etikett : null,
                   `v${r.version}`,
                   r.lastReviewedAt ? `gjennomgått ${dato(r.lastReviewedAt)}` : "aldri gjennomgått",
                 ]

@@ -2,15 +2,19 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Phone } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Pencil, Phone } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
+import { useOkt } from "@/components/OktProvider";
 import { rutiner } from "@/lib/klient";
+import { kategoriInfo } from "@/lib/rutinekonstanter";
 
 const MERKE: Record<string, string> = { utkast: "muted", aktiv: "ok", trenger_gjennomgang: "warn" };
 
 export default function Rutinedetalj({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { aktivOrg } = useOkt();
+  const kanEndre = aktivOrg?.nivaa === "orgadmin" || aktivOrg?.nivaa === "redigering";
   const { data, feil, laster, last, orgId } = useOrgData((o) => rutiner.hent(o, id), [id]);
 
   if (laster || !data) {
@@ -29,6 +33,11 @@ export default function Rutinedetalj({ params }: { params: Promise<{ id: string 
       tittel={data.title}
       handlinger={
         <>
+        {kanEndre && (
+          <Link className="btn btn-primary" href={`/rutiner/${id}/rediger`}>
+            <Pencil size={14} strokeWidth={2.2} aria-hidden /> Rediger
+          </Link>
+        )}
         <Link className="btn btn-ghost" href={`/rutiner/${id}/ark`}>
           🖨 Rutineark
         </Link>
@@ -60,9 +69,25 @@ export default function Rutinedetalj({ params }: { params: Promise<{ id: string 
             tittel="Status"
             hoyre={<span className={`badge ${MERKE[data.effektivStatus]}`}>{data.effektivStatus}</span>}
           />
+          <Rad
+            tittel="Kategori"
+            hoyre={
+              data.category ? (
+                <span style={{ color: kategoriInfo(data.category).farge, fontWeight: 600 }}>
+                  {kategoriInfo(data.category).etikett}
+                </span>
+              ) : (
+                "—"
+              )
+            }
+          />
           <Rad tittel="Ansvarlig" hoyre={data.responsible ?? "—"} />
+          <Rad tittel="Gjelder for" hoyre={data.appliesTo ?? "—"} />
           <Rad tittel="Versjon" hoyre={`v${data.version}`} />
           <Rad tittel="Sist gjennomgått" hoyre={dato(data.lastReviewedAt)} />
+          {data.internkontrollNote && (
+            <Rad tittel="Internkontroll" hoyre={data.internkontrollNote} />
+          )}
           {data.description && (
             <div style={{ padding: "14px 20px", fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--muted)" }}>
               {data.description}
