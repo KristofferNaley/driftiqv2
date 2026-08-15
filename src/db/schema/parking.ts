@@ -1,4 +1,4 @@
-import { date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 /**
@@ -17,26 +17,37 @@ export const parkingSpots = pgTable("parking_spots", {
     .references(() => organizations.id, { onDelete: "cascade" }),
   number: varchar("number").notNull(),
   areaLabel: varchar("area_label"),
-  /** «felles» = styret kan disponere og leie ut. «privat» = tilhører en andel. */
+  /** «felles» = styret kan disponere og leie ut. «tinglyst»/«seksjon» = tilhører boenheten. */
   ownershipType: varchar("ownership_type").notNull().default("felles"),
+  /** «standard» | «hc» | «mc» | «gjest». Lading er IKKE en type lenger — se `hasCharger`. */
   spotType: varchar("spot_type").notNull().default("standard"),
   status: varchar("status").notNull().default("ledig"),
   holderName: varchar("holder_name"),
   unitLabel: varchar("unit_label"),
+  /**
+   * Ladepunkt på plassen. Egen kolonne og ikke en plasstype: en HC-plass kan ha lader, og
+   * v1s «lading»-type gjorde det umulig å si begge deler. Migrasjon 0045 konverterer.
+   */
+  hasCharger: boolean("has_charger").notNull().default(false),
+  /** Fritekst om ladepunktet — «Easee, garasjeanlegg U1». Integrasjon er ikke bygget. */
+  chargerLabel: varchar("charger_label"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Aktiv leieavtale for en felleseid plass. Sletting = avslutning av leieforholdet. */
+/**
+ * Leieavtale for en felleseid plass. Avslutning setter `endedAt` — raden SLETTES ikke:
+ * hvem som leide hvilken plass når er dokumentasjon styret trenger i tildelingssaker.
+ * «Én aktiv avtale per plass» håndheves derfor i koden (`endedAt IS NULL`), ikke lenger
+ * av en unik nøkkel — historikken gjør at samme plass forekommer flere ganger.
+ */
 export const parkingLeases = pgTable("parking_leases", {
   id: varchar("id").primaryKey(),
   orgId: varchar("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
-  /** Unik: én plass kan ha høyst én aktiv avtale. Databasen håndhever det, ikke bare koden. */
   spotId: varchar("spot_id")
     .notNull()
-    .unique()
     .references(() => parkingSpots.id, { onDelete: "cascade" }),
   tenantName: varchar("tenant_name").notNull(),
   pricePerMonth: integer("price_per_month").notNull(),
@@ -44,6 +55,10 @@ export const parkingLeases = pgTable("parking_leases", {
   /** NULL = løpende avtale. */
   endDate: date("end_date"),
   noticePeriodMonths: integer("notice_period_months"),
+  /** «forbruk» | «inkludert» | «fast» — hva avtalen sier om strøm til lading. */
+  powerBilling: varchar("power_billing"),
+  /** Satt = avtalen er avsluttet. */
+  endedAt: timestamp("ended_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -54,6 +69,8 @@ export const parkingWaitlist = pgTable("parking_waitlist", {
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
   name: varchar("name").notNull(),
+  /** Leiligheten («H0301») — rekkefølge og tildeling skal kunne begrunnes per enhet. */
+  unitLabel: varchar("unit_label"),
   requestedType: varchar("requested_type").notNull().default("standard"),
   requestedAt: date("requested_at").notNull(),
   notes: text("notes"),

@@ -14,6 +14,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import { ApiFeil } from "../src/lib/api";
 import {
   avsluttAvtale,
+  opprettSerie,
   plassInn,
   endrePlass,
   hentAvtaler,
@@ -91,8 +92,8 @@ describe("plasser", () => {
   it("oppretter og lister sortert på nummer", async () => {
     const org = await nyOrg();
     await i(org, async (db) => {
-      await opprettPlass(db, org, { number: "12", ownershipType: "felles", spotType: "standard", status: "ledig" });
-      await opprettPlass(db, org, { number: "03", ownershipType: "felles", spotType: "lading", status: "ledig" });
+      await opprettPlass(db, org, { number: "12", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false });
+      await opprettPlass(db, org, { number: "03", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: true });
     });
 
     const plasser = await i(org, (db) => hentPlasser(db, org));
@@ -100,15 +101,34 @@ describe("plasser", () => {
     expect(plasser[0]!.lease).toBeNull();
   });
 
+  it("oppretter en serie — alt eller ingenting", async () => {
+    const org = await nyOrg();
+    await i(org, (db) =>
+      opprettSerie(db, org, { prefiks: "P", fra: 1, til: 3, minSifre: 2, ownershipType: "felles", spotType: "standard", hasCharger: true }),
+    );
+    const plasser = await i(org, (db) => hentPlasser(db, org));
+    expect(plasser.map((p) => p.number)).toEqual(["P01", "P02", "P03"]);
+    expect(plasser.every((p) => p.hasCharger)).toBe(true);
+
+    // Kollisjon med ett nummer skal stoppe HELE serien.
+    const feil = await feilFra(() =>
+      i(org, (db) =>
+        opprettSerie(db, org, { prefiks: "P", fra: 3, til: 5, minSifre: 2, ownershipType: "felles", spotType: "standard", hasCharger: false }),
+      ),
+    );
+    expect(feil.status).toBe(400);
+    expect((await i(org, (db) => hentPlasser(db, org))).length).toBe(3);
+  });
+
   it("avviser duplikat plassnummer", async () => {
     const org = await nyOrg();
     await i(org, (db) =>
-      opprettPlass(db, org, { number: "7", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+      opprettPlass(db, org, { number: "7", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
 
     const feil = await feilFra(() =>
       i(org, (db) =>
-        opprettPlass(db, org, { number: "7", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+        opprettPlass(db, org, { number: "7", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
       ),
     );
     expect(feil.status).toBe(400);
@@ -120,7 +140,7 @@ describe("plasser", () => {
     // en plass kollidert med seg selv og blitt umulig å redigere.
     const org = await nyOrg();
     const plass = await i(org, (db) =>
-      opprettPlass(db, org, { number: "5", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+      opprettPlass(db, org, { number: "5", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
 
     const endret = await i(org, (db) =>
@@ -139,7 +159,7 @@ describe("plasser", () => {
     const a = await nyOrg();
     const b = await nyOrg();
     await i(b, (db) =>
-      opprettPlass(db, b, { number: "99", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+      opprettPlass(db, b, { number: "99", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
 
     expect(await i(a, (db) => hentPlasser(db, a))).toEqual([]);
@@ -150,7 +170,7 @@ describe("leieavtaler", () => {
   async function plassMedAvtale() {
     const org = await nyOrg();
     const plass = await i(org, (db) =>
-      opprettPlass(db, org, { number: "1", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+      opprettPlass(db, org, { number: "1", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
     const avtale = await i(org, (db) =>
       opprettAvtale(db, org, { spotId: plass.id, tenantName: "Leietaker", pricePerMonth: 800 }),
@@ -176,13 +196,47 @@ describe("leieavtaler", () => {
     expect(feil.message).toMatch(/allerede en aktiv leieavtale/i);
   });
 
-  it("frigjør plassen når avtalen avsluttes", async () => {
+  it("frigjør plassen når avtalen avsluttes — og beholder raden som historikk", async () => {
     const { org, plass, avtale } = await plassMedAvtale();
     await i(org, (db) => avsluttAvtale(db, org, avtale.id));
 
     const plasser = await i(org, (db) => hentPlasser(db, org));
     expect(plasser.find((p) => p.id === plass.id)?.status).toBe("ledig");
-    expect(await i(org, (db) => hentAvtaler(db, org))).toEqual([]);
+    // Hvem som leide når er dokumentasjon i tildelingssaker — raden slettes ikke.
+    const avtaler = await i(org, (db) => hentAvtaler(db, org));
+    expect(avtaler).toHaveLength(1);
+    expect(avtaler[0]!.endedAt).not.toBeNull();
+    // Den aktive avtalen er borte fra plassvisningen.
+    expect(plasser.find((p) => p.id === plass.id)?.lease).toBeNull();
+  });
+
+  it("en avsluttet avtale sperrer ikke for ny utleie av samme plass", async () => {
+    const { org, plass, avtale } = await plassMedAvtale();
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    const ny = await i(org, (db) =>
+      opprettAvtale(db, org, { spotId: plass.id, tenantName: "Neste leietaker", pricePerMonth: 800 }),
+    );
+    expect(ny.tenantName).toBe("Neste leietaker");
+    // Dobbel avslutning er en feil, ikke en no-op.
+    const feil = await feilFra(() => i(org, (db) => avsluttAvtale(db, org, avtale.id)));
+    expect(feil.status).toBe(400);
+  });
+
+  it("tildeling fra ventelisten fjerner oppføringen i samme operasjon", async () => {
+    const { org, plass, avtale } = await plassMedAvtale();
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    const ventende = await i(org, (db) =>
+      leggPaVenteliste(db, org, { name: "Elin Vik", unitLabel: "H0301", requestedType: "lading" }),
+    );
+    await i(org, (db) =>
+      opprettAvtale(db, org, {
+        spotId: plass.id,
+        tenantName: "H0301, Elin Vik",
+        pricePerMonth: 700,
+        waitlistEntryId: ventende.id,
+      }),
+    );
+    expect(await i(org, (db) => hentVenteliste(db, org))).toEqual([]);
   });
 
   it("rører ikke en plass som styret har tatt til eget bruk", async () => {
@@ -200,7 +254,7 @@ describe("leieavtaler", () => {
     const a = await nyOrg();
     const b = await nyOrg();
     const plassB = await i(b, (db) =>
-      opprettPlass(db, b, { number: "1", ownershipType: "felles", spotType: "standard", status: "ledig" }),
+      opprettPlass(db, b, { number: "1", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
 
     const feil = await feilFra(() =>

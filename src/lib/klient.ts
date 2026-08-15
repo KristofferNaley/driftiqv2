@@ -81,13 +81,16 @@ export type Plass = {
   status: string;
   holderName: string | null;
   unitLabel: string | null;
+  hasCharger: boolean;
+  chargerLabel: string | null;
   notes: string | null;
-  lease: { id: string; tenantName: string; pricePerMonth: number } | null;
+  lease: { id: string; tenantName: string; pricePerMonth: number; endDate: string | null } | null;
 };
 
 export type Ventende = {
   id: string;
   name: string;
+  unitLabel: string | null;
   requestedType: string;
   requestedAt: string;
   notes: string | null;
@@ -101,11 +104,14 @@ export type Parkeringsavtale = {
   startDate: string | null;
   endDate: string | null;
   noticePeriodMonths: number | null;
+  powerBilling: string | null;
+  endedAt: string | null;
 };
 
 export const parkering = {
   plasser: (orgId: string) => api.hent<Plass[]>(org(orgId, "/parking/spots")),
   nyPlass: (orgId: string, data: unknown) => api.send<Plass>(org(orgId, "/parking/spots"), data),
+  nySerie: (orgId: string, data: unknown) => api.send<Plass[]>(org(orgId, "/parking/spots/serie"), data),
   endrePlass: (orgId: string, id: string, data: unknown) =>
     api.endre<Plass>(org(orgId, `/parking/spots/${id}`), data),
   slettPlass: (orgId: string, id: string) => api.slett(org(orgId, `/parking/spots/${id}`)),

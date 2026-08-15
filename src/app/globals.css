@@ -3468,6 +3468,53 @@ textarea.qr-input { resize: vertical; }
 }
 .prk-kpi-strek { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
 
+/* Kompakt nøkkeltallstripe øverst — mockupens strip. */
+.prk-stripe {
+  display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 4px; flex-wrap: wrap;
+}
+.prk-stripe-del { flex: 1; min-width: 130px; padding: 0 18px; border-right: 1px solid var(--border); }
+.prk-stripe-del:last-child { border-right: none; }
+.prk-stripe-del .k {
+  font-size: var(--fs-label); letter-spacing: 0.5px; color: var(--muted);
+  font-weight: 700; text-transform: uppercase;
+}
+.prk-stripe-del .v { font-size: var(--fs-lg); font-weight: 600; margin-top: 3px; }
+.prk-stripe-del .v small { font-size: var(--fs-label); color: var(--muted); font-weight: 400; }
+.prk-stripe-del .v.gronn { color: var(--ok); }
+.prk-stripe-del .v.gul { color: var(--warn); }
+
+.prk-note {
+  font-size: var(--fs-label); color: var(--muted); line-height: 1.6; margin-top: 12px;
+  background: rgba(var(--accent-rgb), 0.07); border: 1px solid rgba(var(--accent-rgb), 0.25);
+  border-radius: 8px; padding: 11px 13px;
+}
+.prk-note b { color: var(--accent); }
+.prk-note.gul { background: rgba(245, 166, 35, 0.07); border-color: rgba(245, 166, 35, 0.28); }
+.prk-note.gul b { color: var(--warn); }
+
+/* Nøkkel/verdi-rader og hjelpeboksen i skuffene. */
+.prk-par { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
+.prk-par:last-child { border-bottom: none; }
+.prk-par dt { color: var(--muted); }
+.prk-par dd { margin: 0; text-align: right; font-weight: 500; min-width: 0; }
+.prk-hjelp { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 8px; }
+.prk-hjelp .r { display: flex; gap: 10px; padding: 6px 0; }
+.prk-hjelp .sw { width: 9px; height: 9px; border-radius: 3px; margin-top: 6px; flex: 0 0 9px; }
+.prk-sammendrag { background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 14px 16px; margin-top: 6px; }
+
+/* Tomtilstandens veier inn. */
+.prk-veier { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; max-width: 700px; margin: 0 auto; text-align: left; }
+.prk-vei {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 16px;
+  cursor: pointer; color: var(--text); font-family: var(--font-sans); text-align: left;
+}
+.prk-vei:hover { border-color: var(--accent); }
+.prk-vei .n {
+  width: 22px; height: 22px; border-radius: 50%; background: rgba(var(--accent-rgb), 0.2);
+  color: var(--accent); display: grid; place-items: center; font-size: 11px; font-weight: 600; margin-bottom: 9px;
+}
+
 /* ── RUTINEBYGGEREN ──
    Etter mockups/rutinebygger-mockup.html: alltid åpne steg (overskrift i stegets topplinje,
    forklaring rett under), faseindikator, og live forhåndsvisning av beboervisningen og
