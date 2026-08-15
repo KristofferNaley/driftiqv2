@@ -1,6 +1,7 @@
+import { z } from "zod";
 import { lesKropp, plattformRute } from "@/lib/api";
-import { hentSak, settStatus, statusInn, svarInn, svarPaSak } from "@/lib/feilmelding";
-import { sendFeilmeldingSvar } from "@/lib/epost";
+import { hentSak, settBacklog, settStatus, statusInn, svarInn, svarPaSak } from "@/lib/feilmelding";
+import { sendFeilmeldingLost, sendFeilmeldingSvar } from "@/lib/epost";
 
 type P = { sakId: string };
 
@@ -9,10 +10,32 @@ export const GET = plattformRute<P>({
   handler: ({ db, params }) => hentSak(db, params.sakId),
 });
 
+/**
+ * Statusendring. Settes saken til løst, får melderen automatisk e-post — kvitteringen i
+ * «Meld feil» lover svar når saken er løst, og løftet skal ikke avhenge av at noen husker
+ * å skrive et svar i tillegg. Gjenlukking (løst → løst) sender ikke på nytt.
+ */
 export const PUT = plattformRute<P>({
   nivaa: "plattformadmin",
-  handler: async ({ db, bruker, params, req }) =>
-    settStatus(db, params.sakId, (await lesKropp(req, statusInn)).status, bruker.name),
+  handler: async ({ db, bruker, params, req }) => {
+    const { status } = await lesKropp(req, statusInn);
+    const { sak, bleLost } = await settStatus(db, params.sakId, status, bruker.name);
+    if (bleLost) {
+      await sendFeilmeldingLost(sak).catch((e) =>
+        console.error("[feilmelding] Løst-varsel feilet:", e),
+      );
+    }
+    return sak;
+  },
+});
+
+const backlogInn = z.object({ iBacklog: z.boolean() });
+
+/** Backlog-bryteren — «dette skal vi gjøre noe med». */
+export const PATCH = plattformRute<P>({
+  nivaa: "plattformadmin",
+  handler: async ({ db, params, req }) =>
+    settBacklog(db, params.sakId, (await lesKropp(req, backlogInn)).iBacklog),
 });
 
 /**

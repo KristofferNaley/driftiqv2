@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOkt } from "@/components/OktProvider";
 import { initialer } from "@/components/felles";
+import { api } from "@/lib/klient";
 import { erPlattformadminRolle } from "@/lib/nivaer";
 import { useAppLenke } from "../verter";
 import Temaknapp from "@/components/Temaknapp";
@@ -65,6 +66,17 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
   // Absolutt til appverten når vertene er delt: /dashboard er 404 her.
   const appLenke = useAppLenke();
 
+  // Åpne saker som teller på «Feilmeldinger» — innboksen skal synes uten å åpnes.
+  // Feiler kallet, vises bare ingen teller; menyen skal aldri velte på det.
+  const [apneSaker, setApneSaker] = useState(0);
+  useEffect(() => {
+    if (!bruker || !erPlattformadminRolle(bruker.role)) return;
+    api
+      .hent<{ antall: number }>("/plattform/saker/antall")
+      .then((r) => setApneSaker(r.antall))
+      .catch(() => {});
+  }, [bruker]);
+
   return (
     <div className="pf-side">
       <nav className="pf-meny">
@@ -88,6 +100,9 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
             <Link key={p.sti} href={p.sti} className={`pf-lenke${aktiv ? " aktiv" : ""}`}>
               <Ikon size={17} strokeWidth={1.9} aria-hidden />
               <span>{p.etikett}</span>
+              {p.sti === "/plattform/saker" && apneSaker > 0 && (
+                <span className="pf-cnt" aria-label={`${apneSaker} åpne saker`}>{apneSaker}</span>
+              )}
             </Link>
           );
         })}

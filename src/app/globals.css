@@ -2086,43 +2086,44 @@ textarea.qr-input { resize: vertical; }
 .pf-tall.advarsel { color: var(--warn); font-weight: 700; }
 .pf-advarsel { color: var(--warn); font-weight: 600; }
 
-/* ── Leads (v3) ──
+/* ── Master–detalj (delt) + Leads (v3) ──
    Etter mockups/leads-v3-mockup.html: KPI-rad, chips + søk, og master–detalj — lista til
-   venstre, alt om valgt lead til høyre. Prikk- og stegfargene følger statusløpet. */
-.pf-ld-split { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 16px; align-items: start; }
+   venstre, alt om valgt rad til høyre. `.pf-md-`-klassene deles av leads OG innmeldinger
+   (samme grunnlayout i begge mockupene); `.pf-ld-` er leads-spesifikt. */
+.pf-md-split { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 16px; align-items: start; }
 
-.pf-ld-rad {
+.pf-md-rad {
   display: flex; gap: 11px; width: 100%; padding: 12px 16px; text-align: left;
   border: none; border-bottom: 1px solid var(--border); background: none;
   color: var(--text); font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer;
 }
-.pf-ld-rad:last-child { border-bottom: none; }
-.pf-ld-rad:hover { background: var(--surface2); }
-.pf-ld-rad.valgt { background: rgba(var(--accent-rgb), 0.1); box-shadow: inset 2px 0 0 var(--accent); }
+.pf-md-rad:last-child { border-bottom: none; }
+.pf-md-rad:hover { background: var(--surface2); }
+.pf-md-rad.valgt { background: rgba(var(--accent-rgb), 0.1); box-shadow: inset 2px 0 0 var(--accent); }
 .pf-ld-prikk { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: 0 0 7px; }
 .pf-ld-prikk.ny { background: var(--pf); }
 .pf-ld-prikk.kontaktet { background: var(--accent); }
 .pf-ld-prikk.kvalifisert, .pf-ld-prikk.konvertert { background: var(--ok); }
 .pf-ld-prikk.avslatt { background: var(--muted); }
-.pf-ld-nar { margin-left: auto; color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
+.pf-md-nar { margin-left: auto; color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
 .pf-ld-neste { font-size: var(--fs-label); margin-top: 4px; color: var(--warn); }
 .pf-ld-neste.over { color: var(--danger); }
 
-.pf-ld-detalj { padding: 20px 22px; }
-.pf-ld-hode { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.pf-ld-handling { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pf-md-detalj { padding: 20px 22px; }
+.pf-md-hode { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.pf-md-handling { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-.pf-ld-seksjon { padding: 16px 0; border-bottom: 1px solid var(--border); }
-.pf-ld-seksjon:last-child { border-bottom: none; padding-bottom: 0; }
-.pf-ld-seksjon h3 {
+.pf-md-seksjon { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.pf-md-seksjon:last-child { border-bottom: none; padding-bottom: 0; }
+.pf-md-seksjon h3 {
   margin: 0 0 10px; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.5px; color: var(--muted); display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
 }
-.pf-ld-kilde {
+.pf-md-kilde {
   font-weight: 500; letter-spacing: 0; text-transform: none;
   border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
 }
-.pf-ld-seksjon h3 .pf-ld-hoyre { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.pf-md-seksjon h3 .pf-md-hoyre { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
 
 .pf-ld-steg { display: flex; gap: 6px; flex-wrap: wrap; }
 .pf-ld-steg span {
@@ -2133,22 +2134,22 @@ textarea.qr-input { resize: vertical; }
 .pf-ld-steg span.naa { background: rgba(var(--accent-rgb), 0.14); border-color: var(--accent); color: var(--text); font-weight: 600; }
 .pf-ld-steg span.dod { background: rgba(240, 64, 64, 0.1); border-color: rgba(240, 64, 64, 0.35); color: var(--danger); font-weight: 600; }
 
-.pf-ld-nestekort {
+.pf-md-infokort {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
 }
-.pf-ld-nestekort.over { border-color: rgba(240, 64, 64, 0.4); background: rgba(240, 64, 64, 0.06); }
-.pf-ld-nestekort .pf-ld-handling { align-self: center; }
+.pf-md-infokort.over { border-color: rgba(240, 64, 64, 0.4); background: rgba(240, 64, 64, 0.06); }
+.pf-md-infokort .pf-md-handling { align-self: center; }
 
-.pf-ld-par { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 0; }
-.pf-ld-par > div {
+.pf-md-par { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 0; }
+.pf-md-par > div {
   display: flex; justify-content: space-between; gap: 14px; padding: 7px 0;
   border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
 }
-.pf-ld-par dt { color: var(--muted); flex-shrink: 0; }
-.pf-ld-par dd { margin: 0; text-align: right; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
-.pf-ld-par dd.tom { color: var(--muted); font-weight: 400; }
-.pf-ld-bred { grid-column: 1 / -1; }
+.pf-md-par dt { color: var(--muted); flex-shrink: 0; }
+.pf-md-par dd { margin: 0; text-align: right; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.pf-md-par dd.tom { color: var(--muted); font-weight: 400; }
+.pf-md-bred { grid-column: 1 / -1; }
 
 .pf-ld-kontakt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .pf-ld-kontakt a {
@@ -2166,19 +2167,75 @@ textarea.qr-input { resize: vertical; }
 }
 .pf-ld-obs b { color: var(--warn); }
 
-.pf-ld-sitat {
+.pf-md-sitat {
   margin-top: 12px; padding: 11px 13px; background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap;
 }
-.pf-ld-sitat .pf-under { margin-bottom: 4px; }
+.pf-md-sitat .pf-under { margin-bottom: 4px; }
 
 .pf-ld-logg { list-style: none; margin: 0; padding: 0; }
 .pf-ld-logg li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
 .pf-ld-logg li:last-child { border-bottom: none; }
 .pf-ld-notat { display: flex; gap: 8px; margin-top: 12px; }
 
-@media (max-width: 1100px) { .pf-ld-split { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .pf-ld-par { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .pf-md-split { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .pf-md-par { grid-template-columns: 1fr; } }
+
+/* ── Innmeldinger (v3) ──
+   Etter mockups/innmeldinger-v3-mockup.html: master–detalj (delte .pf-md-klasser) pluss
+   samtaletråden med svar/notat-faner og malknapper. */
+.pf-cnt {
+  margin-left: auto; font-size: var(--fs-label); font-weight: 600;
+  background: rgba(240, 64, 64, 0.15); color: var(--danger);
+  padding: 1px 7px; border-radius: 999px;
+}
+
+.pf-sak-id {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--fs-label); color: var(--muted);
+}
+/* Forslag-typen — panelets lilla, som ikke finnes i badge-paletten fra kunde-appen. */
+.badge.pf { background: rgba(139, 92, 246, 0.12); color: var(--pf); }
+.pf-sak-flagg { font-size: var(--fs-label); margin-top: 4px; color: var(--danger); }
+
+.pf-sak-trad { list-style: none; margin: 0; padding: 0; }
+.pf-sak-trad li { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
+.pf-sak-trad li:last-child { border-bottom: none; }
+.pf-sak-trad li.intern .pf-sak-kropp { color: var(--muted); }
+.pf-sak-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 28px;
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 600;
+  background: var(--surface2); color: var(--muted);
+}
+.pf-sak-avatar.oss { background: rgba(var(--accent-rgb), 0.16); color: var(--accent); }
+.pf-sak-avatar.intern { background: rgba(245, 166, 35, 0.15); color: var(--warn); }
+.pf-sak-kropp { flex: 1; min-width: 0; line-height: 1.55; }
+
+.pf-sak-svarboks { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+.pf-sak-faner { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); }
+.pf-sak-fane {
+  border: none; background: none; color: var(--muted); padding: 10px 16px;
+  font-size: var(--fs-label); font-weight: 600; cursor: pointer; font-family: var(--font-sans);
+}
+.pf-sak-fane.valgt { color: var(--text); box-shadow: inset 0 -2px 0 var(--pf); }
+.pf-sak-svarboks textarea {
+  width: 100%; background: var(--bg); border: none; color: var(--text);
+  padding: 12px 14px; min-height: 80px; resize: vertical; display: block;
+  font-family: var(--font-sans); font-size: var(--fs-sm);
+}
+.pf-sak-svarboks textarea:focus { outline: none; }
+.pf-sak-maler { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; background: var(--bg); border-top: 1px solid var(--border); }
+.pf-sak-maler button {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 999px; padding: 4px 10px; font-size: var(--fs-label);
+  cursor: pointer; font-family: var(--font-sans);
+}
+.pf-sak-maler button:hover { color: var(--text); }
+.pf-sak-fot {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: var(--bg); border-top: 1px solid var(--border);
+}
+.pf-sak-fot .hint { color: var(--muted); font-size: var(--fs-label); }
 
 @media (max-width: 900px) {
   .pf-stat-rad { grid-template-columns: 1fr auto; }

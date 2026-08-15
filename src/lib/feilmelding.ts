@@ -14,17 +14,17 @@
  * feilsorterte saker og færre innmeldinger.
  */
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { feedbackMessages, feedbackReports } from "../db/schema/feedback";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet } from "./api";
-import { TYPER } from "./feilmeldingtyper";
+import { STATUS_ETIKETT, TYPER } from "./feilmeldingtyper";
 
 // Etikettene bor i en ren fil uten server-importer — se kommentaren der.
-export { TYPER, TYPE_ETIKETT } from "./feilmeldingtyper";
+export { STATUS_ETIKETT, TYPER, TYPE_ETIKETT } from "./feilmeldingtyper";
 
 export const feilmeldingInn = z.object({
   kind: z.enum(TYPER).default("bug"),
@@ -32,6 +32,9 @@ export const feilmeldingInn = z.object({
   module: z.string().trim().nullish(),
   description: z.string().trim().min(5, "Beskriv gjerne litt mer, så slipper vi en runde til"),
   appVersion: z.string().trim().max(40).nullish(),
+  /** Siden melderen sto på og vindusstørrelsen — legges ved av skjemaet, ikke skrevet inn. */
+  url: z.string().trim().max(300).nullish(),
+  screen: z.string().trim().max(40).nullish(),
 });
 
 export const svarInn = z.object({
@@ -72,6 +75,8 @@ export async function meldFeil(
       appVersion: data.appVersion ?? null,
       // Nettleser og versjon legges ved automatisk, så vi slipper å spørre etterpå.
       userAgent: userAgent?.slice(0, 500) ?? null,
+      url: data.url ?? null,
+      screen: data.screen ?? null,
     })
     .returning();
   return rad!;
@@ -87,9 +92,13 @@ export async function hentEgneSaker(db: Db, orgId: string) {
     .limit(50);
 }
 
-/** Alle saker på tvers av kunder. Plattformpanelet. */
+/**
+ * Alle saker på tvers av kunder, med tidspunktet for FØRSTE svar til melderen per sak.
+ * «Ubesvart» og svartiden i KPI-ene regnes av panelet fra det ene feltet — interne notater
+ * teller ikke: et notat til seg selv er ikke et svar kunden har fått.
+ */
 export async function hentAlleSaker(db: Db) {
-  return db
+  const rader = await db
     .select({
       id: feedbackReports.id,
       nummer: feedbackReports.number,
@@ -102,12 +111,36 @@ export async function hentAlleSaker(db: Db) {
       melderNavn: feedbackReports.reportedByName,
       melderEpost: feedbackReports.reportedByEmail,
       appVersjon: feedbackReports.appVersion,
+      nettleser: feedbackReports.userAgent,
+      side: feedbackReports.url,
+      skjerm: feedbackReports.screen,
+      iBacklog: feedbackReports.inBacklog,
       opprettet: feedbackReports.createdAt,
     })
     .from(feedbackReports)
     .innerJoin(organizations, eq(organizations.id, feedbackReports.orgId))
     .orderBy(desc(feedbackReports.createdAt))
     .limit(200);
+  if (rader.length === 0) return [];
+
+  const svar = await db
+    .select({ reportId: feedbackMessages.reportId, sendt: feedbackMessages.createdAt })
+    .from(feedbackMessages)
+    .where(
+      and(
+        inArray(
+          feedbackMessages.reportId,
+          rader.map((r) => r.id),
+        ),
+        eq(feedbackMessages.internal, false),
+      ),
+    );
+  const forste = new Map<string, Date>();
+  for (const s of svar) {
+    const har = forste.get(s.reportId);
+    if (!har || s.sendt < har) forste.set(s.reportId, s.sendt);
+  }
+  return rader.map((r) => ({ ...r, forsteSvar: forste.get(r.id) ?? null }));
 }
 
 export async function hentSak(db: Db, sakId: string) {
@@ -133,6 +166,13 @@ export const statusInn = z.object({
 });
 
 export async function settStatus(db: Db, sakId: string, status: string, av: string) {
+  const [gammel] = await db
+    .select({ status: feedbackReports.status })
+    .from(feedbackReports)
+    .where(eq(feedbackReports.id, sakId))
+    .limit(1);
+  if (!gammel) throw ikkeFunnet("Sak");
+
   const [rad] = await db
     .update(feedbackReports)
     .set({
@@ -144,8 +184,20 @@ export async function settStatus(db: Db, sakId: string, status: string, av: stri
     })
     .where(eq(feedbackReports.id, sakId))
     .returning();
-  if (!rad) throw ikkeFunnet("Sak");
-  return rad;
+
+  // Endringen føres som internt trådinnlegg — samme grep som leads-loggen: historikken
+  // skrives av serveren, ikke av at noen husket å notere. Uendret status logges ikke.
+  if (gammel.status !== status) {
+    await db.insert(feedbackMessages).values({
+      id: randomUUID(),
+      reportId: sakId,
+      internal: true,
+      authorName: av,
+      body: `Status satt til ${STATUS_ETIKETT[status] ?? status}`,
+    });
+  }
+
+  return { sak: rad!, bleLost: status === "lost" && gammel.status !== "lost" };
 }
 
 export async function svarPaSak(
@@ -154,12 +206,12 @@ export async function svarPaSak(
   forfatter: string,
   data: z.infer<typeof svarInn>,
 ) {
-  const finnes = await db
-    .select({ id: feedbackReports.id })
+  const [sak] = await db
+    .select({ id: feedbackReports.id, status: feedbackReports.status })
     .from(feedbackReports)
     .where(eq(feedbackReports.id, sakId))
     .limit(1);
-  if (!finnes[0]) throw ikkeFunnet("Sak");
+  if (!sak) throw ikkeFunnet("Sak");
 
   const [rad] = await db
     .insert(feedbackMessages)
@@ -171,7 +223,28 @@ export async function svarPaSak(
       body: data.body,
     })
     .returning();
+
+  // Et svar til melderen på en urørt sak ER å begynne på den — statusen følger med, så
+  // «Ny»-lista forblir lista over saker ingen har rørt. Interne notater flytter ingenting.
+  if (!data.internal && sak.status === "ny") {
+    await db
+      .update(feedbackReports)
+      .set({ status: "under_arbeid" })
+      .where(eq(feedbackReports.id, sakId));
+  }
+
   return rad!;
+}
+
+/** Backlog-bryteren: «dette skal vi gjøre noe med». Føres videre manuelt, som i v1. */
+export async function settBacklog(db: Db, sakId: string, iBacklog: boolean) {
+  const [rad] = await db
+    .update(feedbackReports)
+    .set({ inBacklog: iBacklog })
+    .where(eq(feedbackReports.id, sakId))
+    .returning();
+  if (!rad) throw ikkeFunnet("Sak");
+  return rad;
 }
 
 /** Antall saker som ikke er lukket. Til merket i panelmenyen. */

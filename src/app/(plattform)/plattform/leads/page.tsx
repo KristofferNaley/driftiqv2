@@ -353,7 +353,7 @@ export default function Leads() {
       {!liste ? (
         <p className="pf-dempet">Henter …</p>
       ) : (
-        <div className="pf-ld-split">
+        <div className="pf-md-split">
           <div className="pf-kort">
             <div className="pf-kort-hode">
               <span>Leads</span>
@@ -369,7 +369,7 @@ export default function Leads() {
               filtrert.map((l) => (
                 <button
                   key={l.id}
-                  className={`pf-ld-rad${l.id === valgtId ? " valgt" : ""}`}
+                  className={`pf-md-rad${l.id === valgtId ? " valgt" : ""}`}
                   onClick={() => setValgtId(l.id)}
                 >
                   <span className={`pf-ld-prikk ${l.status}`} aria-hidden />
@@ -386,24 +386,24 @@ export default function Leads() {
                       </span>
                     ) : null}
                   </span>
-                  <span className="pf-ld-nar">{alder(l.createdAt)}</span>
+                  <span className="pf-md-nar">{alder(l.createdAt)}</span>
                 </button>
               ))
             )}
           </div>
 
           {!valgt ? (
-            <div className="pf-kort pf-ld-detalj">
+            <div className="pf-kort pf-md-detalj">
               <p className="pf-dempet">Velg en lead i lista.</p>
             </div>
           ) : (
-            <div className="pf-kort pf-ld-detalj">
-              <div className="pf-ld-hode">
+            <div className="pf-kort pf-md-detalj">
+              <div className="pf-md-hode">
                 <div style={{ minWidth: 0 }}>
                   <h2 style={{ margin: 0, fontSize: "var(--fs-lg)", fontWeight: 700 }}>{valgt.name}</h2>
                   <span className="pf-dempet">{valgt.company ?? valgt.email}</span>
                 </div>
-                <div className="pf-ld-handling">
+                <div className="pf-md-handling">
                   <span className={`badge ${STATUS[valgt.status]?.merke ?? "muted"}`}>
                     {STATUS[valgt.status]?.etikett ?? valgt.status}
                   </span>
@@ -464,7 +464,7 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="pf-ld-seksjon">
+              <div className="pf-md-seksjon">
                 <h3>Status</h3>
                 <div className="pf-ld-steg">
                   {LOP.map((s, i) => (
@@ -476,11 +476,11 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="pf-ld-seksjon">
+              <div className="pf-md-seksjon">
                 <h3>Neste steg</h3>
                 {nesteApen ? (
                   <form
-                    className="pf-ld-nestekort"
+                    className="pf-md-infokort"
                     onSubmit={(e) => {
                       e.preventDefault();
                       void oppdater(valgt.id, { neste: { tekst: nesteTekst.trim(), dato: nesteDato } }).then(
@@ -504,7 +504,7 @@ export default function Leads() {
                       value={nesteDato}
                       onChange={(e) => setNesteDato(e.target.value)}
                     />
-                    <div className="pf-ld-handling">
+                    <div className="pf-md-handling">
                       <button type="button" className="btn btn-ghost" onClick={() => setNesteApen(false)}>
                         Avbryt
                       </button>
@@ -517,14 +517,14 @@ export default function Leads() {
                     </div>
                   </form>
                 ) : valgt.nextAction ? (
-                  <div className={`pf-ld-nestekort${overForfall(valgt) ? " over" : ""}`}>
+                  <div className={`pf-md-infokort${overForfall(valgt) ? " over" : ""}`}>
                     <div>
                       <span className="pf-under">Avtalt</span>
                       <span className="pf-navn">
                         {valgt.nextAction}, {dato(valgt.nextDate)}
                       </span>
                     </div>
-                    <div className="pf-ld-handling">
+                    <div className="pf-md-handling">
                       <button
                         className="btn btn-ghost"
                         disabled={jobber}
@@ -542,14 +542,14 @@ export default function Leads() {
                     </div>
                   </div>
                 ) : lukket ? (
-                  <div className="pf-ld-nestekort">
+                  <div className="pf-md-infokort">
                     <div>
                       <span className="pf-under">Ingen oppfølging trengs</span>
                       <span className="pf-navn">Saken er lukket</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="pf-ld-nestekort over">
+                  <div className="pf-md-infokort over">
                     <div>
                       <span className="pf-under">Ingen oppfølging er satt</span>
                       <span className="pf-navn">
@@ -558,7 +558,7 @@ export default function Leads() {
                           : "Sett et neste steg før du går videre"}
                       </span>
                     </div>
-                    <div className="pf-ld-handling">
+                    <div className="pf-md-handling">
                       <button
                         className="btn btn-primary"
                         disabled={jobber}
@@ -585,12 +585,12 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="pf-ld-seksjon">
+              <div className="pf-md-seksjon">
                 <h3>
                   Selskap
-                  {valgt.orgNr && <span className="pf-ld-kilde">Hentet fra Enhetsregisteret</span>}
+                  {valgt.orgNr && <span className="pf-md-kilde">Hentet fra Enhetsregisteret</span>}
                   {valgt.orgNr && (
-                    <span className="pf-ld-hoyre">
+                    <span className="pf-md-hoyre">
                       <button
                         className="btn btn-ghost"
                         style={{ padding: "2px 8px", fontSize: "var(--fs-label)" }}
@@ -602,7 +602,7 @@ export default function Leads() {
                     </span>
                   )}
                 </h3>
-                <dl className="pf-ld-par">
+                <dl className="pf-md-par">
                   <div>
                     <dt>Navn</dt>
                     <dd className={valgt.company ? "" : "tom"}>{valgt.company ?? "Ikke oppgitt"}</dd>
@@ -619,7 +619,7 @@ export default function Leads() {
                     <dt>Kommune</dt>
                     <dd className={valgt.kommune ? "" : "tom"}>{valgt.kommune ?? "—"}</dd>
                   </div>
-                  <div className="pf-ld-bred">
+                  <div className="pf-md-bred">
                     <dt>Adresse</dt>
                     <dd className={valgt.adresse ? "" : "tom"}>
                       {[valgt.adresse, [valgt.postnummer, valgt.poststed].filter(Boolean).join(" ")]
@@ -635,7 +635,7 @@ export default function Leads() {
                     <dt>Registerets telefon</dt>
                     <dd className={valgt.brregTelefon ? "" : "tom"}>{valgt.brregTelefon ?? "—"}</dd>
                   </div>
-                  <div className="pf-ld-bred">
+                  <div className="pf-md-bred">
                     <dt>Nettsted</dt>
                     <dd className={valgt.nettsted ? "" : "tom"}>{valgt.nettsted ?? "—"}</dd>
                   </div>
@@ -648,11 +648,11 @@ export default function Leads() {
                 )}
               </div>
 
-              <div className="pf-ld-seksjon">
+              <div className="pf-md-seksjon">
                 <h3>
-                  Kontaktperson <span className="pf-ld-kilde">Skrevet inn av interessenten</span>
+                  Kontaktperson <span className="pf-md-kilde">Skrevet inn av interessenten</span>
                 </h3>
-                <dl className="pf-ld-par">
+                <dl className="pf-md-par">
                   <div>
                     <dt>Navn</dt>
                     <dd>{valgt.name}</dd>
@@ -673,14 +673,14 @@ export default function Leads() {
                   </div>
                 </dl>
                 {valgt.message && (
-                  <div className="pf-ld-sitat">
+                  <div className="pf-md-sitat">
                     <span className="pf-under">Skrev i skjemaet</span>
                     {valgt.message}
                   </div>
                 )}
               </div>
 
-              <div className="pf-ld-seksjon">
+              <div className="pf-md-seksjon">
                 <h3>Aktivitet</h3>
                 {!logg[valgt.id] ? (
                   <p className="pf-dempet">Henter …</p>
@@ -694,7 +694,7 @@ export default function Leads() {
                           <span style={{ fontWeight: 500 }}>{a.text}</span>
                           {a.note && <span className="pf-under">{a.note}</span>}
                         </span>
-                        <span className="pf-ld-nar">
+                        <span className="pf-md-nar">
                           {datoTid(a.createdAt)}
                           {a.actorName && <span className="pf-under">{a.actorName}</span>}
                         </span>

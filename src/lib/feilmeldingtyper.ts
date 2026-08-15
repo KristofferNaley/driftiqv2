@@ -17,3 +17,10 @@ export const TYPE_ETIKETT: Record<string, string> = {
   idea: "Forslag",
   question: "Spørsmål",
 };
+
+export const STATUS_ETIKETT: Record<string, string> = {
+  ny: "Ny",
+  under_arbeid: "Under arbeid",
+  venter_kunde: "Venter på kunde",
+  lost: "Løst",
+};

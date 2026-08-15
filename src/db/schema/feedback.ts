@@ -40,6 +40,9 @@ export const feedbackReports = pgTable("feedback_reports", {
   /** Legges ved automatisk, så vi slipper å spørre etterpå. */
   appVersion: varchar("app_version"),
   userAgent: varchar("user_agent"),
+  /** Siden melderen sto på (sti, uten vert) og vindusstørrelsen — «hvor» uten å spørre. */
+  url: varchar("url"),
+  screen: varchar("screen"),
 
   /** Bekreftet som noe vi skal gjøre noe med. Føres videre i backloggen manuelt. */
   inBacklog: boolean("in_backlog").notNull().default(false),

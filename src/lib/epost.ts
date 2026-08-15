@@ -440,6 +440,38 @@ export async function sendFeilmeldingSvar(
 }
 
 /**
+ * «Saken din er løst» — sendes automatisk når status settes til løst.
+ *
+ * Kvitteringen i «Meld feil» lover eksplisitt svar på e-post når saken er løst, og det
+ * løftet skal ikke avhenge av at noen husker å skrive et svar i tillegg til å lukke saken.
+ * Admins egne svar går som vanlig gjennom `sendFeilmeldingSvar`.
+ */
+export async function sendFeilmeldingLost(sak: {
+  number: number | null;
+  description: string;
+  reportedByEmail: string | null;
+}): Promise<void> {
+  if (!sak.reportedByEmail) return;
+  const nr = `FM-${String(sak.number ?? 0).padStart(4, "0")}`;
+
+  await send(
+    sak.reportedByEmail,
+    `Saken din er løst (${nr})`,
+    ramme(
+      h("Saken din er løst") +
+        p(
+          `Henvendelsen din til DriftIQ (${nr}) er nå markert som løst. ` +
+            "Ser du fortsatt det samme problemet, er det bare å svare på denne e-posten eller melde fra på nytt i appen.",
+        ) +
+        '<table style="margin:20px 0 0;border-collapse:collapse;width:100%;">' +
+        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
+        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
+        "</table>",
+    ),
+  );
+}
+
+/**
  * Meldingen til en leverandør om QR-kvittering — teksten styret skrev, i vår ramme.
  *
  * ## Hvorfor teksten kommer FERDIG fra klienten

@@ -57,7 +57,16 @@ export function MeldFeil({ versjon }: { versjon: string }) {
     try {
       const sak = await api.send<{ number: number | null }>(
         `/organizations/${aktivOrg.id}/feilmelding`,
-        { kind: type, module: modul || null, description: tekst.trim(), appVersion: versjon },
+        {
+          kind: type,
+          module: modul || null,
+          description: tekst.trim(),
+          appVersion: versjon,
+          // «Hvor sto du, og på hvor stor skjerm» — de to spørsmålene vi ellers må stille i
+          // hver eneste sak. Stien, ikke hele adressen: verten vet vi selv.
+          url: sti || null,
+          screen: `${window.innerWidth} × ${window.innerHeight}`,
+        },
       );
       setSendt(sak.number ?? 0);
       setTekst("");
@@ -158,8 +167,8 @@ export function MeldFeil({ versjon }: { versjon: string }) {
                   lineHeight: 1.6,
                 }}
               >
-                Teknisk info legges ved automatisk: versjon <b>{versjon}</b>, nettleser og
-                boligselskap — så finner vi feilen raskere.
+                Teknisk info legges ved automatisk: versjon <b>{versjon}</b>, nettleser,
+                siden du står på og boligselskap — så finner vi feilen raskere.
               </div>
 
               <Knapperad

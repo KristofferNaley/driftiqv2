@@ -60,6 +60,9 @@ export const api = {
     request<T>(sti, { method: "POST", body: JSON.stringify(kropp) }),
   endre: <T>(sti: string, kropp: unknown) =>
     request<T>(sti, { method: "PUT", body: JSON.stringify(kropp) }),
+  /** Delvis endring (PATCH) — for enkeltfelter der PUT allerede betyr noe annet. */
+  lapp: <T>(sti: string, kropp: unknown) =>
+    request<T>(sti, { method: "PATCH", body: JSON.stringify(kropp) }),
   slett: (sti: string) => request<void>(sti, { method: "DELETE" }),
   /** Filopplasting. `content-type` settes IKKE — nettleseren må sette grensen selv. */
   lastOpp: <T>(sti: string, form: FormData) => request<T>(sti, { method: "POST", body: form }),
