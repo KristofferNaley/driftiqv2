@@ -3438,6 +3438,36 @@ textarea.qr-input { resize: vertical; }
 @media (max-width: 640px) { .lev-kpi { display: none; } }
 
 
+/* ── PARKERING ──
+   Etter v1s Parkering.jsx: plasstabell med eierskaps-pill, leieavtaler og venteliste.
+   Tabellene kan dras sidelengs på smale skjermer i stedet for å knekke kolonnene. */
+.prk-scroll { overflow-x: auto; }
+.prk-min { min-width: 680px; }
+.prk-hode, .prk-rad { display: grid; gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+.prk-hode {
+  background: var(--bg); padding: 9px 18px;
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted);
+}
+.prk-rad:last-child { border-bottom: none; }
+.prk-plass { grid-template-columns: 70px minmax(0, 1fr) 120px 110px 100px auto; }
+.prk-avtale { grid-template-columns: minmax(0, 1fr) 110px 120px 120px auto; }
+.prk-vente { grid-template-columns: 40px minmax(0, 1fr) 130px 140px auto; }
+.prk-nr {
+  font-weight: 700; font-size: var(--fs-sm); background: var(--surface2); color: var(--accent);
+  border-radius: 6px; padding: 4px 0; text-align: center;
+}
+.prk-pill {
+  display: inline-flex; align-items: center; justify-content: center; width: fit-content;
+  padding: 3px 9px; border-radius: 20px; font-size: var(--fs-label); font-weight: 700;
+}
+.prk-posisjon {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--surface2); color: var(--accent);
+  font-size: var(--fs-label); font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.prk-kpi-strek { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+
 /* ── RUTINEBYGGEREN ──
    Port av v1s rutinebygger (.rb-): steg som kollapsbare, sorterbare bokser; kategori-chips
    i stedet for nedtrekk; callout-bygger inne i steget; brytere og notater i sidepanelet. */

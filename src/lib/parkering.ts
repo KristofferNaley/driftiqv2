@@ -13,7 +13,12 @@ import type { Db } from "../db/client";
 import { parkingLeases, parkingSpots, parkingWaitlist } from "../db/schema/parking";
 import { ikkeFunnet, ugyldig } from "./api";
 
-export const EIERSKAP = ["felles", "privat"] as const;
+/**
+ * v1s tre eierskapsformer — og PRODUKSJONSDATAENS. Første utkast hadde «felles»/«privat»,
+ * som avviste redigering av hver eneste migrerte tinglyste og seksjonerte plass: migrasjonen
+ * kopierer 1:1, så enum-en må romme verdiene som faktisk står i basen.
+ */
+export const EIERSKAP = ["tinglyst", "seksjon", "felles"] as const;
 export const PLASSTYPER = ["standard", "lading", "gjest"] as const;
 export const STATUSER = ["disponert", "ledig", "utleid"] as const;
 

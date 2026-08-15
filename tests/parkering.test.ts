@@ -14,6 +14,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import { ApiFeil } from "../src/lib/api";
 import {
   avsluttAvtale,
+  plassInn,
   endrePlass,
   hentAvtaler,
   hentPlasser,
@@ -72,6 +73,19 @@ async function feilFra(fn: () => Promise<unknown>): Promise<ApiFeil> {
   }
   throw new Error("Forventet en ApiFeil, men kallet gikk gjennom");
 }
+
+describe("eierskapsformene", () => {
+  // Produksjonsdata har v1s tre former — migrasjonen kopierer 1:1, så enum-en må romme
+  // dem. Første utkast hadde «felles»/«privat» og avviste hver migrerte tinglyste plass.
+  it("plassInn godtar v1s tinglyst og seksjon", () => {
+    for (const eierskap of ["tinglyst", "seksjon", "felles"] as const) {
+      const r = plassInn.safeParse({ number: "T-1", ownershipType: eierskap });
+      expect(r.success).toBe(true);
+    }
+    expect(plassInn.safeParse({ number: "T-1", ownershipType: "privat" }).success).toBe(false);
+  });
+});
+
 
 describe("plasser", () => {
   it("oppretter og lister sortert på nummer", async () => {

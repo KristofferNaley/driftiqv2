@@ -93,6 +93,16 @@ export type Ventende = {
   notes: string | null;
 };
 
+export type Parkeringsavtale = {
+  id: string;
+  spotId: string;
+  tenantName: string;
+  pricePerMonth: number;
+  startDate: string | null;
+  endDate: string | null;
+  noticePeriodMonths: number | null;
+};
+
 export const parkering = {
   plasser: (orgId: string) => api.hent<Plass[]>(org(orgId, "/parking/spots")),
   nyPlass: (orgId: string, data: unknown) => api.send<Plass>(org(orgId, "/parking/spots"), data),
@@ -100,6 +110,7 @@ export const parkering = {
     api.endre<Plass>(org(orgId, `/parking/spots/${id}`), data),
   slettPlass: (orgId: string, id: string) => api.slett(org(orgId, `/parking/spots/${id}`)),
 
+  avtaler: (orgId: string) => api.hent<Parkeringsavtale[]>(org(orgId, "/parking/leases")),
   nyAvtale: (orgId: string, data: unknown) => api.send(org(orgId, "/parking/leases"), data),
   avsluttAvtale: (orgId: string, id: string) => api.slett(org(orgId, `/parking/leases/${id}`)),
 
