@@ -1725,15 +1725,6 @@ textarea.qr-input { resize: vertical; }
 }
 .mk-fot-lenker { display: flex; gap: 18px; }
 
-/* Panelets lead-rad */
-.pf-lead {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
-  padding: 14px 18px; border-bottom: 1px solid var(--border);
-}
-.pf-lead:last-child { border-bottom: none; }
-.pf-lead-melding {
-  font-size: var(--fs-sm); line-height: 1.6; margin: 7px 0 0; white-space: pre-wrap;
-}
 
 /* ── PRODUKTBILDET ──
    HTML-mock, ikke et skjermbilde: et bilde blir utdatert i det UI-et endres. Denne følger
@@ -1826,13 +1817,6 @@ textarea.qr-input { resize: vertical; }
   border: none; background: none; font-size: 18px; line-height: 1; cursor: pointer;
   color: var(--mk-dempet); padding: 0 4px;
 }
-
-.pf-lead-brreg {
-  margin-top: 9px; padding: 9px 11px; border-radius: 9px;
-  background: var(--bg); border: 1px solid var(--border);
-  font-size: var(--fs-label); line-height: 1.6;
-}
-.pf-lead-brreg .pf-under { margin-bottom: 3px; }
 
 .vedlegg-lenke { color: var(--accent); text-decoration: none; }
 .vedlegg-lenke:hover { text-decoration: underline; }
@@ -2101,6 +2085,100 @@ textarea.qr-input { resize: vertical; }
 .pf-navn-lenke:hover { text-decoration: underline; }
 .pf-tall.advarsel { color: var(--warn); font-weight: 700; }
 .pf-advarsel { color: var(--warn); font-weight: 600; }
+
+/* ── Leads (v3) ──
+   Etter mockups/leads-v3-mockup.html: KPI-rad, chips + søk, og master–detalj — lista til
+   venstre, alt om valgt lead til høyre. Prikk- og stegfargene følger statusløpet. */
+.pf-ld-split { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.pf-ld-rad {
+  display: flex; gap: 11px; width: 100%; padding: 12px 16px; text-align: left;
+  border: none; border-bottom: 1px solid var(--border); background: none;
+  color: var(--text); font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer;
+}
+.pf-ld-rad:last-child { border-bottom: none; }
+.pf-ld-rad:hover { background: var(--surface2); }
+.pf-ld-rad.valgt { background: rgba(var(--accent-rgb), 0.1); box-shadow: inset 2px 0 0 var(--accent); }
+.pf-ld-prikk { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: 0 0 7px; }
+.pf-ld-prikk.ny { background: var(--pf); }
+.pf-ld-prikk.kontaktet { background: var(--accent); }
+.pf-ld-prikk.kvalifisert, .pf-ld-prikk.konvertert { background: var(--ok); }
+.pf-ld-prikk.avslatt { background: var(--muted); }
+.pf-ld-nar { margin-left: auto; color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
+.pf-ld-neste { font-size: var(--fs-label); margin-top: 4px; color: var(--warn); }
+.pf-ld-neste.over { color: var(--danger); }
+
+.pf-ld-detalj { padding: 20px 22px; }
+.pf-ld-hode { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.pf-ld-handling { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.pf-ld-seksjon { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.pf-ld-seksjon:last-child { border-bottom: none; padding-bottom: 0; }
+.pf-ld-seksjon h3 {
+  margin: 0 0 10px; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--muted); display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+}
+.pf-ld-kilde {
+  font-weight: 500; letter-spacing: 0; text-transform: none;
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+}
+.pf-ld-seksjon h3 .pf-ld-hoyre { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+.pf-ld-steg { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-ld-steg span {
+  flex: 1; text-align: center; padding: 7px 4px; border-radius: 7px;
+  font-size: var(--fs-label); background: var(--bg); color: var(--muted);
+  border: 1px solid transparent; min-width: 72px;
+}
+.pf-ld-steg span.naa { background: rgba(var(--accent-rgb), 0.14); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.pf-ld-steg span.dod { background: rgba(240, 64, 64, 0.1); border-color: rgba(240, 64, 64, 0.35); color: var(--danger); font-weight: 600; }
+
+.pf-ld-nestekort {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+}
+.pf-ld-nestekort.over { border-color: rgba(240, 64, 64, 0.4); background: rgba(240, 64, 64, 0.06); }
+.pf-ld-nestekort .pf-ld-handling { align-self: center; }
+
+.pf-ld-par { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 0; }
+.pf-ld-par > div {
+  display: flex; justify-content: space-between; gap: 14px; padding: 7px 0;
+  border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
+}
+.pf-ld-par dt { color: var(--muted); flex-shrink: 0; }
+.pf-ld-par dd { margin: 0; text-align: right; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.pf-ld-par dd.tom { color: var(--muted); font-weight: 400; }
+.pf-ld-bred { grid-column: 1 / -1; }
+
+.pf-ld-kontakt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.pf-ld-kontakt a {
+  display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 12px; color: var(--text); font-weight: 500;
+  font-size: var(--fs-sm); text-decoration: none;
+}
+.pf-ld-kontakt a:hover { background: var(--surface2); }
+.pf-ld-kontakt a span { color: var(--muted); font-size: var(--fs-label); }
+
+.pf-ld-obs {
+  margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: var(--fs-label);
+  line-height: 1.6; color: var(--muted);
+  background: rgba(245, 166, 35, 0.07); border: 1px solid rgba(245, 166, 35, 0.3);
+}
+.pf-ld-obs b { color: var(--warn); }
+
+.pf-ld-sitat {
+  margin-top: 12px; padding: 11px 13px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap;
+}
+.pf-ld-sitat .pf-under { margin-bottom: 4px; }
+
+.pf-ld-logg { list-style: none; margin: 0; padding: 0; }
+.pf-ld-logg li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
+.pf-ld-logg li:last-child { border-bottom: none; }
+.pf-ld-notat { display: flex; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 1100px) { .pf-ld-split { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .pf-ld-par { grid-template-columns: 1fr; } }
 
 @media (max-width: 900px) {
   .pf-stat-rad { grid-template-columns: 1fr auto; }

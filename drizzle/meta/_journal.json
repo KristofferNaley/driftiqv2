@@ -281,6 +281,13 @@
       "when": 1786718840851,
       "tag": "0039_steep_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786791843288,
+      "tag": "0040_thick_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

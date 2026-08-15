@@ -49,6 +49,8 @@ export default ts.config(
         clearTimeout: "readonly",
         // Tidsavbrudd på utgående kall til tredjeparter (lib/brreg.ts).
         AbortSignal: "readonly",
+        // CSV-eksporten på leads-siden bygger en fil i nettleseren.
+        Blob: "readonly",
         RequestInit: "readonly",
         React: "readonly",
         TextDecoder: "readonly",
