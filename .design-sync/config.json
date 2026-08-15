@@ -1,0 +1,44 @@
+{
+  "projectId": "0c6fc7bb-02f7-4f33-986d-d319bdeaf35c",
+  "shape": "package",
+  "pkg": "@driftiq/designsystem",
+  "globalName": "DriftIQ",
+  "buildCmd": "docker run --rm -v \"$PWD:/app\" -w /app -u \"$(id -u):$(id -g)\" node:22-alpine sh -c \"node designsystem/build.mjs && npx tsc -p designsystem/tsconfig.json\"",
+  "srcDir": "../src",
+  "tsconfig": "./tsconfig.json",
+  "cssEntry": "./dist/styles.css",
+  "extraFonts": [
+    "../node_modules/@fontsource-variable/plus-jakarta-sans/index.css"
+  ],
+  "docsDir": "../.design-sync/docs",
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Fanemodal": { "cardMode": "single", "viewport": "1000x800" },
+    "Modal": { "cardMode": "single", "viewport": "820x620" },
+    "Skuff": { "cardMode": "single", "viewport": "1000x700" },
+    "Felt": { "cardMode": "column" },
+    "Nokkeltall": { "cardMode": "column" },
+    "Hurtigskjema": { "cardMode": "column" }
+  },
+  "componentSrcMap": {
+    "Fanevalg": null,
+    "Kort": "../src/components/felles.tsx",
+    "Rad": "../src/components/felles.tsx",
+    "Tom": "../src/components/felles.tsx",
+    "Feil": "../src/components/felles.tsx",
+    "Nokkeltall": "../src/components/felles.tsx",
+    "Hurtigskjema": "../src/components/felles.tsx",
+    "Faner": "../src/components/felles.tsx",
+    "Modal": "../src/components/skjema.tsx",
+    "Skuff": "../src/components/skjema.tsx",
+    "Fanemodal": "../src/components/skjema.tsx",
+    "Kommer": "../src/components/skjema.tsx",
+    "Felt": "../src/components/skjema.tsx",
+    "Tekstfelt": "../src/components/skjema.tsx",
+    "Tekstomrade": "../src/components/skjema.tsx",
+    "Nedtrekk": "../src/components/skjema.tsx",
+    "Avkryssing": "../src/components/skjema.tsx",
+    "Bryter": "../src/components/skjema.tsx",
+    "Knapperad": "../src/components/skjema.tsx"
+  }
+}

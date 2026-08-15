@@ -10,3 +10,14 @@ next-env.d.ts
 
 # Skisser og mockups — arbeidsmateriale, ikke en del av appen.
 mockups/
+
+# Designsystem-eksporten til Claude Design (se .design-sync/NOTES.md).
+# Alt her er regenerert output eller maskintilstand — inngangene som SKAL committes
+# er designsystem/ (uten dist) og .design-sync/ (uten .cache og learnings).
+.ds-sync/
+ds-bundle/
+designsystem/dist/
+designsystem/.okt-stubb.mjs
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

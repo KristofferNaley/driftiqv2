@@ -19,7 +19,16 @@ import ts from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default ts.config(
-  { ignores: [".next/**", "node_modules/**", "drizzle/**"] },
+  // De fire siste hører til designsystem-eksporten til Claude Design (se
+  // `.design-sync/NOTES.md`): generert output (`ds-bundle/`, `designsystem/dist/`),
+  // konverterens egne skript (`.ds-sync/`) og forhåndsvisningene (`.design-sync/`, som
+  // importerer en pakke som først finnes under kortbygget). Linten har ingenting å si om
+  // kode ingen skriver for hånd — uten dette drukner ekte funn i noen tusen `no-undef`
+  // fra et minifisert React. Merk at flat config IKKE hopper over punktmapper av seg selv.
+  { ignores: [
+    ".next/**", "node_modules/**", "drizzle/**",
+    "ds-bundle/**", "designsystem/dist/**", ".ds-sync/**", ".design-sync/**",
+  ] },
   js.configs.recommended,
   ...ts.configs.recommended,
   {
