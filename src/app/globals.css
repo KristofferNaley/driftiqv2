@@ -2546,6 +2546,50 @@ textarea.qr-input { resize: vertical; }
 }
 .ah-legende-punkt { display: inline-flex; align-items: center; gap: 6px; }
 
+/* Tidslinja — v1s andre visning, her som egen fane. Tolv måneder kan ikke gjøres lesbare
+   på 375px — de kan dras i i stedet (samme grep som v1s .arshjul-timeline-scroll). */
+.ah-tl-scroll { overflow-x: auto; }
+.ah-tl { min-width: 700px; }
+.ah-tl-maneder { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; }
+.ah-tl-maned {
+  text-align: center; font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.8px;
+  padding-bottom: 6px; border-bottom: 2px solid var(--border); color: var(--muted);
+}
+.ah-tl-maned.naa { border-bottom-color: var(--accent); color: var(--accent); }
+/* Banene under månedsoverskriftene: svake månedslinjer i bakgrunnen, luft øverst til
+   «I DAG»-etiketten på nå-streken. */
+.ah-tl-baner {
+  position: relative; padding-top: 20px;
+  background: linear-gradient(to right, var(--border) 1px, transparent 1px);
+  background-size: calc(100% / 12) 100%;
+}
+.ah-tl-idag { position: absolute; top: 20px; bottom: 0; width: 2px; background: var(--accent); border-radius: 1px; }
+.ah-tl-idag::after {
+  content: "I DAG"; position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.8px;
+  color: var(--accent); white-space: nowrap;
+}
+.ah-tl-bane { position: relative; margin-bottom: 6px; }
+/* Periode: bar fra startdato til frist. Gjennomskinnelig med kant i kategorifargen — en
+   heldekkende blokk ville skjult nå-streken og månedslinjene bak. */
+.ah-tl-bar {
+  position: absolute; height: 26px; min-width: 12px; border-radius: 13px; border: 1px solid;
+  display: flex; align-items: center; padding: 0 9px; overflow: hidden;
+}
+.ah-tl-bar-tekst {
+  font-size: var(--fs-label); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Én dag: punkt PÅ datoen med etiketten ved siden av. `translateX(-5px)` setter senteret
+   av punktet på datoen; flippet variant (nær årsslutt) legger etiketten til venstre. */
+.ah-tl-punkt {
+  position: absolute; height: 26px; display: flex; align-items: center; gap: 6px;
+  transform: translateX(-5px); white-space: nowrap;
+}
+.ah-tl-punkt.flippet { flex-direction: row-reverse; transform: translateX(calc(-100% + 5px)); }
+.ah-tl-punkt .ah-prikk { width: 10px; height: 10px; border: 2px solid var(--surface); box-sizing: content-box; }
+.ah-tl-punkt-tekst { font-size: var(--fs-label); font-weight: 600; }
+
 .ah-rad {
   display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
   padding: 10px 14px; border-bottom: 1px solid var(--border);

@@ -51,6 +51,10 @@ export default ts.config(
         AbortSignal: "readonly",
         // CSV-eksporten på leads-siden bygger en fil i nettleseren.
         Blob: "readonly",
+        // Tidslinja i årshjulet måler etikettbredder med canvas i dokumentets egen font.
+        ResizeObserver: "readonly",
+        CanvasRenderingContext2D: "readonly",
+        getComputedStyle: "readonly",
         RequestInit: "readonly",
         React: "readonly",
         TextDecoder: "readonly",

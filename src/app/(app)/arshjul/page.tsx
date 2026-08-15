@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
@@ -52,10 +52,11 @@ export default function Arshjul() {
   const [aar, setAar] = useState(new Date().getFullYear());
   const [filter, setFilter] = useState<Filter>("alle");
   const [skjema, setSkjema] = useState<Hjulhendelse | "ny" | null>(null);
-  // Hjulet, lista og oppgavevalget som FANER, ikke stablet på én side: hjulet trenger hele
-  // bredden på mindre skjermer, og høyrekolonnen stjal den. Lista er et annet spørsmål
-  // («hva er neste»), og hører like lite hjemme under hjulet som ved siden av.
-  const [fane, setFane] = useState<"hjul" | "liste" | "oppgavevalg">("hjul");
+  // Kalenderen, tidslinja, lista og oppgavevalget som FANER, ikke stablet på én side:
+  // visningene trenger hele bredden på mindre skjermer, og høyrekolonnen stjal den.
+  // Lista er et annet spørsmål («hva er neste»), og hører like lite hjemme under hjulet
+  // som ved siden av.
+  const [fane, setFane] = useState<"hjul" | "tidslinje" | "liste" | "oppgavevalg">("hjul");
 
   const { data, feil, setFeil, laster, last, orgId } = useOrgData(
     (o) => arshjul.hjul(o, aar),
@@ -92,7 +93,10 @@ export default function Arshjul() {
           valgt={fane}
           onVelg={setFane}
           faner={[
-            { nokkel: "hjul", etikett: "Årshjul" },
+            // «Kalender», ikke «Årshjul»: fanen navngir VISNINGEN, siden heter fortsatt
+            // Årshjul i menyen. Tidslinja er v1s andre visning, gjenoppstått som egen fane.
+            { nokkel: "hjul", etikett: "Kalender" },
+            { nokkel: "tidslinje", etikett: "Tidslinje" },
             { nokkel: "liste", etikett: "Alle hendelser" },
             // Valget skriver til Oppgaver-modulen — uten redigeringsrett er fanen bare
             // en liste man ikke får gjort noe med.
@@ -181,14 +185,12 @@ export default function Arshjul() {
               })}
             </div>
 
-            <div className="ah-legende">
-              {(Object.keys(HJULKATEGORIER) as Array<keyof typeof HJULKATEGORIER>).map((k) => (
-                <span key={k} className="ah-legende-punkt">
-                  <span className="ah-prikk" style={{ background: HJULKATEGORIER[k].farge }} aria-hidden />
-                  {HJULKATEGORIER[k].etikett}
-                </span>
-              ))}
-            </div>
+            <Legende />
+          </>
+        ) : fane === "tidslinje" ? (
+          <>
+            <Tidslinje hendelser={synlige} aar={aar} />
+            <Legende />
           </>
         ) : (
           <>
@@ -256,6 +258,190 @@ export default function Arshjul() {
         />
       )}
     </Layout>
+  );
+}
+
+function Legende() {
+  return (
+    <div className="ah-legende">
+      {(Object.keys(HJULKATEGORIER) as Array<keyof typeof HJULKATEGORIER>).map((k) => (
+        <span key={k} className="ah-legende-punkt">
+          <span className="ah-prikk" style={{ background: HJULKATEGORIER[k].farge }} aria-hidden />
+          {HJULKATEGORIER[k].etikett}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Tidslinja ───────────────────────────────────────────────────────────────────────────
+// v1s andre visning av hjulet, portet fra Arshjul.jsx: månedene bortover, én bane per
+// kategori, hendelser plassert PÅ datoen sin. Perioder blir barer, enkeltdatoer punkter.
+
+/**
+ * Måler brikkebredden med canvas i samme font som brikkene faktisk tegnes med — eksakt,
+ * uten å måle i DOM-en etter render. Tokenene leses i stedet for å hardkodes, ellers
+ * måler vi feil den dagen skalaen justeres og etikettene begynner å overlappe igjen.
+ * (Under SSR finnes ingen canvas — da gjetter vi; klienten måler om ved hydrering.)
+ */
+const brikkebredde = (() => {
+  let ctx: CanvasRenderingContext2D | null = null;
+  let satt: string | null = null;
+  return (tekst: string): number => {
+    if (typeof document === "undefined") return tekst.length * 7 + 16;
+    if (!ctx) ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return tekst.length * 7 + 16;
+    const rot = getComputedStyle(document.documentElement);
+    const px = rot.getPropertyValue("--fs-label").trim() || "12px";
+    const fam = rot.getPropertyValue("--font-sans").trim() || "sans-serif";
+    const nokkel = `${px}|${fam}`;
+    if (satt !== nokkel) {
+      satt = nokkel;
+      ctx.font = `600 ${px} ${fam}`;
+    }
+    return ctx.measureText(tekst).width + 16; // padding: 0 8px
+  };
+})();
+
+/** Posisjonen til en dato som prosent av året. Strengen parses direkte — ingen tidssoner. */
+function pctAvDato(iso: string, aar: number): number {
+  const mnd = Number(iso.slice(5, 7)) - 1;
+  const dag = Number(iso.slice(8, 10));
+  const dagerIMnd = new Date(aar, mnd + 1, 0).getDate();
+  return ((mnd + (dag - 1) / dagerIMnd) / 12) * 100;
+}
+
+type Baneelement = {
+  h: Hjulhendelse;
+  startPct: number | null;
+  sluttPct: number;
+  flippet: boolean;
+  rad: number;
+};
+
+/**
+ * Elementene i en bane er absolutt plassert etter dato. Uten dette legger de seg oppå
+ * hverandre når datoene er nære — de vet ikke om hverandres bredde. Her fordeles de på
+ * underrader: hvert element havner i første rad der det ikke kolliderer med forrige.
+ *
+ * To former: hendelser MED startdato tegnes som en bar fra start til frist og opptar
+ * akkurat perioden sin; hendelser uten tegnes som et punkt PÅ datoen med etiketten ved
+ * siden av. Punkter nær årsslutt får etiketten på venstre side — ellers hadde den
+ * stukket ut av året.
+ */
+function leggIBane(hendelser: Hjulhendelse[], aar: number, banebredde: number): Baneelement[] {
+  const sortert = hendelser
+    .map((h) => {
+      const sluttPct = pctAvDato(h.dato, aar);
+      const startPct = h.startDato ? pctAvDato(h.startDato, aar) : null;
+      const etikettPct = (brikkebredde(h.tittel) / Math.max(banebredde, 1)) * 100;
+      let venstre: number;
+      let hoyre: number;
+      let flippet = false;
+      if (startPct !== null) {
+        venstre = startPct;
+        hoyre = sluttPct;
+      } else if (sluttPct + etikettPct > 100) {
+        flippet = true;
+        venstre = sluttPct - etikettPct;
+        hoyre = sluttPct;
+      } else {
+        venstre = sluttPct;
+        hoyre = sluttPct + etikettPct;
+      }
+      return { h, startPct, sluttPct, flippet, venstre, hoyre };
+    })
+    .sort((a, b) => a.venstre - b.venstre);
+
+  const radSlutt: number[] = []; // høyrekanten til siste element i hver underrad
+  return sortert.map((el) => {
+    let rad = 0;
+    while (radSlutt[rad] !== undefined && radSlutt[rad]! > el.venstre) rad++;
+    radSlutt[rad] = el.hoyre + 0.4;
+    return { h: el.h, startPct: el.startPct, sluttPct: el.sluttPct, flippet: el.flippet, rad };
+  });
+}
+
+function Tidslinje({ hendelser, aar }: { hendelser: Hjulhendelse[]; aar: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [bredde, setBredde] = useState(700);
+
+  // Banebredden styrer hvor mye plass en etikett tar i prosent — den må måles, og måles
+  // om når vinduet endres.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => setBredde(el.clientWidth || 700));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const naa = new Date();
+  const visIdag = aar === naa.getFullYear();
+  const idagIso = `${aar}-${String(naa.getMonth() + 1).padStart(2, "0")}-${String(naa.getDate()).padStart(2, "0")}`;
+
+  const baner = (Object.keys(HJULKATEGORIER) as Array<keyof typeof HJULKATEGORIER>)
+    .map((kategori) => ({
+      kategori,
+      elementer: leggIBane(hendelser.filter((h) => h.kategori === kategori), aar, bredde),
+    }))
+    .filter((b) => b.elementer.length > 0);
+
+  return (
+    <div className="ah-tl-scroll">
+      <div className="ah-tl" ref={ref}>
+        <div className="ah-tl-maneder">
+          {MANEDER.map((navn, i) => (
+            <div key={navn} className={`ah-tl-maned${visIdag && i === naa.getMonth() ? " naa" : ""}`}>
+              {navn}
+            </div>
+          ))}
+        </div>
+        {baner.length === 0 ? (
+          <Tom tekst="Ingen hendelser med dette filteret." />
+        ) : (
+          <div className="ah-tl-baner">
+            {visIdag && <div className="ah-tl-idag" style={{ left: `${pctAvDato(idagIso, aar)}%` }} />}
+            {baner.map(({ kategori, elementer }) => {
+              const farge = HJULKATEGORIER[kategori].farge;
+              const antallRader = Math.max(...elementer.map((e) => e.rad)) + 1;
+              return (
+                <div key={kategori} className="ah-tl-bane" style={{ minHeight: `${antallRader * 30 + 4}px` }}>
+                  {elementer.map(({ h, startPct, sluttPct, flippet, rad }) =>
+                    startPct !== null ? (
+                      <div
+                        key={h.id}
+                        className="ah-tl-bar"
+                        title={`${h.tittel} · ${dato(h.startDato)} – ${dato(h.dato)}`}
+                        style={{
+                          left: `${startPct}%`,
+                          width: `${Math.max(sluttPct - startPct, 0.5)}%`,
+                          top: `${2 + rad * 30}px`,
+                          background: `color-mix(in srgb, ${farge} 30%, transparent)`,
+                          borderColor: farge,
+                        }}
+                      >
+                        <span className="ah-tl-bar-tekst" style={{ color: farge }}>{h.tittel}</span>
+                      </div>
+                    ) : (
+                      <div
+                        key={h.id}
+                        className={`ah-tl-punkt${flippet ? " flippet" : ""}`}
+                        title={`${h.tittel} · ${dato(h.dato)}`}
+                        style={{ left: `${sluttPct}%`, top: `${2 + rad * 30}px` }}
+                      >
+                        <span className="ah-prikk" style={{ background: farge }} aria-hidden />
+                        <span className="ah-tl-punkt-tekst">{h.tittel}</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
