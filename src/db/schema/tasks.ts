@@ -1,4 +1,4 @@
-import { bigint, boolean, date, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, integer, numeric, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 import { units } from "./units";
@@ -68,6 +68,24 @@ export const taskChecklistItems = pgTable("task_checklist_items", {
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
   text: varchar("text").notNull(),
+  /**
+   * `avkryssing` | `tall`.
+   *
+   * To typer, ikke fem. En fritekst-type inviterer til «ca. 5 bar» der man vil ha `5.0`, og
+   * da er måleserien verdiløs — trengs en kommentar, finnes notatfeltet på utkvitteringen.
+   */
+  type: varchar("type").notNull().default("avkryssing"),
+  /** «bar», «°C», «ppm». Kun for `tall`. Kopieres inn i resultatet — se `unit` der. */
+  unit: varchar("unit"),
+  /**
+   * Må fylles ut for å kunne kvittere ut.
+   *
+   * AV som standard, og det er ikke forsiktighet: i dag er et uhuket punkt et gyldig svar
+   * («ikke utført» og «ikke spurt om» er ulike ting). En hard sperre treffer QR-skjemaet,
+   * der en montør står i et fyrrom med dårlig dekning — blokkerer den innsendingen, kan
+   * resultatet bli at jobben ikke registreres i det hele tatt.
+   */
+  required: boolean("required").notNull().default(false),
   order: integer("order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -133,6 +151,24 @@ export const completionChecklistResults = pgTable("completion_checklist_results"
   itemId: varchar("item_id").references(() => taskChecklistItems.id, { onDelete: "set null" }),
   text: varchar("text").notNull(),
   checked: boolean("checked").notNull().default(false),
+  /**
+   * Måleverdien, for punkter av typen `tall`. Null for avkryssingspunkter — og også for et
+   * tallpunkt som IKKE ble lest av, som er noe annet enn verdien 0.
+   *
+   * `numeric` uten presisjon: trykk måles i bar med én desimal, temperatur i hele grader, og
+   * en fast skala her ville avrundet noens avlesning. MERK at node-postgres gir `numeric`
+   * tilbake som STRENG, akkurat som bigint — gjennom `Number()` før noe regnes eller tegnes.
+   */
+  value: numeric("value"),
+  /**
+   * Enheten SLIK DEN STO den dagen, kopiert fra malpunktet.
+   *
+   * Dette er den viktigste kolonnen i hele funksjonen. Uten den ville en endring av malen fra
+   * bar til kPa stille omtolket alle gamle avlesninger, og en graf som blander de to er en
+   * løgn som ser ut som data — kurven ser fortsatt ut som en kurve. Samme skille som `text`
+   * over: malen kan endres, protokollen kan ikke.
+   */
+  unit: varchar("unit"),
   order: integer("order").notNull().default(0),
 });
 

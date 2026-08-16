@@ -8,7 +8,7 @@ import { Faner, Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/fell
 import { Knapperad, Modal, Nedtrekk, Tekstomrade, Tekstfelt, useSending } from "@/components/skjema";
 import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 import { useOkt } from "@/components/OktProvider";
-import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave, type Utkvitteringsbilde } from "@/lib/klient";
+import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave, type Sjekkpunkt, type Utkvitteringsbilde } from "@/lib/klient";
 import Dokumentviser from "@/components/Dokumentviser";
 import { lagLeverandormelding } from "@/lib/leverandormelding";
 import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
@@ -753,34 +753,58 @@ function Sjekklistepanel({
 }: {
   orgId: string;
   taskId: string;
-  punkter: Array<{ id: string; text: string }>;
+  punkter: Sjekkpunkt[];
   kanRedigere: boolean;
   onLagret: () => Promise<void>;
 }) {
-  // Lokal kopi av tekstene, slik at et felt kan redigeres uten å skrive per tastetrykk.
-  // Synkes fra props etter hver lagring — `punkter` er sannheten mellom redigeringene.
-  const [rader, setRader] = useState(punkter.map((p) => p.text));
+  /**
+   * Lokal kopi av HELE raden, ikke bare teksten: et punkt har nå også type, enhet og om det
+   * er påkrevd. Synkes fra props etter hver lagring — `punkter` er sannheten mellom
+   * redigeringene.
+   */
+  type Rad = Pick<Sjekkpunkt, "text" | "type" | "unit" | "required">;
+  const fraProps = (): Rad[] =>
+    punkter.map((p) => ({ text: p.text, type: p.type, unit: p.unit, required: p.required }));
+
+  const [rader, setRader] = useState<Rad[]>(fraProps);
   const [nytt, setNytt] = useState("");
   const [feil, setFeil] = useState<string | null>(null);
   const [jobber, setJobber] = useState(false);
-  useEffect(() => setRader(punkter.map((p) => p.text)), [punkter]);
+  useEffect(() => setRader(fraProps()), [punkter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function lagre(tekster: string[]) {
+  async function lagre(neste: Rad[]) {
     setJobber(true);
     setFeil(null);
     try {
       await oppgaver.settSjekkliste(orgId, taskId, {
-        items: tekster.map((t) => t.trim()).filter(Boolean).map((t) => ({ text: t })),
+        items: neste
+          .map((r) => ({ ...r, text: r.text.trim() }))
+          .filter((r) => r.text)
+          .map((r) => ({
+            text: r.text,
+            type: r.type,
+            // Enheten sendes bare for tallpunkter — serveren rydder den uansett, men det er
+            // billigere å ikke sende den enn å stole på at noen husker det neste gang.
+            unit: r.type === "tall" ? (r.unit ?? null) : null,
+            required: r.required,
+          })),
       });
       await onLagret();
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Kunne ikke lagre sjekklisten");
       // Tilbake til det som faktisk står lagret — en rad som SER flyttet ut men ikke er det,
       // er verre enn at flyttingen synlig ikke skjedde.
-      setRader(punkter.map((p) => p.text));
+      setRader(fraProps());
     } finally {
       setJobber(false);
     }
+  }
+
+  /** Endrer ett felt på én rad og lagrer. Brukes av alt unntatt tekstfeltet, som venter på blur. */
+  function endre(i: number, felt: Partial<Rad>) {
+    const neste = rader.map((r, j) => (j === i ? { ...r, ...felt } : r));
+    setRader(neste);
+    void lagre(neste);
   }
 
   const flytt = (i: number, retning: -1 | 1) => {
@@ -798,7 +822,19 @@ function Sjekklistepanel({
         {punkter.length === 0 ? (
           <Tom tekst="Ingen sjekkpunkter. De vises i QR-skjemaet hver gang oppgaven utføres." />
         ) : (
-          punkter.map((p, i) => <Rad key={p.id} tittel={`${i + 1}. ${p.text}`} />)
+          punkter.map((p, i) => (
+            <Rad
+              key={p.id}
+              tittel={`${i + 1}. ${p.text}`}
+              hoyre={
+                p.type === "tall"
+                  ? `Måling${p.unit ? ` i ${p.unit}` : ""}${p.required ? " · påkrevd" : ""}`
+                  : p.required
+                    ? "Påkrevd"
+                    : undefined
+              }
+            />
+          ))
         )}
       </Kort>
     );
@@ -809,21 +845,22 @@ function Sjekklistepanel({
       <div className="field-note">Punktene vises i QR-skjemaet hver gang oppgaven utføres.</div>
       <Feil melding={feil} />
 
-      {rader.map((tekst, i) => (
-        <div key={punkter[i]?.id ?? `ny-${i}`} className="sjekk-rad">
+      {rader.map((rad, i) => (
+        <div key={punkter[i]?.id ?? `ny-${i}`} className="sjekk-blokk">
+        <div className="sjekk-rad">
           <span className="sjekk-nr">{i + 1}.</span>
           <input
             className="input"
-            value={tekst}
+            value={rad.text}
             aria-label={`Sjekkpunkt ${i + 1}`}
             disabled={jobber}
             onChange={(e) =>
-              setRader(rader.map((t, j) => (j === i ? e.target.value : t)))
+              setRader(rader.map((r, j) => (j === i ? { ...r, text: e.target.value } : r)))
             }
             // Lagres når feltet forlates — per tastetrykk ville hvert tegn gitt et nytt
             // punkt hos serveren, siden gjenkjenningen går på uendret tekst.
             onBlur={() => {
-              if (tekst.trim() !== (punkter[i]?.text ?? "")) void lagre(rader);
+              if (rad.text.trim() !== (punkter[i]?.text ?? "")) void lagre(rader);
             }}
           />
           <button
@@ -858,6 +895,58 @@ function Sjekklistepanel({
             <X size={15} strokeWidth={1.9} aria-hidden />
           </button>
         </div>
+
+        {/* Egenskapene på egen linje under teksten. Presset inn på samme rad ble feltene så
+            smale at ingen av dem kunne leses på mobil — og det er nettopp på mobil den som
+            setter opp en sprinklerkontroll står. */}
+        <div className="sjekk-valg">
+          <label>
+            <span className="field-note">Svar</span>
+            <select
+              className="input"
+              value={rad.type}
+              disabled={jobber}
+              aria-label={`Type på sjekkpunkt ${i + 1}`}
+              onChange={(e) => endre(i, { type: e.target.value as Sjekkpunkt["type"] })}
+            >
+              <option value="avkryssing">Avkryssing</option>
+              <option value="tall">Tall som fylles ut</option>
+            </select>
+          </label>
+
+          {/* Enheten finnes bare for tallpunkter. Den kopieres inn i hver avlesning, så en
+              endring her gjelder framover — gamle målinger beholder enheten de ble målt i. */}
+          {rad.type === "tall" && (
+            <label>
+              <span className="field-note">Enhet</span>
+              <input
+                className="input"
+                value={rad.unit ?? ""}
+                placeholder="bar, °C, ppm …"
+                maxLength={12}
+                disabled={jobber}
+                aria-label={`Enhet på sjekkpunkt ${i + 1}`}
+                onChange={(e) =>
+                  setRader(rader.map((r, j) => (j === i ? { ...r, unit: e.target.value } : r)))
+                }
+                onBlur={() => {
+                  if ((rad.unit ?? "") !== (punkter[i]?.unit ?? "")) void lagre(rader);
+                }}
+              />
+            </label>
+          )}
+
+          <label className="sjekk-pakrevd">
+            <input
+              type="checkbox"
+              checked={rad.required}
+              disabled={jobber}
+              onChange={(e) => endre(i, { required: e.target.checked })}
+            />
+            <span>Må fylles ut</span>
+          </label>
+        </div>
+        </div>
       ))}
 
       <form
@@ -865,7 +954,13 @@ function Sjekklistepanel({
         onSubmit={(e) => {
           e.preventDefault();
           if (!nytt.trim()) return;
-          const neste = [...rader, nytt.trim()];
+          // Nye punkter starter som avkryssing. Trenger de en måling, settes typen på raden
+          // etterpå — å spørre om type før punktet finnes ville gjort det vanligste tilfellet
+          // to klikk dyrere.
+          const neste: Rad[] = [
+            ...rader,
+            { text: nytt.trim(), type: "avkryssing", unit: null, required: false },
+          ];
           setRader(neste);
           setNytt("");
           void lagre(neste);

@@ -23,6 +23,17 @@ import {
 import { anonymAktor } from "../src/lib/aktor";
 
 /** Aktøren i testene: navn uten konto. Koblingen til bruker-id testes i aktivitet.test.ts. */
+/**
+ * Et vanlig avkryssingspunkt. `type` og `required` fylles av zod ved ekte innsending, men
+ * testene bygger objektet for hånd og må si det samme.
+ */
+const punkt = (text: string, ekstra: Partial<{ type: "avkryssing" | "tall"; unit: string | null; required: boolean }> = {}) => ({
+  text,
+  type: "avkryssing" as const,
+  required: false,
+  ...ekstra,
+});
+
 const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
@@ -159,7 +170,7 @@ describe("utkvittering", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const kvitt = await i(orgId, (db) =>
-      registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [] }),
+      registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [], verdier: [] }),
     );
     expect(kvitt.manual).toBe(true);
     expect(kvitt.completedBy).toBe("Kari");
@@ -176,6 +187,7 @@ describe("utkvittering", () => {
           completedAt: iMorgen,
           hasDeviation: false,
           checkedItemIds: [],
+          verdier: [],
         }),
       ),
     );
@@ -190,7 +202,7 @@ describe("utkvittering", () => {
     );
     expect((await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id))).forsinket).toBe(true);
 
-    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [] }));
+    await i(orgId, (db) => registrerUtkvittering(db, orgId, oppgave.id, KARI, { hasDeviation: false, checkedItemIds: [], verdier: [] }));
 
     const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
     expect(etter.forsinket).toBe(false);
@@ -204,7 +216,7 @@ describe("sjekkliste", () => {
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
 
     await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Sjekk batteri" }, { text: "Test alarm" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Sjekk batteri"), punkt("Test alarm")] }),
     );
     const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
     expect(etter.sjekkliste.map((p) => p.text)).toEqual(["Sjekk batteri", "Test alarm"]);
@@ -217,7 +229,7 @@ describe("sjekkliste", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const mal = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Opprinnelig punkt" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Opprinnelig punkt")] }),
     );
 
     // Utkvitteringen KOPIERER malen inn i resultatradene selv — derfor huker vi av det
@@ -227,12 +239,13 @@ describe("sjekkliste", () => {
       registrerUtkvittering(db, orgId, oppgave.id, KARI, {
         hasDeviation: false,
         checkedItemIds: [mal[0]!.id],
+        verdier: [],
       }),
     );
 
     // Malen byttes helt ut — det gamle punktet slettes.
     await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Helt nytt punkt" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Helt nytt punkt")] }),
     );
 
     const historikk = await i(orgId, (db) => hentUtkvitteringsresultater(db, kvitt.id));
@@ -249,13 +262,13 @@ describe("sjekkliste", () => {
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const fra = await i(orgId, (db) =>
       erstattSjekkliste(db, orgId, oppgave.id, {
-        items: [{ text: "Vask 1" }, { text: "Vask 2" }],
+        items: [punkt("Vask 1"), punkt("Vask 2")],
       }),
     );
 
     const til = await i(orgId, (db) =>
       erstattSjekkliste(db, orgId, oppgave.id, {
-        items: [{ text: "Vask 1" }, { text: "Tørk 1" }],
+        items: [punkt("Vask 1"), punkt("Tørk 1")],
       }),
     );
 
@@ -272,10 +285,10 @@ describe("sjekkliste", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const fra = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Vask 1" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Vask 1")] }),
     );
     const til = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Vaskemaskin 1" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Vaskemaskin 1")] }),
     );
     expect(til[0]!.id).not.toBe(fra[0]!.id);
   });
@@ -284,10 +297,10 @@ describe("sjekkliste", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const fra = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "A" }, { text: "B" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("A"), punkt("B")] }),
     );
     const til = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "B" }, { text: "A" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("B"), punkt("A")] }),
     );
     expect(til.map((p) => p.id)).toEqual([fra[1]!.id, fra[0]!.id]);
     expect(til.map((p) => p.order)).toEqual([0, 1]);
@@ -297,12 +310,13 @@ describe("sjekkliste", () => {
     const { orgId, vendorId } = await oppsett();
     const oppgave = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
     const punkter = await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Gangveier strødd" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Gangveier strødd")] }),
     );
     await i(orgId, (db) =>
       registrerUtkvittering(db, orgId, oppgave.id, KARI, {
         hasDeviation: false,
         checkedItemIds: [punkter[0]!.id],
+        verdier: [],
       }),
     );
 
@@ -312,7 +326,7 @@ describe("sjekkliste", () => {
 
     // Navnebytte → nytt punkt, og historikkens peker nulles. Teksten består som protokoll.
     await i(orgId, (db) =>
-      erstattSjekkliste(db, orgId, oppgave.id, { items: [{ text: "Gangveier og trapper strødd" }] }),
+      erstattSjekkliste(db, orgId, oppgave.id, { items: [punkt("Gangveier og trapper strødd")] }),
     );
     const etter = await i(orgId, (db) => hentOppgave(db, orgId, oppgave.id));
     const resultat = etter.utkvitteringer[0]!.punkter[0]!;

@@ -92,7 +92,16 @@ export async function hentQrKontekst(token: string) {
     if (!rad) throw ikkeFunnet("Ugyldig eller inaktiv QR-kode");
 
     const sjekkliste = await db
-      .select({ id: taskChecklistItems.id, text: taskChecklistItems.text })
+      .select({
+        id: taskChecklistItems.id,
+        text: taskChecklistItems.text,
+        // Typen, enheten og påkrevd-flagget må HIT: skjemaet er anonymt og har ingen annen
+        // vei til å vite at et punkt vil ha en avlesning i bar. Uten dem ville en påkrevd
+        // måling blitt et 400-svar etter at montøren trykket send.
+        type: taskChecklistItems.type,
+        unit: taskChecklistItems.unit,
+        required: taskChecklistItems.required,
+      })
       .from(taskChecklistItems)
       .where(eq(taskChecklistItems.taskId, rad.taskId))
       .orderBy(asc(taskChecklistItems.order));

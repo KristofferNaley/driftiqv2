@@ -128,6 +128,7 @@ describe("registrerViaQr", () => {
       completedBy: "Ola",
       hasDeviation: false,
       checkedItemIds: [punkter[0]!, punkter[2]!],
+      verdier: [],
     });
 
     const { rows } = await eier.query<{ text: string; checked: boolean }>(
@@ -146,7 +147,7 @@ describe("registrerViaQr", () => {
   it("fører leverandørselskapet når navn ikke er oppgitt", async () => {
     // Loggen skal aldri stå tom for hvem som utførte; leverandøren er avtaleparten.
     const { token } = await oppsett();
-    await registrerViaQr(token, { hasDeviation: false, checkedItemIds: [] });
+    await registrerViaQr(token, { hasDeviation: false, checkedItemIds: [], verdier: [] });
     const { rows } = await eier.query<{ completed_by: string; manual: boolean }>(
       "SELECT c.completed_by, c.manual FROM completions c JOIN tasks t ON t.id = c.task_id WHERE t.qr_token = $1",
       [token],
@@ -164,6 +165,7 @@ describe("registrerViaQr", () => {
       deviationDescription: "Nødlys ute",
       severity: "akutt",
       checkedItemIds: [],
+      verdier: [],
     });
 
     const { rows } = await eier.query<{
@@ -192,7 +194,7 @@ describe("registrerViaQr", () => {
        VALUES ($1,$2,7,'Eldre sak','Kari','ny')`,
       [randomUUID(), orgId],
     );
-    await registrerViaQr(token, { hasDeviation: true, deviationDescription: "Ny", checkedItemIds: [] });
+    await registrerViaQr(token, { hasDeviation: true, deviationDescription: "Ny", checkedItemIds: [], verdier: [] });
     const { rows } = await eier.query<{ number: number }>(
       "SELECT number FROM deviations WHERE org_id = $1 ORDER BY number DESC LIMIT 1",
       [orgId],
@@ -202,8 +204,113 @@ describe("registrerViaQr", () => {
 
   it("oppretter ingenting på et ukjent token", async () => {
     const feil = await feilFra(() =>
-      registrerViaQr(randomUUID(), { hasDeviation: true, checkedItemIds: [] }),
+      registrerViaQr(randomUUID(), { hasDeviation: true, checkedItemIds: [], verdier: [] }),
     );
     expect(feil.status).toBe(404);
+  });
+});
+
+/**
+ * Målepunkter — sprinklertrykket som skal loggføres, ikke bare hukes av.
+ *
+ * Sperren for påkrevde punkter ligger i `opprettUtkvittering` og ikke i rutelaget, nettopp
+ * fordi QR-flyten kommer inn denne veien. Skjemaet har sin egen sjekk for å si fra mens
+ * montøren står på stedet, men det er DENNE som er sannheten.
+ */
+describe("målepunkter via QR", () => {
+  /** Legger til et tallpunkt på oppgaven og gir id-en. */
+  async function nyttMalepunkt(taskId: string, opts: { unit: string; required: boolean }) {
+    const id = randomUUID();
+    await eier.query(
+      `INSERT INTO task_checklist_items (id, task_id, text, "order", type, unit, required)
+       VALUES ($1,$2,'Trykk',9,'tall',$3,$4)`,
+      [id, taskId, opts.unit, opts.required],
+    );
+    return id;
+  }
+
+  it("lagrer avlesningen med enheten kopiert inn", async () => {
+    const { token, taskId } = await oppsett();
+    const punktId = await nyttMalepunkt(taskId, { unit: "bar", required: false });
+
+    await registrerViaQr(token, {
+      hasDeviation: false,
+      checkedItemIds: [],
+      verdier: [{ itemId: punktId, value: 5.4 }],
+    });
+
+    const { rows } = await eier.query<{ value: string; unit: string }>(
+      `SELECT r.value, r.unit FROM completion_checklist_results r
+         JOIN completions c ON c.id = r.completion_id
+        WHERE c.task_id = $1 AND r.item_id = $2`,
+      [taskId, punktId],
+    );
+    expect(rows).toHaveLength(1);
+    // `numeric` kommer tilbake som STRENG fra node-postgres — samme felle som bigint.
+    expect(Number(rows[0]!.value)).toBe(5.4);
+    expect(rows[0]!.unit).toBe("bar");
+  });
+
+  /**
+   * Kjernen i hele designet: enheten på en gammel avlesning skal IKKE følge malen når den
+   * endres. Uten dette ville en graf blandet bar og kPa og sett helt riktig ut.
+   */
+  it("beholder den gamle enheten når malen endres etterpå", async () => {
+    const { token, taskId } = await oppsett();
+    const punktId = await nyttMalepunkt(taskId, { unit: "bar", required: false });
+
+    await registrerViaQr(token, {
+      hasDeviation: false,
+      checkedItemIds: [],
+      verdier: [{ itemId: punktId, value: 5 }],
+    });
+    await eier.query("UPDATE task_checklist_items SET unit = 'kPa' WHERE id = $1", [punktId]);
+
+    const { rows } = await eier.query<{ unit: string }>(
+      `SELECT r.unit FROM completion_checklist_results r
+         JOIN completions c ON c.id = r.completion_id
+        WHERE c.task_id = $1 AND r.item_id = $2`,
+      [taskId, punktId],
+    );
+    expect(rows[0]!.unit).toBe("bar");
+  });
+
+  it("stopper utkvitteringen når et påkrevd målepunkt mangler, og navngir punktet", async () => {
+    const { token, taskId } = await oppsett();
+    await nyttMalepunkt(taskId, { unit: "bar", required: true });
+
+    const feil = await feilFra(() =>
+      registrerViaQr(token, { hasDeviation: false, checkedItemIds: [], verdier: [] }),
+    );
+    expect(feil.status).toBe(400);
+    // Montøren står på stedet: meldingen må si HVA som mangler, ikke bare at noe gjør det.
+    expect(feil.message).toMatch(/Trykk/);
+
+    // Og ingenting skal være registrert — en halv utkvittering er verre enn ingen.
+    const { rows } = await eier.query("SELECT id FROM completions WHERE task_id = $1", [taskId]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("slipper gjennom når det påkrevde punktet ER fylt ut", async () => {
+    const { token, taskId } = await oppsett();
+    const punktId = await nyttMalepunkt(taskId, { unit: "bar", required: true });
+
+    await registrerViaQr(token, {
+      hasDeviation: false,
+      checkedItemIds: [],
+      verdier: [{ itemId: punktId, value: 4.2 }],
+    });
+
+    const { rows } = await eier.query("SELECT id FROM completions WHERE task_id = $1", [taskId]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("tar med type, enhet og krav i konteksten skjemaet leser", async () => {
+    const { token, taskId } = await oppsett();
+    await nyttMalepunkt(taskId, { unit: "bar", required: true });
+
+    const k = await hentQrKontekst(token);
+    const punkt = k.sjekkliste.find((p) => p.text === "Trykk");
+    expect(punkt).toMatchObject({ type: "tall", unit: "bar", required: true });
   });
 });

@@ -20,6 +20,14 @@ export default function Kvittering({ params }: { params: Promise<{ token: string
   const [sendt, setSendt] = useState(false);
 
   const [avhuket, setAvhuket] = useState<Set<string>>(new Set());
+  /**
+   * Avlesninger, som TEKST mens de skrives.
+   *
+   * Et halvskrevet «12.» er ikke et tall, og et felt som kaster tegnet man nettopp skrev er
+   * uutholdelig på mobil. Konverteringen skjer ved innsending; komma byttes til punktum
+   * underveis, siden norske telefoner gir komma på desimaltasten.
+   */
+  const [verdier, setVerdier] = useState<Record<string, string>>({});
   const [utfortAv, setUtfortAv] = useState("");
   const [notat, setNotat] = useState("");
   const [harAvvik, setHarAvvik] = useState(false);
@@ -38,8 +46,29 @@ export default function Kvittering({ params }: { params: Promise<{ token: string
       .finally(() => setLaster(false));
   }, [token]);
 
+  /**
+   * De påkrevde punktene som ikke er besvart.
+   *
+   * Sperren finnes ALLEREDE på serveren — den må, siden skjemaet er anonymt. Denne er her for
+   * at montøren skal få vite det mens de står på stedet, med punktet navngitt, i stedet for å
+   * trykke send og få en feilmelding tilbake. Serveren er sannheten; dette er høfligheten.
+   */
+  const mangler = (kontekst?.sjekkliste ?? []).filter(
+    (p) =>
+      p.required &&
+      (p.type === "tall" ? !(verdier[p.id] ?? "").trim() : !avhuket.has(p.id)),
+  );
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
+    if (mangler.length > 0) {
+      setFeil(
+        mangler.length === 1
+          ? `«${mangler[0]!.text}» må fylles ut før du kan registrere.`
+          : `Disse må fylles ut før du kan registrere: ${mangler.map((p) => p.text).join(", ")}.`,
+      );
+      return;
+    }
     setSender(true);
     setFeil(null);
     try {
@@ -53,6 +82,12 @@ export default function Kvittering({ params }: { params: Promise<{ token: string
           deviationDescription: harAvvik ? avviksTekst.trim() || null : null,
           severity: harAvvik && alvorlighet ? alvorlighet : null,
           checkedItemIds: [...avhuket],
+          // Tomme felter utelates: «ikke avlest» er noe annet enn 0, og et 0-tall i en
+          // trykklogg er en påstand ingen har gjort.
+          verdier: Object.entries(verdier)
+            .filter(([, v]) => v.trim() !== "")
+            .map(([itemId, v]) => ({ itemId, value: Number(v) }))
+            .filter((v) => Number.isFinite(v.value)),
         }),
       });
       if (!svar.ok) {
@@ -140,21 +175,45 @@ export default function Kvittering({ params }: { params: Promise<{ token: string
         {k.sjekkliste.length > 0 && (
           <section>
             <h2 className="qr-seksjon">Sjekkliste</h2>
-            {k.sjekkliste.map((punkt) => (
-              <label key={punkt.id} className="qr-punkt">
-                <input
-                  type="checkbox"
-                  checked={avhuket.has(punkt.id)}
-                  onChange={(e) => {
-                    const neste = new Set(avhuket);
-                    if (e.target.checked) neste.add(punkt.id);
-                    else neste.delete(punkt.id);
-                    setAvhuket(neste);
-                  }}
-                />
-                <span>{punkt.text}</span>
-              </label>
-            ))}
+            {k.sjekkliste.map((punkt) =>
+              punkt.type === "tall" ? (
+                /* Måling. `inputmode="decimal"` gir talltastaturet på telefonen — dette
+                   fylles ut med hansker i et fyrrom, ikke ved et skrivebord. */
+                <label key={punkt.id} className="qr-felt">
+                  <span className="qr-etikett">
+                    {punkt.text}
+                    {punkt.unit && <span className="qr-enhet"> ({punkt.unit})</span>}
+                    {punkt.required && <span className="qr-krav"> må fylles ut</span>}
+                  </span>
+                  <input
+                    className="qr-input"
+                    inputMode="decimal"
+                    value={verdier[punkt.id] ?? ""}
+                    placeholder={punkt.unit ? `Verdi i ${punkt.unit}` : "Verdi"}
+                    onChange={(e) =>
+                      setVerdier({ ...verdier, [punkt.id]: e.target.value.replace(",", ".") })
+                    }
+                  />
+                </label>
+              ) : (
+                <label key={punkt.id} className="qr-punkt">
+                  <input
+                    type="checkbox"
+                    checked={avhuket.has(punkt.id)}
+                    onChange={(e) => {
+                      const neste = new Set(avhuket);
+                      if (e.target.checked) neste.add(punkt.id);
+                      else neste.delete(punkt.id);
+                      setAvhuket(neste);
+                    }}
+                  />
+                  <span>
+                    {punkt.text}
+                    {punkt.required && <span className="qr-krav"> må hukes av</span>}
+                  </span>
+                </label>
+              ),
+            )}
             <p className="qr-dempet">
               Punkter du ikke huker av føres som ikke utført. Det er et gyldig svar — logget
               er at de ikke ble gjort, ikke at de ble glemt.
@@ -266,7 +325,13 @@ type Kontekst = {
   sted: string | null;
   orgNavn: string;
   leverandor: string | null;
-  sjekkliste: Array<{ id: string; text: string }>;
+  sjekkliste: Array<{
+    id: string;
+    text: string;
+    type: "avkryssing" | "tall";
+    unit: string | null;
+    required: boolean;
+  }>;
 };
 
 function Ramme({ children }: { children: React.ReactNode }) {

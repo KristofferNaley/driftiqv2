@@ -155,6 +155,22 @@ export type Utkvitteringspunkt = {
   order: number;
 };
 
+/**
+ * Et malpunkt på oppgaven.
+ *
+ * `tall` er punktet som krever en avlesning — sprinklertrykk, temperatur. `unit` er kun satt
+ * for dem, og kopieres inn i hver utførelse slik at gamle avlesninger ikke omtolkes hvis
+ * enheten endres i malen senere.
+ */
+export type Sjekkpunkt = {
+  id: string;
+  text: string;
+  order: number;
+  type: "avkryssing" | "tall";
+  unit: string | null;
+  required: boolean;
+};
+
 /** Bildet leverandøren tok på stedet. Filen hentes fra utkvitteringens egen filrute. */
 export type Utkvitteringsbilde = {
   id: string;
@@ -174,7 +190,7 @@ export type Utkvittering = {
 };
 
 export type OppgaveMedHistorikk = Oppgave & {
-  sjekkliste: Array<{ id: string; text: string; order: number }>;
+  sjekkliste: Sjekkpunkt[];
   utkvitteringer: Utkvittering[];
 };
 

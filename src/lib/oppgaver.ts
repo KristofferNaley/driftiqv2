@@ -57,10 +57,29 @@ export const utkvitteringInn = z.object({
   severity: z.enum(["lav", "middels", "akutt"]).nullish(),
   /** Sjekkpunktene som ble huket av. Resten føres som ikke utført, ikke som utelatt. */
   checkedItemIds: z.array(z.string()).default([]),
+  /**
+   * Avleste verdier for punkter av typen `tall`. Punkter som ikke ble lest av utelates —
+   * «ikke avlest» er noe annet enn 0, og et 0-tall i en trykklogg er en påstand.
+   *
+   * `coerce`: både QR-skjemaet og appen sender tall fra et `<input>`, altså som streng.
+   */
+  verdier: z
+    .array(z.object({ itemId: z.string(), value: z.coerce.number().finite() }))
+    .default([]),
 });
 
+export const SJEKKPUNKTTYPER = ["avkryssing", "tall"] as const;
+
 export const sjekklisteInn = z.object({
-  items: z.array(z.object({ text: z.string().trim().min(1, "Sjekkpunkt kan ikke være tomt") })),
+  items: z.array(
+    z.object({
+      text: z.string().trim().min(1, "Sjekkpunkt kan ikke være tomt"),
+      type: z.enum(SJEKKPUNKTTYPER).default("avkryssing"),
+      /** Kun meningsfylt for `tall`; ryddes bort for avkryssing i `lagreSjekkliste`. */
+      unit: z.string().trim().max(12, "Enheten er for lang").nullish(),
+      required: z.boolean().default(false),
+    }),
+  ),
 });
 
 const iDag = () => new Date().toISOString().slice(0, 10);
@@ -343,6 +362,37 @@ export async function opprettUtkvittering(
     .where(eq(tasks.id, taskId))
     .limit(1);
 
+  const mal = await db
+    .select()
+    .from(taskChecklistItems)
+    .where(eq(taskChecklistItems.taskId, taskId))
+    .orderBy(asc(taskChecklistItems.order));
+
+  /**
+   * Avlesningene, og sperren for de påkrevde punktene.
+   *
+   * Kjøres FØR utkvitteringen settes inn. Lå den etter, la et avvist forsøk igjen en tom
+   * rad — og den raden er `lastCompletedAt`: oppgaven ble stående som utført samtidig som
+   * montøren fikk feilmelding. Testen i qr.test.ts fanget nettopp det.
+   *
+   * Sjekken ligger HER og ikke i rutelaget, fordi QR-skjemaet kommer inn en helt annen vei
+   * (anonymt, `lib/qr.ts`) og ellers ville sluppet forbi. En påkrevd måling som mangler skal
+   * stoppe utkvitteringen — det er hele poenget med flagget — men meldingen må si hvilket
+   * punkt det gjelder, ikke bare «ugyldig». Montøren står på stedet og skal kunne rette det.
+   */
+  const verdier = new Map(data.verdier.map((v) => [v.itemId, v.value]));
+  const mangler = mal
+    .filter((p) => p.required)
+    .filter((p) => (p.type === "tall" ? verdier.get(p.id) == null : !data.checkedItemIds.includes(p.id)))
+    .map((p) => p.text);
+  if (mangler.length > 0) {
+    throw ugyldig(
+      mangler.length === 1
+        ? `«${mangler[0]}» må fylles ut før oppgaven kan kvitteres ut.`
+        : `Disse punktene må fylles ut før oppgaven kan kvitteres ut: ${mangler.join(", ")}.`,
+    );
+  }
+
   const [ny] = await db
     .insert(completions)
     .values({
@@ -360,12 +410,6 @@ export async function opprettUtkvittering(
     .returning();
   const utkvittering = ny!;
 
-  const mal = await db
-    .select()
-    .from(taskChecklistItems)
-    .where(eq(taskChecklistItems.taskId, taskId))
-    .orderBy(asc(taskChecklistItems.order));
-
   if (mal.length > 0) {
     const avhuket = new Set(data.checkedItemIds);
     await db.insert(completionChecklistResults).values(
@@ -375,6 +419,16 @@ export async function opprettUtkvittering(
         itemId: punkt.id,
         text: punkt.text,
         checked: avhuket.has(punkt.id),
+        // Verdien og ENHETEN kopieres inn, som teksten. Endres malen fra bar til kPa i
+        // morgen, skal dagens avlesning fortsatt vite hva den ble målt i.
+        //
+        // `String(...)`: drizzle tar `numeric` som streng, samme grunn som den kommer TILBAKE
+        // som streng fra node-postgres. Tallet er validert av zod, så konverteringen er trygg.
+        value:
+          punkt.type === "tall" && verdier.has(punkt.id)
+            ? String(verdier.get(punkt.id))
+            : null,
+        unit: punkt.type === "tall" ? punkt.unit : null,
         order: punkt.order,
       })),
     );
@@ -484,15 +538,19 @@ export async function erstattSjekkliste(
   for (let i = 0; i < data.items.length; i++) {
     const id = tildelt[i];
     const punkt = data.items[i]!;
+    // Enheten ryddes bort for avkryssingspunkter. Blir et tallpunkt gjort om til avkryssing,
+    // skal ikke «bar» bli stående som et spøkelse som dukker opp igjen ved neste type-bytte.
+    const felt = {
+      text: punkt.text,
+      type: punkt.type,
+      unit: punkt.type === "tall" ? (punkt.unit?.trim() || null) : null,
+      required: punkt.required,
+      order: i,
+    };
     if (id) {
-      await db
-        .update(taskChecklistItems)
-        .set({ text: punkt.text, order: i })
-        .where(eq(taskChecklistItems.id, id));
+      await db.update(taskChecklistItems).set(felt).where(eq(taskChecklistItems.id, id));
     } else {
-      await db
-        .insert(taskChecklistItems)
-        .values({ id: randomUUID(), taskId, text: punkt.text, order: i });
+      await db.insert(taskChecklistItems).values({ id: randomUUID(), taskId, ...felt });
     }
   }
 
