@@ -9,5 +9,5 @@ import { OktProvider } from "@/components/OktProvider";
  * TEGNES. En klientsidesjekk er en bekvemmelighet, aldri en sikkerhetsmekanisme.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
-  return <OktProvider versjon="0.1.0">{children}</OktProvider>;
+  return <OktProvider versjon="1.0.0">{children}</OktProvider>;
 }

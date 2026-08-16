@@ -348,14 +348,18 @@ komponenter — endres logikken, må begge med.
 
 ## Versjon og endringslogg
 
-v2 har **ingen endringslogg ennå**, og ingen offentlig changelog-rute. Versjonen er
-hardkodet `"0.1.0"` som `versjon`-prop på `OktProvider` **to steder** — `(app)/layout.tsx`
-og `(plattform)/layout.tsx` — og vises i sidemenyfoten og på innsendte feilmeldinger.
-`package.json` sier 0.0.0 og leses ikke av noe. Bumpes versjonen, må begge layoutene med.
+Versjonen er hardkodet som `versjon`-prop på `OktProvider` **to steder** —
+`(app)/layout.tsx` og `(plattform)/layout.tsx` — og vises i sidemenyfoten og på innsendte
+feilmeldinger. `package.json` sier 0.0.0 og leses ikke av noe. Bumpes versjonen, må begge
+layoutene med, og `CHANGELOG.md` få en oppføring i samme commit.
 
-Når v2 tar over for v1, gjelder v1-reglene: to logger (intern + kundevendt) med samme
-versjonsnummer, patch som standard, og bare utgitt arbeid får et nummer. Ikke innfør
-numrene før det finnes utgivelser å feste dem til.
+**1.0.0 (16.08.2026)** er første utgivelse: v2 overtok testmiljøet (`test.driftiq.no`,
+`test-admin.driftiq.no`) fra v1 0.8.3. v2 starter altså ikke på v1s nummerrekke.
+`CHANGELOG.md` er den interne loggen; bare **utgitt** arbeid får et nummer, patch er
+standard.
+
+Den **kundevendte** loggen finnes ennå ikke — verken fil eller changelog-rute. Den kommer
+når v2 tar over prod, og da gjelder v1-regelen: to logger med samme versjonsnummer.
 
 ## Ved endringer
 

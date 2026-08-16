@@ -46,7 +46,7 @@ export default async function PlattformLayout({ children }: { children: ReactNod
   if (!bruker?.aktiv || !erPlattformadminRolle(bruker.rolle)) notFound();
 
   return (
-    <OktProvider versjon="0.1.0">
+    <OktProvider versjon="1.0.0">
       <VerterProvider appVert={process.env.VERT_APP ?? null}>{children}</VerterProvider>
     </OktProvider>
   );

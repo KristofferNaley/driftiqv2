@@ -282,12 +282,19 @@ describe("tilknytning", () => {
 
 describe("boligbyggelag", () => {
   it("normaliserer org.nr, så samme lag ikke kan registreres to ganger", async () => {
-    const a = await i((db) => bblLag.opprett(db, { name: "Vestbo", orgNr: "938 765 432", active: true }));
+    // Nummeret trekkes tilfeldig, og det er ikke overdrivelse: `bbl.org_nr` er unik på tvers
+    // av HELE registeret, og testene deler base med appen. Et hardkodet nummer var Vestbos
+    // ekte org.nr, og testen begynte å feile i det laget faktisk ble registrert (16.08.2026)
+    // — på den FØRSTE innsettingen, så feilen så ut som om unikhetssjekken var i stykker.
+    const nr = String(900_000_000 + Math.floor(Math.random() * 100_000_000));
+    const medMellomrom = `${nr.slice(0, 3)} ${nr.slice(3, 6)} ${nr.slice(6)}`;
+
+    const a = await i((db) => bblLag.opprett(db, { name: "Testbo", orgNr: medMellomrom, active: true }));
     ryddBbl.push(a.id);
-    expect(a.orgNr).toBe("938765432");
+    expect(a.orgNr).toBe(nr);
 
     await expect(
-      i((db) => bblLag.opprett(db, { name: "Vestbo igjen", orgNr: "938765432", active: true })),
+      i((db) => bblLag.opprett(db, { name: "Testbo igjen", orgNr: nr, active: true })),
     ).rejects.toMatchObject({ status: 400 } satisfies Partial<ApiFeil>);
   });
 

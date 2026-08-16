@@ -27,8 +27,12 @@ docker run --rm -v "$V1_VOLUM":/v1:ro -v "$V2_VOLUM":/v2 alpine sh -c '
     rest=${rel#*/}
     modul=${rest%%/*}
     case "$modul" in
-      # v1s profilbilder — v2 har egen banneropplasting, og leser aldri denne mappen.
-      profil) continue ;;
+      # v1s profilmappe rommer dashbordbanneret, som v2 leser fra `org/` (se filSti(…, "org")
+      # i lib/lagring.ts). Raden peker på filnavnet — flyttes ikke fila, viser innstillingene
+      # et banner som gir 404. v1s logo ligger i samme mappe og blir med som en foreldreløs
+      # fil på noen titalls kB: skriptet ser bare volumet, ikke databasen, og en logo på
+      # avveie er billigere enn et banner som mangler.
+      profil) maal="/v2/orgs/$org/org/$(basename "$fil")" ;;
       # Nøstet i v1, flatt i v2.
       deviations|completions|contracts) maal="/v2/orgs/$org/$modul/$(basename "$fil")" ;;
       *) maal="/v2/orgs/$rel" ;;

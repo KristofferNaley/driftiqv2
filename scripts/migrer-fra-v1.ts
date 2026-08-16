@@ -62,15 +62,51 @@ type Tabell = {
  */
 const TABELLER: Tabell[] = [
   {
+    navn: "bbl",
+    // Må komme FØR organizations: `bbl_id` og `manager_bbl_id` peker hit, og en org med
+    // tilknytning ville ellers blitt avvist av fremmednøkkelen.
+    //
+    // `ORDER BY` er ikke pynt: `successor_id` er en selvreferanse (fusjonerte lag peker på
+    // laget de gikk inn i), og etterfølgeren må finnes før den som peker på den. Radene uten
+    // etterfølger settes derfor inn først.
+    kilde: `SELECT id, name, org_nr, region, website, notes, successor_id, merge_date,
+                   COALESCE(active, true) AS active, COALESCE(created_at, now()) AS created_at
+            FROM bbl
+            ORDER BY (successor_id IS NOT NULL)`,
+    kolonner: ["id", "name", "org_nr", "region", "website", "notes", "successor_id", "merge_date", "active", "created_at"],
+    oppdater: ["name", "org_nr", "region", "website", "notes", "successor_id", "merge_date", "active"],
+  },
+  {
     navn: "organizations",
+    // Kolonnelista er ikke minimal med vilje. Alt som er fylt ut av en kunde og IKKE kan
+    // gjenskapes fra noe annet, skal med — en tom kontaktkolonne i v2 ser ut som «ikke fylt
+    // ut ennå», ikke som tapt data, og oppdages derfor aldri. Førstemigreringen tok bare de
+    // elleve første, og testmiljøet mistet stille byggdata, kvoteoverstyring og
+    // BBL-tilknytning (oppdaget 16.08.2026 under generalprøven).
+    //
+    // `banner_path` er en FULL STI i v1 (`/app/uploads/orgs/{org}/profil/{uuid}.png`); v2
+    // lagrer bare filnavnet og finner mappa selv. Derfor strippes alt fram til siste `/`.
+    // Selve fila flyttes av migrer-opplastinger.sh (v1 `profil/` → v2 `org/`).
     kilde: `SELECT id, name, slug, org_nr, org_form, municipality, unit_count,
-                   COALESCE(active, true) AS active, enabled_modules, deviation_categories, created_at
+                   COALESCE(active, true) AS active, enabled_modules, deviation_categories, created_at,
+                   phone, contact_email, website, storage_quota, building_info,
+                   affiliation_type, bbl_id, manager_type, manager_bbl_id, manager_name, manager_org_nr,
+                   COALESCE(has_employees, false) AS has_employees,
+                   regexp_replace(banner_path, '^.*/', '') AS banner_file_name,
+                   banner_name AS banner_original_name
             FROM organizations`,
-    kolonner: ["id", "name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories", "created_at"],
+    kolonner: ["id", "name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories", "created_at",
+      "phone", "contact_email", "website", "storage_quota", "building_info",
+      "affiliation_type", "bbl_id", "manager_type", "manager_bbl_id", "manager_name", "manager_org_nr",
+      "has_employees", "banner_file_name", "banner_original_name"],
     // `deviation_categories` er kundens egne avvikskategorier. Uten den her ville et lag som
     // har navngitt kategoriene sine falt tilbake til standardsettet, og gamle avvik ville
     // pekt på verdier som ikke lenger fantes i nedtrekket.
-    oppdater: ["name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories"],
+    oppdater: ["name", "slug", "org_nr", "org_form", "municipality", "unit_count", "active", "enabled_modules", "deviation_categories",
+      "phone", "contact_email", "website", "storage_quota", "building_info",
+      "affiliation_type", "bbl_id", "manager_type", "manager_bbl_id", "manager_name", "manager_org_nr", "has_employees"],
+    // Banneret står bevisst UTENFOR `oppdater`: har kunden lastet opp et nytt i v2, skal en
+    // ny kjøring ikke peke raden tilbake til v1-fila.
   },
   {
     navn: "users",
@@ -160,6 +196,16 @@ const TABELLER: Tabell[] = [
     oppdater: [],
   },
   {
+    // Før `tasks`: oppgaver kan være knyttet til én enhet (`unit_id`).
+    navn: "units",
+    kilde: `SELECT id, org_id, COALESCE(type, 'bolig') AS type, navn, beskrivelse, andelsnr,
+                   leilighetsnr, oppgang, etasje, areal_m2, archived_at,
+                   COALESCE(created_at, now()) AS created_at
+            FROM units`,
+    kolonner: ["id", "org_id", "type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at", "created_at"],
+    oppdater: ["type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at"],
+  },
+  {
     navn: "tasks",
     // qr_token kopieres UENDRET. Se modulkommentaren.
     kilde: `SELECT id, org_id, vendor_id, responsible_user_id, title, description, location,
@@ -178,15 +224,6 @@ const TABELLER: Tabell[] = [
             FROM task_checklist_items`,
     kolonner: ["id", "task_id", "text", "order", "created_at"],
     oppdater: ["text", "order"],
-  },
-  {
-    navn: "units",
-    kilde: `SELECT id, org_id, COALESCE(type, 'bolig') AS type, navn, beskrivelse, andelsnr,
-                   leilighetsnr, oppgang, etasje, areal_m2, archived_at,
-                   COALESCE(created_at, now()) AS created_at
-            FROM units`,
-    kolonner: ["id", "org_id", "type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at", "created_at"],
-    oppdater: ["type", "navn", "beskrivelse", "andelsnr", "leilighetsnr", "oppgang", "etasje", "areal_m2", "archived_at"],
   },
   {
     navn: "hms_templates",
@@ -212,34 +249,6 @@ const TABELLER: Tabell[] = [
             FROM hms_template_items`,
     kolonner: ["id", "category_id", "text", "order", "created_at"],
     oppdater: ["text", "order"],
-  },
-  {
-    navn: "routines",
-    kilde: `SELECT id, org_id, title, description, category, responsible, applies_to,
-                   COALESCE(is_critical, false) AS is_critical, review_interval_months,
-                   COALESCE(status, 'utkast') AS status, last_reviewed_at,
-                   COALESCE(version, 1) AS version, qr_token, vendor_id, contract_id,
-                   document_id, task_id, COALESCE(created_at, now()) AS created_at
-            FROM routines`,
-    kolonner: ["id", "org_id", "title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "qr_token", "vendor_id", "contract_id", "document_id", "task_id", "created_at"],
-    oppdater: ["title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "vendor_id", "contract_id", "document_id", "task_id"],
-  },
-  {
-    navn: "routine_steps",
-    kilde: `SELECT id, routine_id, COALESCE("order", 0) AS "order", title, description,
-                   COALESCE(is_critical, false) AS is_critical, callout_type, callout_text
-            FROM routine_steps`,
-    kolonner: ["id", "routine_id", "order", "title", "description", "is_critical", "callout_type", "callout_text"],
-    oppdater: ["order", "title", "description", "is_critical", "callout_type", "callout_text"],
-  },
-  {
-    navn: "routine_versions",
-    kilde: `SELECT id, routine_id, org_id, version_number, content_snapshot, changed_by,
-                   COALESCE(changed_at, now()) AS changed_at
-            FROM routine_versions`,
-    kolonner: ["id", "routine_id", "org_id", "version_number", "content_snapshot", "changed_by", "changed_at"],
-    // Versjonshistorikk er uforanderlig — ingen oppdatering, heller ikke fra migreringen.
-    oppdater: [],
   },
   {
     navn: "building_elements",
@@ -355,6 +364,37 @@ const TABELLER: Tabell[] = [
     oppdater: ["folder", "document_date", "title", "description", "ai_readable"],
   },
   {
+    // Rutinene står HER, og ikke oppe ved malene der de hører hjemme tematisk: en rutine kan
+    // peke på en kontrakt, et dokument, en oppgave og en leverandør, og alle fire må finnes
+    // først.
+    navn: "routines",
+    kilde: `SELECT id, org_id, title, description, category, responsible, applies_to,
+                   COALESCE(is_critical, false) AS is_critical, review_interval_months,
+                   COALESCE(status, 'utkast') AS status, last_reviewed_at,
+                   COALESCE(version, 1) AS version, qr_token, vendor_id, contract_id,
+                   document_id, task_id, COALESCE(created_at, now()) AS created_at
+            FROM routines`,
+    kolonner: ["id", "org_id", "title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "qr_token", "vendor_id", "contract_id", "document_id", "task_id", "created_at"],
+    oppdater: ["title", "description", "category", "responsible", "applies_to", "is_critical", "review_interval_months", "status", "last_reviewed_at", "version", "vendor_id", "contract_id", "document_id", "task_id"],
+  },
+  {
+    navn: "routine_steps",
+    kilde: `SELECT id, routine_id, COALESCE("order", 0) AS "order", title, description,
+                   COALESCE(is_critical, false) AS is_critical, callout_type, callout_text
+            FROM routine_steps`,
+    kolonner: ["id", "routine_id", "order", "title", "description", "is_critical", "callout_type", "callout_text"],
+    oppdater: ["order", "title", "description", "is_critical", "callout_type", "callout_text"],
+  },
+  {
+    navn: "routine_versions",
+    kilde: `SELECT id, routine_id, org_id, version_number, content_snapshot, changed_by,
+                   COALESCE(changed_at, now()) AS changed_at
+            FROM routine_versions`,
+    kolonner: ["id", "routine_id", "org_id", "version_number", "content_snapshot", "changed_by", "changed_at"],
+    // Versjonshistorikk er uforanderlig — ingen oppdatering, heller ikke fra migreringen.
+    oppdater: [],
+  },
+  {
     navn: "completions",
     kilde: `SELECT id, task_id, COALESCE(completed_at, now()) AS completed_at, completed_by,
                    notes, COALESCE(has_deviation, false) AS has_deviation, deviation_description,
@@ -462,18 +502,6 @@ const TABELLER: Tabell[] = [
     oppdater: ["title", "description", "category", "severity", "status", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
   },
   {
-    navn: "deviation_attachments",
-    // Filene kopieres separat med scripts/migrer-opplastinger.sh — v1 lagrer dem nøstet
-    // (deviations/{devId}/fil), v2 leser flatt (deviations/fil). Raden uten fila gir
-    // «Fil ikke funnet på disk», fila uten raden er usynlig — begge må med.
-    kilde: `SELECT id, deviation_id, org_id, treatment_id, filename, original_name,
-                   content_type, file_size, uploaded_by, COALESCE(uploaded_at, now()) AS uploaded_at
-            FROM deviation_attachments`,
-    kolonner: ["id", "deviation_id", "org_id", "treatment_id", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at"],
-    // Dokumentasjon — append-only, som behandlingsinnleggene.
-    oppdater: [],
-  },
-  {
     navn: "completion_photos",
     kilde: `SELECT id, completion_id, org_id, filename, original_name, content_type,
                    file_size, COALESCE(uploaded_at, now()) AS uploaded_at
@@ -487,6 +515,21 @@ const TABELLER: Tabell[] = [
             FROM deviation_treatments`,
     kolonner: ["id", "deviation_id", "text", "created_by", "created_at"],
     // Append-only: et innlegg skal ALDRI oppdateres, heller ikke av migreringen.
+    oppdater: [],
+  },
+  {
+    navn: "deviation_attachments",
+    // Etter `deviation_treatments`: et vedlegg kan henge på ett behandlingsinnlegg
+    // (`treatment_id`) — bildet som ble lastet opp da avviket ble lukket.
+    //
+    // Filene kopieres separat med scripts/migrer-opplastinger.sh — v1 lagrer dem nøstet
+    // (deviations/{devId}/fil), v2 leser flatt (deviations/fil). Raden uten fila gir
+    // «Fil ikke funnet på disk», fila uten raden er usynlig — begge må med.
+    kilde: `SELECT id, deviation_id, org_id, treatment_id, filename, original_name,
+                   content_type, file_size, uploaded_by, COALESCE(uploaded_at, now()) AS uploaded_at
+            FROM deviation_attachments`,
+    kolonner: ["id", "deviation_id", "org_id", "treatment_id", "filename", "original_name", "content_type", "file_size", "uploaded_by", "uploaded_at"],
+    // Dokumentasjon — append-only, som behandlingsinnleggene.
     oppdater: [],
   },
   {
@@ -548,6 +591,58 @@ const TABELLER: Tabell[] = [
             FROM parking_waitlist`,
     kolonner: ["id", "org_id", "name", "requested_type", "requested_at", "notes", "created_at"],
     oppdater: ["name", "requested_type", "requested_at", "notes"],
+  },
+
+  // -------------------------------------------------------------------------------------
+  // Plattformens egne tabeller. De eies ikke av en kunde, og er derfor lette å glemme —
+  // ingen ringer og sier at prismodellen er borte, den bare står på standardverdiene.
+  // -------------------------------------------------------------------------------------
+  {
+    navn: "pricing_config",
+    // Én rad («default»). Uten den faller panelet tilbake til innebygde priser, og et
+    // abonnement regnet ut i v2 ville ikke stemt med fakturaen kunden allerede har fått.
+    kilde: `SELECT id, floor_price, tiers, module_defaults, hidden_modules, leads_notify_emails,
+                   COALESCE(updated_at, now()) AS updated_at
+            FROM pricing_config`,
+    kolonner: ["id", "floor_price", "tiers", "module_defaults", "hidden_modules", "leads_notify_emails", "updated_at"],
+    oppdater: ["floor_price", "tiers", "module_defaults", "hidden_modules", "leads_notify_emails", "updated_at"],
+  },
+  {
+    navn: "support_access_log",
+    // Revisjonsspor: hvem i DriftIQ som har sett på hvilken kunde, og hvorfor. Et spor som
+    // starter på null ved overgangen er verdiløst nettopp den dagen noen spør.
+    kilde: `SELECT id, superadmin_id, admin_name, org_id, reason, started_at, expires_at, ended_at
+            FROM support_access_log`,
+    kolonner: ["id", "superadmin_id", "admin_name", "org_id", "reason", "started_at", "expires_at", "ended_at"],
+    // Append-only. En avsluttet sesjon skal aldri skrives om.
+  },
+  {
+    navn: "feedback_reports",
+    // «Meld feil»-køen. Løpenummeret (`number`) er DriftIQs saksrekke på tvers av kunder og
+    // kopieres uendret — en sak omtalt som FM-0031 i en e-post skal fortsatt hete det.
+    //
+    // v1s `screenshot_*`-kolonner har ingen mottaker i v2 (skjermbilder ble tatt ut til
+    // fordel for `url` + `screen`, som v1 ikke har). De faller derfor bort, og det er et
+    // bevisst valg — ikke en glipp.
+    kilde: `SELECT id, number, org_id, kind, module, description, status,
+                   reported_by_user_id, reported_by_name, reported_by_email,
+                   app_version, user_agent, COALESCE(in_backlog, false) AS in_backlog,
+                   resolved_at, resolved_by, COALESCE(created_at, now()) AS created_at
+            FROM feedback_reports`,
+    kolonner: ["id", "number", "org_id", "kind", "module", "description", "status",
+      "reported_by_user_id", "reported_by_name", "reported_by_email",
+      "app_version", "user_agent", "in_backlog", "resolved_at", "resolved_by", "created_at"],
+    oppdater: ["status", "in_backlog", "resolved_at", "resolved_by"],
+  },
+  {
+    navn: "feedback_messages",
+    // v1 merket meldingen med om den ble SENDT til kunden; v2 merker den motsatte veien, med
+    // om den er intern. Samme skille, snudd — derfor negeringen. En feilvending her ville
+    // vist interne notater til kunden, så den står som eneste logikk i denne fila.
+    kilde: `SELECT id, report_id, NOT COALESCE(sent_to_customer, false) AS internal,
+                   author AS author_name, body, COALESCE(created_at, now()) AS created_at
+            FROM feedback_messages`,
+    kolonner: ["id", "report_id", "internal", "author_name", "body", "created_at"],
   },
 ];
 
@@ -709,6 +804,37 @@ async function verifiserQrTokens(): Promise<void> {
   }
 }
 
+/**
+ * Sjekker `TABELLER`-rekkefølgen mot v2s ekte fremmednøkler FØR første innsetting.
+ *
+ * Uten denne oppdages en feilsortering først midtveis: tabellene før den som ryker er
+ * allerede committet, og en prod-migrering står halvveis inne i vedlikeholdsvinduet. Fire
+ * feil lå her da rekkefølgen ble prøvd for første gang mot en TOM base (16.08.2026) —
+ * `tasks` før `units`, `routines` før kontrakter og dokumenter, vedlegg før behandlinger.
+ * At de aldri hadde smelt før, var flaks: mot en base som allerede hadde radene fra en
+ * tidligere kjøring, fantes forelderen alt.
+ *
+ * Sjekken leser katalogen, ikke en liste vi vedlikeholder ved siden av — en ny
+ * fremmednøkkel er derfor dekket i samme øyeblikk den finnes.
+ */
+async function sjekkRekkefolge(navn: string[]): Promise<void> {
+  const plass = new Map(navn.map((n, i) => [n, i]));
+  const { rows } = await adminPool.query<{ barn: string; forelder: string }>(
+    `SELECT conrelid::regclass::text AS barn, confrelid::regclass::text AS forelder
+       FROM pg_constraint
+      WHERE contype = 'f' AND conrelid <> confrelid`,
+  );
+  const feil = rows
+    .filter((r) => plass.has(r.barn) && plass.has(r.forelder) && plass.get(r.forelder)! > plass.get(r.barn)!)
+    .map((r) => `${r.barn} settes inn før ${r.forelder}, som den peker på`);
+  if (feil.length > 0) {
+    throw new Error(
+      `TABELLER er i feil rekkefølge — migreringen ville stoppet halvveis:\n  ` +
+        [...new Set(feil)].sort().join("\n  "),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   console.log(TORRKJOR ? "== TØRRKJØRING — ingenting skrives ==" : "== Migrerer fra v1 ==");
 
@@ -717,6 +843,9 @@ async function main(): Promise<void> {
     const kjente = new Set(tabeller.map((t) => t.navn));
     throw new Error(`Ukjente tabeller i --tabeller: ${[...TABELLFILTER].filter((n) => !kjente.has(n)).join(", ")}`);
   }
+
+  // Kjøres også ved tørrkjøring: rekkefølgen er nettopp det en tørrkjøring skal avsløre.
+  await sjekkRekkefolge(TABELLER.map((t) => t.navn));
 
   for (const t of tabeller) {
     const antall = await kopier(t);
