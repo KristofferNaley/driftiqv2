@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { OktProvider } from "@/components/OktProvider";
 import { VerterProvider } from "./verter";
@@ -22,6 +22,17 @@ import { erPlattformadminRolle } from "@/lib/nivaer";
  * Derfor `notFound()` og ikke en feilmelding: en 403 bekrefter at ruta finnes. En 404 sier
  * ingenting, og for den som ikke skal være her er det sant nok — siden finnes ikke for dem.
  *
+ * ## Uinnlogget er et ANNET tilfelle
+ *
+ * Den som ikke er innlogget i det hele tatt, sendes til `/logg-inn` i stedet. Det lekker
+ * ingenting: innloggingssiden serveres på alle verter uansett (`alltidTillatt` i
+ * middleware), og siden avslører ikke om det finnes et panel bak. Det som lakk, og som
+ * fortsatt stoppes av `notFound()`, er at et INNLOGGET styremedlem fikk se panelets skall.
+ *
+ * Uten skillet ble en utløpt cookie en blindvei: panelverten sender rot til `/plattform`,
+ * som svarte 404, uten noe spor av en vei videre. Traff meg selv 16.08.2026 da panelet
+ * flyttet fra `v2-admin` til `test-admin` og cookien ble stående igjen på det gamle navnet.
+ *
  * Sjekken ligger i LAYOUTEN, ikke i hver side. Legger noen til en ny side under
  * `/plattform` om et år, er den beskyttet uten å ha gjort noe. Det motsatte — å måtte huske
  * en sjekk per side — var nettopp feilen: fire av fem sider hadde ingen.
@@ -35,7 +46,9 @@ import { erPlattformadminRolle } from "@/lib/nivaer";
  */
 export default async function PlattformLayout({ children }: { children: ReactNode }) {
   const sesjon = await auth.api.getSession({ headers: await headers() });
-  if (!sesjon?.user?.id) notFound();
+  // Ingen `?retur=` med stien hit: skjemaet finner selv fram til `/plattform` på panelverten
+  // (`standardSti` i logg-inn/skjema.tsx), og en sti i adresselinja er unødvendig støy.
+  if (!sesjon?.user?.id) redirect("/logg-inn");
 
   // Den FERSKE raden, ikke kopien i sesjonen: trekkes plattformtilgangen, skal panelet
   // lukke seg ved neste sidelast — ikke ved neste innlogging.

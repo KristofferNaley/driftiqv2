@@ -34,7 +34,22 @@ function standardSti(adminVert: string | null): string {
  */
 function returSti(adminVert: string | null): string {
   if (typeof window === "undefined") return "/dashboard";
-  return new URLSearchParams(window.location.search).get("retur") || standardSti(adminVert);
+  const onsket = new URLSearchParams(window.location.search).get("retur");
+  return erIntern(onsket) ? onsket : standardSti(adminVert);
+}
+
+/**
+ * `retur` kommer fra adresselinja og går rett i `router.replace()` — den må være en INTERN
+ * sti, ellers er innloggingssiden en åpen viderekobling: en lenke til
+ * `…/logg-inn?retur=https://falsk.example/` lar angriperen låne troverdigheten til vårt eget
+ * domene, og brukeren sendes videre etter et helt EKTE innlogg. At de faktisk logget inn er
+ * nettopp det som gjør det overbevisende.
+ *
+ * Derfor: må starte med «/», og tegnet etter kan verken være «/» eller «\». `//falsk.example`
+ * er protokollrelativt og går ut av domenet, og nettlesere behandler «\» som «/» her.
+ */
+function erIntern(sti: string | null): sti is string {
+  return !!sti && sti.startsWith("/") && sti[1] !== "/" && sti[1] !== "\\";
 }
 
 export default function LoggInnSkjema({ adminVert }: { adminVert: string | null }) {
