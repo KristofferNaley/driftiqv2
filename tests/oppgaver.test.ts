@@ -126,6 +126,30 @@ describe("oppgaver", () => {
     expect(liste[0]!.lastCompletedAt).toBeNull();
   });
 
+  /**
+   * Deaktivering er måten en oppgave tas ut av drift uten å slettes. Filteret manglet, så en
+   * deaktivert oppgave ble stående i lista og talte med i statusfanene — mens teksten i
+   * deaktiveringsdialogen lovet at den var ute av både lista og årshjulet.
+   */
+  it("holder deaktiverte oppgaver ute av lista, men beholder raden", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const beholdt = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    const avsluttet = await i(orgId, (db) => opprettOppgave(db, orgId, grunn(vendorId)));
+    await i(orgId, (db) => deaktiverOppgave(db, orgId, avsluttet.id));
+
+    const liste = await i(orgId, (db) => hentOppgaver(db, orgId));
+    expect(liste.map((t) => t.id)).toEqual([beholdt.id]);
+
+    // Raden er i behold — historikken og QR-koden skal bestå.
+    const medAlle = await i(orgId, (db) => hentOppgaver(db, orgId, { inkluderDeaktiverte: true }));
+    expect(medAlle.map((t) => t.id).sort()).toEqual([beholdt.id, avsluttet.id].sort());
+    expect(medAlle.find((t) => t.id === avsluttet.id)!.active).toBe(false);
+
+    // Og den kan fortsatt åpnes direkte, så en feilaktig deaktivering kan angres.
+    const detalj = await i(orgId, (db) => hentOppgave(db, orgId, avsluttet.id));
+    expect(detalj.active).toBe(false);
+  });
+
   it("avviser en leverandør fra en annen org", async () => {
     const a = await oppsett();
     const b = await oppsett();

@@ -18,7 +18,7 @@ import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
  * si ulike ting. Det var nettopp den feilen v1 hadde i sju kopier.
  */
 
-type Status = "ok" | "forsinket" | "aldri";
+type Status = "ok" | "forsinket" | "aldri" | "deaktivert";
 
 /**
  * «Ikke utført» skiller «vi har ikke holdepunkt for når» fra «i rute».
@@ -28,6 +28,9 @@ type Status = "ok" | "forsinket" | "aldri";
  * behov` er unntaket: den har ingen kadens, og er derfor i rute per definisjon.
  */
 function statusFor(t: Oppgave): Status {
+  // Deaktivert er ikke en status ved siden av de andre — den erstatter dem. En avsluttet
+  // oppgave er verken «à jour» eller «ikke utført»; den skal ikke gjennomføres.
+  if (!t.active) return "deaktivert";
   if (t.forsinket) return "forsinket";
   if (t.frequency === "on_demand") return "ok";
   return t.nesteFrist ? "ok" : "aldri";
@@ -35,6 +38,7 @@ function statusFor(t: Oppgave): Status {
 
 const STATUSMERKE: Record<Status, { etikett: string; klasse: string }> = {
   ok: { etikett: "À jour", klasse: "ok" },
+  deaktivert: { etikett: "Deaktivert", klasse: "muted" },
   forsinket: { etikett: "Forsinket", klasse: "warn" },
   aldri: { etikett: "Ikke utført", klasse: "info" },
 };
@@ -42,7 +46,15 @@ const STATUSMERKE: Record<Status, { etikett: string; klasse: string }> = {
 export default function Oppgaver() {
   const router = useRouter();
   const { aktivOrg } = useOkt();
-  const { data, feil, laster, last, orgId } = useOrgData((o) => oppgaver.liste(o));
+  /**
+   * Deaktiverte oppgaver er ute som standard — de skal ikke gjennomføres mer. De hentes bare
+   * når man ber om dem, så en oppgave som ble avsluttet ved et uhell kan finnes igjen.
+   */
+  const [visDeaktiverte, setVisDeaktiverte] = useState(false);
+  const { data, feil, laster, last, orgId } = useOrgData(
+    (o) => oppgaver.liste(o, visDeaktiverte),
+    [visDeaktiverte],
+  );
   const [nyOppgave, setNyOppgave] = useState(false);
   const [filter, setFilter] = useState<"alle" | Status>("alle");
   const [leverandor, setLeverandor] = useState("");
@@ -110,6 +122,16 @@ export default function Oppgaver() {
               </button>
             ))}
           </div>
+          {/* Bryter, ikke en fane: deaktiverte er ikke en status oppgaven KAN ha ved siden av
+              de andre — de er tatt ut av drift, og lista er kortere uten dem. */}
+          <label className="oppg-deaktiverte">
+            <input
+              type="checkbox"
+              checked={visDeaktiverte}
+              onChange={(e) => setVisDeaktiverte(e.target.checked)}
+            />
+            <span>Vis deaktiverte</span>
+          </label>
         </div>
 
         <div className="card">

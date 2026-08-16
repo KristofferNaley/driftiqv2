@@ -133,7 +133,25 @@ function berik<T extends { id: string; frequency: string; active: boolean; start
   return { ...rad, lastCompletedAt: sist, nesteFrist: nesteFrist(input), forsinket: erForsinket(input) };
 }
 
-export async function hentOppgaver(db: Db, orgId: string) {
+/**
+ * Oppgavene i lista.
+ *
+ * DEAKTIVERTE ER UTE som standard. Deaktivering er måten en oppgave som ikke lenger skal
+ * gjennomføres tas ut av drift uten å slettes — historikken, utkvitteringene og QR-koden skal
+ * bestå. Filteret manglet, så en deaktivert oppgave ble stående i lista og talte med i
+ * statusfanene, mens teksten i deaktiveringsdialogen lovet det motsatte.
+ *
+ * Fire steder leser denne — lista, navtallene, dashbordet og årshjulet — og alle fire skal ha
+ * samme svar. Derfor ligger filteret her og ikke i kallstedene.
+ *
+ * `inkluderDeaktiverte` finnes for at de skal kunne finnes igjen: en oppgave man deaktiverte
+ * ved et uhell skal ikke være nådd bare via en URL man må huske.
+ */
+export async function hentOppgaver(
+  db: Db,
+  orgId: string,
+  opts: { inkluderDeaktiverte?: boolean } = {},
+) {
   const rader = await db
     .select({
       oppgave: tasks,
@@ -145,7 +163,11 @@ export async function hentOppgaver(db: Db, orgId: string) {
     .leftJoin(vendors, eq(vendors.id, tasks.vendorId))
     .leftJoin(units, eq(units.id, tasks.unitId))
     .leftJoin(users, eq(users.id, tasks.responsibleUserId))
-    .where(eq(tasks.orgId, orgId))
+    .where(
+      opts.inkluderDeaktiverte
+        ? eq(tasks.orgId, orgId)
+        : and(eq(tasks.orgId, orgId), eq(tasks.active, true)),
+    )
     .orderBy(asc(tasks.title));
 
   const sist = await sisteUtkvitteringer(db, rader.map((r) => r.oppgave.id));
