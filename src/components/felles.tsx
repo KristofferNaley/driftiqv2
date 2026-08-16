@@ -113,11 +113,13 @@ export function Feil({ melding }: { melding: string | null }) {
 }
 
 export function Nokkeltall({ etikett, verdi }: { etikett: string; verdi: ReactNode }) {
+  // Tallet som KLASSE, ikke inline style: mobilen tar det ett trinn ned med en media query,
+  // og inline style kan ikke overstyres av en. Regel 2 i designsystemet.
   return (
     <div className="card">
       <div className="card-body">
         <div className="card-title">{etikett}</div>
-        <div style={{ fontSize: "var(--fs-hero)", fontWeight: 700, marginTop: "4px" }}>{verdi}</div>
+        <div className="nokkeltall-verdi">{verdi}</div>
       </div>
     </div>
   );
@@ -137,9 +139,11 @@ export function Hurtigskjema({
   const [sender, setSender] = useState(false);
   const felt = useRef<HTMLInputElement>(null);
 
+  // Klasse, ikke inline flex: i et kort-hode på mobil skal skjemaet brekke ned på egen
+  // linje og feltet gi slipp på minstebredden — begge deler krever en media query.
   return (
     <form
-      style={{ display: "flex", gap: "8px" }}
+      className="hurtigskjema"
       onSubmit={async (e) => {
         e.preventDefault();
         // Tomt felt: sett fokus der i stedet for å gjøre ingenting. Knappen er IKKE
@@ -162,7 +166,6 @@ export function Hurtigskjema({
       <input
         ref={felt}
         className="input"
-        style={{ minWidth: "180px" }}
         placeholder={plassholder}
         aria-label={plassholder}
         value={verdi}

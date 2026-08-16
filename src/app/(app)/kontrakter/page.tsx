@@ -188,8 +188,7 @@ export default function Kontrakter({ searchParams }: { searchParams: Promise<{ a
             </div>
           )}
           <input
-            className="input"
-            style={{ marginLeft: "auto", maxWidth: "220px" }}
+            className="input sok-hoyre"
             placeholder="Søk kontrakt …"
             aria-label="Søk kontrakt"
             value={sok}

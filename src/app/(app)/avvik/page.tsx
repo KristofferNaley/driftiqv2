@@ -214,8 +214,10 @@ function Kpi({
   under: string;
   underFarge?: string;
 }) {
+  // Padding som KLASSE (`kpi-flate`), ikke inline style: mobilen strammer den inn med en
+  // media query, og inline style kan ikke overstyres av en. Regel 2 i designsystemet.
   return (
-    <div className={`card kpi-kort k-${farge}`} style={{ padding: "16px 18px" }}>
+    <div className={`card kpi-kort kpi-flate k-${farge}`}>
       <div className="kpi-etikett">{etikett}</div>
       <div className="kpi-verdi">{verdi}</div>
       {under && (

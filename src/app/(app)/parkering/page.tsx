@@ -270,8 +270,7 @@ export default function Parkering() {
                     </button>
                   ))}
                   <input
-                    className="input"
-                    style={{ marginLeft: "auto", width: "220px" }}
+                    className="input sok-hoyre"
                     placeholder="Søk plassnummer eller navn"
                     aria-label="Søk i plasser"
                     value={sok}

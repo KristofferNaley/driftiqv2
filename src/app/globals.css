@@ -393,6 +393,18 @@ a { color: inherit; text-decoration: none; }
    `repeat(N, 1fr)` — det er nettopp faste kolonnetall som ødela mobilvisningen i v1. */
 .auto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 
+/* Nøkkeltall-kortets tall. Egen klasse fordi mobilen tar det ett trinn ned. */
+.nokkeltall-verdi { font-size: var(--fs-hero); font-weight: 700; margin-top: 4px; }
+
+/* «Legg til»-skjemaet i et kortthode. Minstebredden på feltet er for skrivebord —
+   mobilblokken slipper den, ellers presser feltet knappen ut av kortet. */
+.hurtigskjema { display: flex; gap: 8px; min-width: 0; }
+.hurtigskjema .input { min-width: 180px; }
+
+/* Søkefeltet som står til høyre i en filterrad (parkering, kontrakter). Egen klasse fordi
+   mobilen gir det hele bredden — og det var inline style tre steder før det ble en. */
+.sok-hoyre { margin-left: auto; width: 220px; max-width: 100%; }
+
 /* ── FANEMODAL ───────────────────────────────────────────────────────────────────
  *
  * Modal med vertikal fanerad. Fire soner: topp (hvem dette er), fanerekke, panel og
@@ -903,6 +915,7 @@ a { color: inherit; text-decoration: none; }
      ved siden av sidemenyen). Ved 210 brøt det fjerde ned på egen linje. */
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;
 }
+.kpi-flate { padding: 16px 18px; }
 .kpi-kort.k-blaa { --kpi-farge: var(--accent); }
 .kpi-kort.k-roed { --kpi-farge: var(--danger); }
 .kpi-kort.k-gul { --kpi-farge: var(--warn); }
@@ -2870,8 +2883,12 @@ textarea.qr-input { resize: vertical; }
   .dp-l, .dp-m { grid-column: span 2; }
 }
 @media (max-width: 640px) {
-  .dash-grid { grid-template-columns: minmax(0, 1fr); }
-  .dp-s, .dp-m, .dp-l { grid-column: span 1; }
+  /* To spor også på telefon: KPI-widgetene (dp-s) står som PAR, mens de brede widgetene
+     (lister, tidslinjer) tar hele bredden. Én kolonne for alt ga fire stablede hero-kort
+     før innholdet begynte — halvannen skjerm med tall. */
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dp-s { grid-column: span 1; }
+  .dp-m, .dp-l { grid-column: span 2; }
 }
 
 .dash-plass.redigerer { cursor: grab; }
@@ -4017,6 +4034,62 @@ textarea.qr-input { resize: vertical; }
   cursor: pointer; background: var(--surface2); color: var(--text); font-family: var(--font-sans);
 }
 .rb-mal:hover { border-color: var(--accent); }
+
+/* ══ MOBIL — SAMLET STRAMMING ══
+ *
+ * Skjermbildene fra telefonen (16.08.2026) viste tre ting som gjorde appen tung i hånden:
+ * handlingsknappen i toppen brakk over to linjer og dyttet på resten, KPI-kortene stablet
+ * seg i full bredde med hero-tall (fire kort = halvannen skjerm før innholdet), og
+ * filterpillene la beslag på en kvart skjerm. Desktop-verdiene er riktige der de gjelder —
+ * dette er unntakene, samlet på ETT sted så neste justering ikke må lete i hele fila.
+ *
+ * Blokken står NEST SIST med vilje: fila har ingen cascade-lag, så den må stå etter alt
+ * den overstyrer. Kun print-blokken skal stå bak den.
+ */
+@media (max-width: 640px) {
+  /* Toppraden. Tittelen viker (ellipsis) — knappene skal aldri brekke. Men den viker ikke
+     til NULL: «Parkering» ble til «P.» da to knapper tok hele raden. Minstebredden holder
+     tittelen lesbar, og knapperaden ruller sidelengs hvis den likevel ikke får plass. */
+  .topbar { padding: 0 12px; gap: 8px; }
+  .page-title { font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 96px; }
+  .topbar-right { gap: 7px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .topbar-right .btn { padding: 8px 13px; font-size: var(--fs-sm); white-space: nowrap; flex-shrink: 0; }
+
+  /* KPI-kortene: to i bredden, tall ett trinn ned fra hero. Fire stablede kort med
+     40px-tall er halvannen skjerm — som PAR gir de samme oversikt på en tredjedel. */
+  .dash-kpi, .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi-tall, .kpi-verdi { font-size: var(--fs-xl); }
+  .kpi-kort button, .kpi-flate { padding: 12px 14px; }
+
+  /* Filterpiller og kategorichips — mindre flate per valg, samme treffpunkt omtrent. */
+  .pille { padding: 5px 11px; }
+  .ah-chip { padding: 5px 10px; }
+
+  /* Sideflaten bruker hele skjermen. 30px marg på hver side av en 390px-skjerm er en
+     sjettedel av bredden brukt på ingenting — kortene har sin egen luft innvendig. */
+  .page-content { padding: 14px 10px; gap: 12px; }
+  .card { border-radius: 11px; }
+  .card-header { padding: 13px 14px; flex-wrap: wrap; }
+  .card-body { padding: 14px; }
+
+  /* Nøkkeltall-kortene (rutiner, vedlikehold, kontrakter): par, ikke stabel — samme grep
+     som KPI-kortene over. Tallet ett trinn ned fra hero. */
+  .auto-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .nokkeltall-verdi { font-size: var(--fs-xl); }
+
+  /* «Legg til»-skjemaet i kortthodet: ned på egen linje i full bredde, feltet slipper
+     minstebredden sin. Før dette presset det knappen ut over kortkanten. */
+  .hurtigskjema { flex: 1 1 100%; }
+  .hurtigskjema .input { min-width: 0; flex: 1; }
+
+  /* Listerader: høyresiden (merker og knapper) ned på egen linje når det er trangt.
+     Uten dette ble venstresiden klemt til ~40px, og «Anne Lie» brakk per BOKSTAV i
+     leverandørmodalens kontaktliste. */
+  .list-item { flex-wrap: wrap; row-gap: 8px; padding: 12px 14px; }
+
+  /* Søkefeltet i filterrader tar hele bredden i stedet for å stå avskåret til høyre. */
+  .sok-hoyre { margin-left: 0; width: 100%; }
+}
 
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
