@@ -1608,8 +1608,31 @@ textarea.qr-input { resize: vertical; }
   --mk-dempet: var(--muted);
   --mk-kant: var(--border);
   --mk-flate: var(--surface);
+  /*
+   * Fjerde palettrinn, og bare landingssiden har bruk for det.
+   *
+   * Appen klarer seg med `--bg` og `--surface`, som skiller seg med fire punkter: nok til å
+   * løfte et kort med kantlinje, altfor lite til et fullbreddebånd. Første utkast brukte
+   * `--surface` til båndene, og siden ble én flate uten struktur.
+   *
+   * `--mk-dyp` går ANDRE veien enn `--surface` — mørkere i mørkt tema, mørkere i lyst — så
+   * skalaen blir dyp < bg < surface < surface2. Da har båndene et trinn å skille seg på,
+   * og kortene et trinn å løftes på, uten at apptokenene røres.
+   */
+  --mk-dyp: #070f1a;
+  --mk-rutenett-strek: rgba(255, 255, 255, 0.028);
+  /*
+   * Merkevaregradienten fra den grafiske profilen (v2.0). Den er tre stopp og ikke to:
+   * blått → cyan → mint. Et forsøk med bare `--accent` → `--logo-iq` stoppet på cyan, og
+   * da mister ordet det siste løftet — det er mintstoppet som gjør at det gløder.
+   */
+  --mk-grad: linear-gradient(100deg, #4d9bff 0%, #00c2ff 55%, #5fe0b6 100%);
   background: var(--bg); color: var(--mk-blekk);
   min-height: 100dvh; display: flex; flex-direction: column;
+}
+[data-theme="light"] .mk {
+  --mk-dyp: #eaeff8;
+  --mk-rutenett-strek: rgba(13, 27, 42, 0.05);
 }
 .mk a { color: var(--accent); }
 
@@ -1626,8 +1649,11 @@ textarea.qr-input { resize: vertical; }
 .mk-nav a { color: var(--mk-dempet); text-decoration: none; }
 .mk-nav a:hover { color: var(--mk-blekk); }
 .mk-knapp-liten {
-  border: 1px solid var(--mk-kant); border-radius: 9px; padding: 7px 14px;
-  color: var(--mk-blekk) !important; font-weight: 600;
+  border: 1px solid transparent; border-radius: 9px; padding: 9px 17px;
+  background: linear-gradient(135deg, var(--accent), #2b7bff);
+  color: #fff !important; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 8px 22px -10px rgba(var(--accent-rgb), 0.9),
+              inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .mk-tema {
   border: 1px solid var(--mk-kant); border-radius: 9px; background: none;
@@ -1644,46 +1670,222 @@ textarea.qr-input { resize: vertical; }
 .mk-hopp:focus { left: 16px; }
 @media (max-width: 620px) { .mk-nav a:not(.mk-knapp-liten) { display: none; } }
 
+/* ── TONER ──
+   Én variabel per kort, satt av en `t-*`-klasse. Reglene under bruker `var(--tone)` og
+   slipper å gjentas per farge — og fargene er de fem som allerede finnes i systemet, så
+   markedssiden innfører ingen ny palett. */
+.t-blaa { --tone: var(--accent); }
+.t-cyan { --tone: var(--logo-iq); }
+.t-gronn { --tone: var(--accent2); }
+.t-gul { --tone: var(--warn); }
+.t-rod { --tone: var(--danger); }
+
 .mk-hero {
-  padding: 72px 24px 56px; max-width: 780px; margin: 0 auto; text-align: center;
+  padding: 72px 24px 56px; max-width: 820px; margin: 0 auto; text-align: center;
+  position: relative; isolation: isolate;
+}
+/* Glød bak heroen. Uten den er toppen en flat firkant farge — det var dette som gjorde at
+   siden leste som «kjedelig» ved siden av mockupen. Dekorativ, derfor pointer-events: none. */
+.mk-hero::before {
+  content: ""; position: absolute; z-index: -2; pointer-events: none;
+  left: 50%; top: -180px; transform: translateX(-50%);
+  width: min(1000px, 130%); height: 620px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.28), transparent 70%);
+  filter: blur(70px);
+}
+/* Rutenettet bak heroen. Nesten usynlig (2,8 % hvitt), og nettopp derfor virker det: det gir
+   flaten tekstur uten å bli et mønster man ser på. Masken toner det ut mot kantene, ellers
+   ville rutene stoppet i en synlig strek der elementet slutter. */
+.mk-hero::after {
+  content: ""; position: absolute; inset: -72px 0 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(var(--mk-rutenett-strek) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mk-rutenett-strek) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 26%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 26%, #000 20%, transparent 78%);
 }
 .mk-merkelapp {
-  display: inline-block; font-size: var(--fs-label); font-weight: 700;
-  background: rgba(15, 186, 129, 0.12); color: #0a8f63;
-  border-radius: 20px; padding: 5px 13px; margin-bottom: 22px;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: var(--fs-label); font-weight: 700;
+  background: color-mix(in srgb, var(--accent2) 13%, transparent);
+  color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+  border-radius: 20px; padding: 5px 14px; margin-bottom: 22px;
 }
+/* Prikken har en glorie og en puls: den sier «i drift akkurat nå», som er hele poenget med
+   merkelappen. Stanses ved prefers-reduced-motion — glorien alene bærer det fint. */
+.mk-merkelapp::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent2); flex-shrink: 0;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 18%, transparent);
+  animation: mk-puls 2.4s ease-in-out infinite;
+}
+@keyframes mk-puls { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .mk-merkelapp::before { animation: none; } }
 .mk-hero h1 {
-  font-size: clamp(30px, 5.2vw, 50px); font-weight: 800; line-height: 1.12;
-  letter-spacing: -1px; margin: 0 0 20px;
+  font-size: clamp(32px, 5.6vw, 58px); font-weight: 800; line-height: 1.08;
+  letter-spacing: -1.5px; margin: 0 0 20px;
 }
-.mk-hero h1 em { font-style: normal; color: var(--accent); }
+/* Gradienttekst på det uthevede ordet. `color: transparent` MÅ stå sammen med
+   background-clip — uten den maler nettleseren teksten over gradienten. */
+.mk-hero h1 em {
+  font-style: normal; background: var(--mk-grad);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 .mk-ingress { font-size: var(--fs-md); line-height: 1.7; color: var(--mk-dempet); margin: 0 auto 26px; }
 .mk-knapper { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 /* `.mk .mk-knapp`, ikke bare `.mk-knapp`: den generelle `.mk a` over har spesifisitet
    (0,1,1) og ville ellers vunnet, slik at knappen ble blå tekst på blå bakgrunn. */
 .mk .mk-knapp, .mk-knapp {
-  display: inline-block; border: none; border-radius: 11px;
-  background: var(--accent); color: #fff; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 9px; border: 1px solid transparent;
+  border-radius: 11px; text-decoration: none;
   padding: 13px 26px; font-size: var(--fs-md); font-weight: 700;
   font-family: var(--font-sans); cursor: pointer;
+  /* Gradient og glød, ikke flat blåfarge. Den innvendige lyse linjen på toppen er det som
+     gjør at knappen leser som en fysisk flate og ikke et rektangel. */
+  background: linear-gradient(135deg, var(--accent), #2b7bff); color: #fff;
+  box-shadow: 0 8px 24px -8px rgba(var(--accent-rgb), 0.85),
+              inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+.mk .mk-knapp:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px -8px rgba(var(--accent-rgb), 0.95),
+              inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mk .mk-knapp, .mk .mk-knapp:hover { transition: none; transform: none; }
 }
 .mk-knapp:disabled { opacity: 0.55; cursor: default; }
-.mk .mk-knapp.sekundaer { background: var(--mk-flate); color: var(--mk-blekk); border: 1px solid var(--mk-kant); }
+.mk .mk-knapp.sekundaer {
+  background: color-mix(in srgb, var(--mk-blekk) 5%, transparent);
+  color: var(--mk-blekk); border-color: var(--mk-kant); box-shadow: none;
+}
+.mk .mk-knapp.sekundaer:hover {
+  background: color-mix(in srgb, var(--mk-blekk) 10%, transparent); box-shadow: none;
+}
 .mk-liten { font-size: var(--fs-label); color: var(--mk-dempet); margin-top: 14px; }
 
 .mk-seksjon { padding: 56px 24px; max-width: 1080px; margin: 0 auto; width: 100%; }
 .mk-seksjon.smal { max-width: 680px; }
 .mk-overtittel {
-  display: block; font-size: var(--fs-label); font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1.4px; color: var(--accent); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 11px;
+  font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.7px; color: var(--logo-iq); margin-bottom: 12px;
+}
+/* Streken foran overtittelen. Den gjør at seksjonen begynner med et visuelt anslag i stedet
+   for at teksten bare starter — samme grep som mockupen, og med merkevaregradienten i seg
+   framfor én flat farge. */
+.mk-overtittel::before {
+  content: ""; width: 22px; height: 2px; border-radius: 2px; flex-shrink: 0;
+  background: linear-gradient(90deg, var(--accent), var(--logo-iq));
 }
 .mk-seksjon h1, .mk-seksjon h2 {
-  font-size: clamp(23px, 3.4vw, 32px); font-weight: 800;
-  letter-spacing: -0.5px; margin: 0 0 26px;
+  font-size: clamp(26px, 3.8vw, 38px); font-weight: 800;
+  letter-spacing: -0.8px; line-height: 1.16; margin: 0 0 20px;
+  /* Brytes bevisst på 24 tegn: en overskrift som går i én lang linje over hele bredden
+     leses som brødtekst. To–tre korte linjer leses som en overskrift. */
+  max-width: 24ch;
 }
 
-.mk-rutenett { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; }
-.mk-kort { border: 1px solid var(--mk-kant); border-radius: 14px; padding: 22px; background: var(--mk-flate); }
+/* ── BÅND ──
+   Bakgrunnen skal gå helt ut i kanten mens teksten holder seg innenfor samme bredde som
+   resten av siden — derfor to elementer: båndet eier farge og loddrett luft, `.mk-seksjon`
+   inni eier bredden. Rytmen (dyp → grunn → tonet → dyp) er det som skiller seksjonene fra
+   hverandre når siden ble lengre; med bare hvitrom flyter de sammen til én tekstvegg. */
+.mk-band { padding: 84px 0; }
+.mk-band > .mk-seksjon { padding-block: 0; }
+.mk-band.dyp { background: var(--mk-dyp); border-block: 1px solid var(--mk-kant); }
+.mk-band.tonet {
+  background: linear-gradient(180deg, var(--mk-dyp), var(--bg));
+  border-top: 1px solid var(--mk-kant);
+}
+@media (max-width: 720px) { .mk-band { padding: 52px 0; } }
+
+/* Ingress under en seksjonsoverskrift. Egen klasse og ikke `.mk-ingress`: den er
+   venstrestilt og bredde-begrenset i tegn, mens `.mk-ingress` er midtstilt i heroen. */
+.mk-sek-ingress {
+  font-size: var(--fs-md); line-height: 1.7; color: var(--mk-dempet);
+  max-width: 62ch; margin: 0 0 30px;
+}
+
+/* Punktene under heroen — de fire tingene et styre spør om før de leser videre. */
+.mk-punkter {
+  list-style: none; margin: 40px 0 0; padding: 0;
+  /* Fire i bredden med skillestreker, ikke haker: dette er en faktastripe under heroen, og
+     hakene gjorde den til enda en punktliste. Det uthevede ordet bærer poenget. */
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--mk-kant); padding-top: 22px; text-align: left;
+}
+.mk-punkter li {
+  font-size: var(--fs-label); line-height: 1.5; color: var(--mk-dempet);
+  padding: 0 18px; border-left: 1px solid var(--mk-kant); text-align: center;
+}
+.mk-punkter li:first-child { border-left: none; padding-left: 0; }
+.mk-punkter b { color: var(--mk-blekk); font-weight: 700; }
+@media (max-width: 720px) {
+  .mk-punkter { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 0; }
+  .mk-punkter li:nth-child(odd) { border-left: none; padding-left: 0; }
+}
+
+/* ── UTGANGSPUNKTET ──
+   Tre kort med løpenummer. Nummeret er innhold: det sier at dette er ett problem som
+   utvikler seg, ikke tre løsrevne irritasjoner. */
+.mk-prob { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+/* Står på det dype båndet, og løftes derfor to trinn — ellers smelter kortet inn i båndet
+   på samme måte som modulkortene gjorde mot bakgrunnen. Fargestripen til venstre knytter
+   kortet til alvorlighetsgraden: rødt, gult, blått. */
+.mk-prob-kort {
+  border: 1px solid var(--mk-kant); border-left: 3px solid var(--tone);
+  border-radius: 14px; padding: 24px; background: var(--surface2);
+}
+.mk-nr {
+  display: block; font-size: var(--fs-sm); font-weight: 800;
+  color: var(--tone); letter-spacing: 1.5px; margin-bottom: 12px;
+}
+.mk-prob-kort h3 { font-size: var(--fs-md); font-weight: 700; margin: 0 0 9px; }
+.mk-prob-kort p { font-size: var(--fs-sm); line-height: 1.65; color: var(--mk-dempet); margin: 0; }
+/* Konklusjonen står i en egen flate, ikke som løs brødtekst: den er svaret på de tre
+   kortene over, og skal leses som det. */
+.mk-utgang {
+  display: flex; align-items: flex-start; gap: 13px;
+  font-size: var(--fs-md); line-height: 1.65; margin: 26px 0 0;
+  background: rgba(var(--accent-rgb), 0.09);
+  border: 1px solid rgba(var(--accent-rgb), 0.26);
+  border-radius: 13px; padding: 18px 22px;
+}
+.mk-utgang svg { color: var(--accent); flex-shrink: 0; margin-top: 3px; }
+
+/* ── PILOTBÅNDET ──
+   To spalter: hva som skjer til venstre, skjemaet til høyre. Skjemaet skal stå ved siden av
+   løftet og ikke under det — den som har lest ferdig skal ikke måtte scrolle for å svare. */
+.mk-cta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 46px; align-items: start; }
+@media (max-width: 860px) { .mk-cta { grid-template-columns: minmax(0, 1fr); gap: 34px; } }
+.mk-steg { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
+.mk-steg li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; align-items: start; }
+.mk-steg-nr {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--logo-iq) 14%, transparent); color: var(--logo-iq);
+  border: 1px solid color-mix(in srgb, var(--logo-iq) 30%, transparent);
+  font-weight: 800; font-size: var(--fs-sm);
+}
+.mk-steg b { display: block; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 3px; }
+.mk-steg em { display: block; font-size: var(--fs-sm); line-height: 1.6; color: var(--mk-dempet); font-style: normal; }
+
+.mk-rutenett { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 18px; }
+/* `--surface2`, ikke `--surface`: modulkortene står på sidens egen bakgrunn, og med
+   `--surface` var de fire punkter unna den — åtte kort som fløt sammen til én flate.
+   Topplinjen og ikonfeltet i modulens egen tone er det som gjør lista skannbar. */
+.mk-kort {
+  border: 1px solid var(--mk-kant); border-top: 2px solid var(--tone);
+  border-radius: 14px; padding: 22px; background: var(--surface2);
+}
+.mk-ikon {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px; margin-bottom: 14px;
+  background: color-mix(in srgb, var(--tone) 16%, transparent); color: var(--tone);
+}
 .mk-kort h3 { font-size: var(--fs-md); font-weight: 700; margin: 0 0 9px; }
 .mk-kort p { font-size: var(--fs-sm); line-height: 1.65; color: var(--mk-dempet); margin: 0; }
 
@@ -1728,6 +1930,9 @@ textarea.qr-input { resize: vertical; }
 }
 .mk-person-info b { display: block; font-size: var(--fs-md); }
 .mk-person-info em { display: block; font-size: var(--fs-sm); color: var(--mk-dempet); font-style: normal; }
+/* Tredje linje: at systemet brukes ukentlig av den som lagde det, er selve beviset — den
+   skal ha aksentfargen og ikke drukne som enda en dempet undertekst. */
+.mk-person-info > span { display: block; font-size: var(--fs-label); color: var(--accent); margin-top: 3px; }
 
 .mk-tekst h2 { font-size: var(--fs-lg); font-weight: 700; margin: 28px 0 10px; }
 .mk-tekst p { font-size: var(--fs-sm); line-height: 1.75; color: var(--mk-dempet); margin: 0 0 12px; }
@@ -1739,6 +1944,7 @@ textarea.qr-input { resize: vertical; }
   font-size: var(--fs-label); color: var(--mk-dempet);
 }
 .mk-fot-lenker { display: flex; gap: 18px; }
+.mk-fot-sted { opacity: 0.75; }
 
 
 /* ── PRODUKTBILDET ──
@@ -1769,31 +1975,49 @@ textarea.qr-input { resize: vertical; }
 }
 .mk-app-meny span:not(.mk-app-lbl) {
   font-size: var(--fs-label); color: var(--mk-dempet); padding: 7px 9px; border-radius: 7px;
+  display: flex; align-items: center; gap: 9px;
+}
+.mk-app-meny svg { flex-shrink: 0; opacity: 0.75; }
+.mk-app-meny span.pa svg { opacity: 1; }
+/* Telleren ved siden av menypunktet: det er DEN som gjør bildet til et system i drift og
+   ikke en tom skjerm. */
+.mk-app-merke {
+  background: rgba(var(--accent-rgb), 0.18); color: var(--accent);
+  border-radius: 999px; padding: 0 6px; font-size: 10px; font-weight: 700;
+  font-style: normal; line-height: 1.6; flex-shrink: 0; margin-left: auto;
 }
 .mk-app-meny span.pa { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); font-weight: 600; }
 .mk-app-innhold { padding: 16px 18px; }
-.mk-app-tittel { font-size: var(--fs-sm); font-weight: 700; margin-bottom: 12px; }
-.mk-app-tall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
-.mk-app-tall div {
-  border: 1px solid var(--mk-kant); border-radius: 10px; padding: 10px 12px; background: var(--bg);
+.mk-app-tittel {
+  font-size: var(--fs-sm); font-weight: 700; margin-bottom: 12px;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
 }
-.mk-app-tall b { display: block; font-size: 22px; font-weight: 700; }
-.mk-app-tall b.gronn { color: var(--accent2); }
-.mk-app-tall b.gul { color: var(--warn); }
-.mk-app-tall b.rod { color: var(--danger); }
-.mk-app-tall span { font-size: 10px; color: var(--mk-dempet); }
+.mk-app-tittel em { font-size: 10px; font-weight: 500; color: var(--mk-dempet); font-style: normal; }
+.mk-app-tall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+/* Nøkkeltallene: merkelappen OVER tallet, og en farget topplinje per kort. Med tallet først
+   og merkelappen under leste de fire som løs tekst — nå leses de som et instrumentpanel. */
+.mk-app-tall div {
+  border: 1px solid var(--mk-kant); border-top: 2px solid var(--tone);
+  border-radius: 10px; padding: 9px 12px 11px; background: var(--bg);
+}
+.mk-app-tall span {
+  display: block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--mk-dempet); margin-bottom: 3px;
+}
+.mk-app-tall b { display: block; font-size: 22px; font-weight: 700; color: var(--tone); }
+/* Radene er kort, ikke linjer i en tabell: det er slik lista faktisk ser ut i appen. */
+.mk-app-liste { display: grid; gap: 6px; }
 .mk-app-liste > div {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid var(--mk-kant);
+  padding: 9px 11px; border: 1px solid var(--mk-kant); border-radius: 9px; background: var(--bg);
 }
-.mk-app-liste > div:last-child { border-bottom: none; }
 .mk-app-liste b { display: block; font-size: var(--fs-label); font-weight: 600; }
 .mk-app-liste em { display: block; font-size: 10px; color: var(--mk-dempet); font-style: normal; }
-.mk-app-status { font-size: 10px; font-weight: 700; white-space: nowrap; }
-.mk-app-status.gronn { color: var(--accent2); }
-.mk-app-status.gul { color: var(--warn); }
-.mk-app-status.rod { color: var(--danger); }
-.mk-app-status.grå { color: var(--mk-dempet); }
+.mk-app-status {
+  font-size: 10px; font-weight: 700; white-space: nowrap; color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 15%, transparent);
+  border-radius: 999px; padding: 3px 9px;
+}
 @media (max-width: 620px) {
   .mk-app { grid-template-columns: 1fr; }
   .mk-app-meny { display: none; }

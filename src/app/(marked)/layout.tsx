@@ -57,12 +57,17 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
           <span className="mk-ord">Drift<span>IQ</span></span>
         </Link>
         <nav className="mk-nav">
+          <a href="#problem">Problemet</a>
+          <a href="#skjerm">Slik ser det ut</a>
           <a href="#moduler">Hva systemet dekker</a>
           <a href="#kontakt">Bli pilotlag</a>
-          <Temaveksler />
           {/* Absolutt til kundeappen, ikke relativ: innlogging på markedsverten setter
               cookien på feil origin og ender i 404 (se middleware.ts). */}
-          <a className="mk-knapp-liten" href={`${APP_URL}/logg-inn`}>Logg inn</a>
+          <a href={`${APP_URL}/logg-inn`}>Logg inn</a>
+          <Temaveksler />
+          {/* Handlingen skal være den blå flaten i toppen, ikke innloggingen: siden finnes
+              for å skaffe pilotlag, og de har ingen konto å logge inn med ennå. */}
+          <a className="mk-knapp-liten" href="#kontakt">Bli pilotlag</a>
         </nav>
       </header>
 
@@ -76,8 +81,10 @@ export default function MarkedLayout({ children }: { children: ReactNode }) {
           </span>
           <span className="mk-fot-lenker">
             <Link href="/personvern">Personvern</Link>
+            <a href="/#kontakt">Kontakt</a>
             <a href={`${APP_URL}/logg-inn`}>Logg inn</a>
           </span>
+          <span className="mk-fot-sted">Laget i Bergen · 2026</span>
         </div>
       </footer>
     </div>
