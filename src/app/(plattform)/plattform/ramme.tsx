@@ -9,6 +9,7 @@ import { api } from "@/lib/klient";
 import { erPlattformadminRolle } from "@/lib/nivaer";
 import { useAppLenke } from "../verter";
 import Temaknapp from "@/components/Temaknapp";
+import ProfilModal from "@/components/ProfilModal";
 import {
   Activity,
   BarChart3,
@@ -63,6 +64,15 @@ const MENY: ReadonlyArray<{ sti: string; etikett: string; ikon: LucideIcon }> = 
 export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {
   const { bruker } = useOkt();
   const sti = usePathname();
+  /**
+   * Profilen, med `orgId={null}`.
+   *
+   * Panelet er den ENESTE flaten en plattformadmin uten medlemskap i et lag ser — og uten
+   * dette hadde nettopp de kontoene, de med mest makt, ikke hatt noen vei til å skru på
+   * tofaktor selv. Modalen er den samme som i kunde-appen, ikke en kopi: den tar allerede
+   * `orgId: string | null` og skjuler fanene som ikke gir mening uten et lag.
+   */
+  const [profilApen, setProfilApen] = useState(false);
   // Absolutt til appverten når vertene er delt: /dashboard er 404 her.
   const appLenke = useAppLenke();
 
@@ -117,7 +127,12 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
             <Temaknapp kompakt />
           </div>
           {bruker && (
-            <div className="pf-bruker-blokk">
+            <button
+              type="button"
+              className="pf-bruker-blokk"
+              onClick={() => setProfilApen(true)}
+              title="Din profil, passord og tofaktor"
+            >
               <span className="pf-mark liten" aria-hidden>{initialer(bruker.name)}</span>
               <span style={{ minWidth: 0 }}>
                 <span className="pf-navn">{bruker.name}</span>
@@ -125,7 +140,7 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
                   {erPlattformadminRolle(bruker.role) ? "Plattformadmin" : "Ingen tilgang"}
                 </span>
               </span>
-            </div>
+            </button>
           )}
         </div>
       </nav>
@@ -134,6 +149,15 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
         <h1 className="pf-tittel">{tittel}</h1>
         {children}
       </main>
+
+      {profilApen && (
+        <ProfilModal
+          orgId={null}
+          onLukk={() => setProfilApen(false)}
+          // Navnet står i brukerblokken nede til venstre, så en endring må hentes på nytt.
+          onLagret={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

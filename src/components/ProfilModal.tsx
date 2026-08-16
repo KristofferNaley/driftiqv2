@@ -152,18 +152,24 @@ export default function ProfilModal({
   }
 
   const aktiv = profil?.organisasjoner.find((o) => o.id === orgId) ?? null;
+  /** Er brukeren med i noe lag i det hele tatt? Se fanelista under. */
+  const harLag = (profil?.organisasjoner.length ?? 0) > 0;
 
   const faner: ReadonlyArray<Fanevalg<Fane>> = [
     { nokkel: "profil", etikett: "Profil", Ikon: User, endret: profilEndret },
     // Varslene ligger på MEDLEMSKAPET. Uten et aktivt lag finnes de ikke, og en fane som
     // bare kan si «ikke tilgjengelig» er verre enn ingen fane.
     ...(orgId ? [{ nokkel: "varsler" as const, etikett: "Varsler", Ikon: Bell, endret: varslerEndret }] : []),
-    { nokkel: "lag", etikett: "Mine lag", Ikon: Building2 },
+    // «Mine lag» og «Aktivitet» forutsetter at man ER med i et lag. En plattformadmin uten
+    // medlemskap åpner den samme modalen fra panelet, og for dem ville begge fanene bare
+    // kunne si «du har ingen» — samme grunn som varslene skjules over. Betingelsen er
+    // MEDLEMSKAP og ikke `orgId`, så kunde-appen oppfører seg nøyaktig som før.
+    ...(harLag ? [{ nokkel: "lag" as const, etikett: "Mine lag", Ikon: Building2 }] : []),
     { nokkel: "sikkerhet", etikett: "Passord", Ikon: KeyRound },
     // Egen fane, ikke en seksjon under passord: tofaktor er en beslutning man tar én gang og
     // sjelden rører igjen, og den skal kunne finnes uten å scrolle forbi et passordskjema.
     { nokkel: "tofaktor", etikett: "Tofaktor", Ikon: ShieldCheck },
-    { nokkel: "aktivitet", etikett: "Aktivitet", Ikon: History },
+    ...(harLag ? [{ nokkel: "aktivitet" as const, etikett: "Aktivitet", Ikon: History }] : []),
     { nokkel: "om", etikett: "Om appen", Ikon: Info },
   ];
 

@@ -1470,10 +1470,15 @@ textarea.qr-input { resize: vertical; }
   border: 1px solid #2a2140;
 }
 .pf-tilbake:hover { background: #1e1830; color: #fff; }
+/* Er en <button> (åpner profilen), og da må font, farge og bakgrunn settes eksplisitt —
+   knapper arver ingen av delene, og `background: none` alene har gitt svart tekst på mørk
+   flate tre ganger i dette repoet. */
 .pf-bruker-blokk {
-  display: flex; align-items: center; gap: 10px;
-  padding: 13px 8px 0; margin-top: 13px; border-top: 1px solid #2a2140;
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 13px 8px 0; margin-top: 13px; border: none; border-top: 1px solid #2a2140;
+  background: none; color: inherit; font-family: var(--font-sans); cursor: pointer;
 }
+.pf-bruker-blokk:hover .pf-navn { color: var(--pf); }
 .pf-bruker-blokk .pf-navn { color: #fff; }
 .pf-bruker-blokk .pf-under { color: var(--pf); }
 
