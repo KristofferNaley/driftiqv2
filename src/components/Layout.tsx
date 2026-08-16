@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import { useOkt } from "./OktProvider";
 import { NIVA_ETIKETT } from "@/lib/nivaer";
 import ProfilModal from "./ProfilModal";
+import SokModal from "./SokModal";
 import { MeldFeil } from "./MeldFeil";
 import { navtall } from "@/lib/klient";
 
@@ -53,11 +54,28 @@ export default function Layout({
   const [sammenslatt, setSammenslatt] = useState(false);
   const sti = usePathname();
   const [profil, setProfil] = useState(false);
+  const [soker, setSoker] = useState(false);
   /**
    * Tallene i sidemenyen. `null` til de er hentet — da tegnes ingen merker, i stedet for at
    * de blinker fra 0 til riktig verdi ved hver navigasjon.
    */
   const [navtallene, setNavtallene] = useState<{ forsinkedeOppgaver: number; apneAvvik: number } | null>(null);
+
+  /**
+   * Cmd+K / Ctrl+K åpner det globale søket fra hvor som helst i appen. Lytteren bor HER
+   * fordi Layout renderes på hver appside — søket skal ikke avhenge av hvilken modul man
+   * står i.
+   */
+  useEffect(() => {
+    const paaTast = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSoker((s) => !s);
+      }
+    };
+    window.addEventListener("keydown", paaTast);
+    return () => window.removeEventListener("keydown", paaTast);
+  }, []);
 
   useEffect(() => {
     if (!aktivOrg) return;
@@ -121,6 +139,10 @@ export default function Layout({
         }
         onLukk={() => setApen(false)}
         onProfil={() => setProfil(true)}
+        onSok={() => {
+          setApen(false);
+          setSoker(true);
+        }}
       />
 
       <div className="app-main">
@@ -164,6 +186,7 @@ export default function Layout({
         </div>
       </div>
 
+      {soker && <SokModal orgId={aktivOrg?.id ?? null} onLukk={() => setSoker(false)} />}
       {profil && (
         <ProfilModal
           orgId={aktivOrg?.id ?? null}

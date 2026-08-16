@@ -42,6 +42,7 @@ export default function Sidebar({
   tall,
   onLukk,
   onProfil,
+  onSok,
 }: {
   apen: boolean;
   sammenslatt: boolean;
@@ -54,6 +55,8 @@ export default function Sidebar({
   onLukk: () => void;
   /** Åpner «Min profil» — også eneste vei til utlogging. */
   onProfil: () => void;
+  /** Åpner det globale søket. Knappen bor her; Cmd+K-lytteren bor i Layout. */
+  onSok: () => void;
 }) {
   const sti = usePathname();
   const grupper = menyFor(aktiverteModuler, oktKjent);
@@ -79,6 +82,14 @@ export default function Sidebar({
 
       {/* Org-en er kontekst for alt under, derfor over det første menypunktet. */}
       <OrgVelger />
+
+      {/* Søket står mellom org-velgeren og menyen: det søker i DENNE org-en, på tvers av
+          punktene under. Ser ut som et felt, er en knapp — selve feltet bor i modalen. */}
+      <button type="button" className="sok-knapp" onClick={onSok} title="Søk i hele systemet">
+        <ikoner.Search size={15} strokeWidth={2} aria-hidden />
+        <span className="nav-tekst">Søk …</span>
+        <kbd className="sok-kbd">⌘K</kbd>
+      </button>
 
       <div className="sidebar-nav">
         {grupper.map((g) => (

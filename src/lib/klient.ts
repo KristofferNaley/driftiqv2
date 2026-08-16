@@ -759,3 +759,18 @@ export const meg = {
   /** Navn og telefon. E-post kan ikke endres her — se kommentaren i api/meg/route.ts. */
   lagre: (d: { name?: string; phone?: string | null }) => api.endre<MegSvar>("/meg", d),
 };
+
+/** Ett treff i det globale søket. `modul` avgjør hvor lenken peker — se SokModal. */
+export type SokTreff = {
+  modul: string;
+  id: string;
+  tittel: string;
+  undertekst: string | null;
+  dato: string | null;
+  /** Kun avvik: løpenummeret, vist som «#21». */
+  nummer: number | null;
+};
+
+export const sok = {
+  hent: (o: string, q: string) => api.hent<SokTreff[]>(org(o, `/sok?q=${encodeURIComponent(q)}`)),
+};

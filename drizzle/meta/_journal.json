@@ -330,6 +330,13 @@
       "when": 1786902654840,
       "tag": "0046_true_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786913192881,
+      "tag": "0047_sok_indekser",
+      "breakpoints": true
     }
   ]
 }

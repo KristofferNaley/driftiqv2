@@ -4035,6 +4035,55 @@ textarea.qr-input { resize: vertical; }
 }
 .rb-mal:hover { border-color: var(--accent); }
 
+/* ── GLOBALT SØK ──
+   Knappen i sidemenyen ser ut som et felt (det er dit man skal), modalen eier selve
+   feltet. <button> arver verken farge eller font — begge settes eksplisitt. */
+.sok-knapp {
+  display: flex; align-items: center; gap: 9px;
+  margin: 10px 12px 2px; padding: 8px 11px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface2); color: var(--muted);
+  font-family: var(--font-sans); font-size: var(--fs-label); cursor: pointer;
+}
+.sok-knapp:hover { color: var(--text); border-color: var(--accent); }
+.sok-knapp .nav-tekst { flex: 1; text-align: left; }
+.sok-kbd {
+  font-family: var(--font-sans); font-size: 10px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px;
+}
+/* Tastaturhintet er meningsløst på berøringsskjerm. */
+@media (max-width: 768px) { .sok-kbd { display: none; } }
+
+.sok-felt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px; border-bottom: 1px solid var(--border);
+  color: var(--muted); flex-shrink: 0;
+}
+.sok-felt input {
+  flex: 1; min-width: 0; border: none; background: none; outline: none;
+  font-family: var(--font-sans); font-size: var(--fs-md); color: var(--text);
+}
+.sok-status { font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+
+.sok-resultater { overflow-y: auto; max-height: min(60dvh, 520px); padding: 8px 8px 12px; }
+.sok-gruppe { margin-top: 8px; }
+.sok-gruppe-navn {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--muted); padding: 6px 10px 4px;
+}
+.sok-treff {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border-radius: 9px; text-decoration: none; color: var(--text);
+}
+.sok-treff:hover { background: var(--surface2); }
+.sok-treff-tittel { font-size: var(--fs-sm); font-weight: 600; }
+.sok-treff-tittel b { color: var(--accent); font-weight: 700; }
+.sok-treff-meta {
+  font-size: var(--fs-label); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ══ MOBIL — SAMLET STRAMMING ══
  *
  * Skjermbildene fra telefonen (16.08.2026) viste tre ting som gjorde appen tung i hånden:
