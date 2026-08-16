@@ -13,6 +13,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "../src/lib/auth";
 import { lukkPooler } from "../src/db/client";
 import { GET as hentPlasser, POST as nyPlass } from "../src/app/api/organizations/[orgId]/parking/spots/route";
+import { GET as hentUtforelsesbilde } from "../src/app/api/organizations/[orgId]/tasks/[taskId]/completions/[completionId]/bilder/[bildeId]/fil/route";
 
 const PASSORD = "et-godt-passord-123";
 
@@ -34,6 +35,13 @@ afterAll(async () => {
 
 afterEach(async () => {
   for (const id of ryddOrg.splice(0)) {
+    await eier.query("DELETE FROM completion_photos WHERE org_id = $1", [id]);
+    await eier.query(
+      "DELETE FROM completions WHERE task_id IN (SELECT id FROM tasks WHERE org_id = $1)",
+      [id],
+    );
+    await eier.query("DELETE FROM tasks WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM vendors WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM parking_spots WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM user_org_memberships WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM organizations WHERE id = $1", [id]);
@@ -181,5 +189,94 @@ describe("orgRute", () => {
 
     const svar = await hentPlasser(foresporsel(cookie), ctx(org));
     expect(svar.status).toBe(401);
+  });
+});
+
+/**
+ * Utførelsesbildene fra QR-kvitteringen.
+ *
+ * Ruta ligger under `/tasks/{taskId}/completions/{id}/bilder/…`, og `org_id` på bildet alene
+ * er IKKE nok: uten joinen mot `completions` kunne et bilde fra en hvilken som helst annen
+ * oppgave i samme lag leses gjennom denne oppgavens URL. Det er ingen tenantlekkasje, men det
+ * er en oppgave som viser fram dokumentasjon som ikke hører til den — og i en
+ * internkontrollperm er det nettopp koblingen som er poenget.
+ */
+describe("utførelsesbilder", () => {
+  const bildeCtx = (orgId: string, taskId: string, completionId: string, bildeId: string) => ({
+    params: Promise.resolve({ orgId, taskId, completionId, bildeId }),
+  });
+
+  async function oppsett(orgId: string) {
+    const vendorId = randomUUID();
+    await eier.query("INSERT INTO vendors (id, org_id, name) VALUES ($1,$2,'Leverandør')", [
+      vendorId,
+      orgId,
+    ]);
+    const lagTask = async () => {
+      const id = randomUUID();
+      await eier.query(
+        "INSERT INTO tasks (id, org_id, vendor_id, title, frequency) VALUES ($1,$2,$3,'Oppgave','annual')",
+        [id, orgId, vendorId],
+      );
+      return id;
+    };
+    const taskA = await lagTask();
+    const taskB = await lagTask();
+
+    const completionId = randomUUID();
+    await eier.query(
+      "INSERT INTO completions (id, task_id, completed_by) VALUES ($1,$2,'Leverandøren')",
+      [completionId, taskA],
+    );
+    const bildeId = randomUUID();
+    await eier.query(
+      `INSERT INTO completion_photos (id, completion_id, org_id, filename, original_name, content_type)
+       VALUES ($1,$2,$3,$4,'bilde.jpg','image/jpeg')`,
+      [bildeId, completionId, orgId, `${randomUUID()}.jpg`],
+    );
+    return { taskA, taskB, completionId, bildeId };
+  }
+
+  it("nekter å hente bildet gjennom en ANNEN oppgaves url", async () => {
+    const org = await nyOrg(["tasks"]);
+    const { cookie } = await innloggetBruker(org, "visning");
+    const { taskB, completionId, bildeId } = await oppsett(org);
+
+    const svar = await hentUtforelsesbilde(
+      foresporsel(cookie),
+      bildeCtx(org, taskB, completionId, bildeId),
+    );
+    expect(svar.status).toBe(404);
+    expect((await svar.json()).detail).toMatch(/ikke funnet/i);
+  });
+
+  it("krever at modulen er på", async () => {
+    const org = await nyOrg(["parkering"]);
+    const { cookie } = await innloggetBruker(org, "visning");
+    const { taskA, completionId, bildeId } = await oppsett(org);
+
+    const svar = await hentUtforelsesbilde(
+      foresporsel(cookie),
+      bildeCtx(org, taskA, completionId, bildeId),
+    );
+    expect(svar.status).toBe(403);
+  });
+
+  /**
+   * Riktig oppgave og riktig lag: da skal ruta komme HELT fram til disken. Fila finnes ikke i
+   * testen, og «Fil ikke funnet på disk» er derfor det riktige svaret — det beviser at
+   * radoppslaget og alle gatene slapp den gjennom.
+   */
+  it("slipper gjennom til fila når oppgave, lag og modul stemmer", async () => {
+    const org = await nyOrg(["tasks"]);
+    const { cookie } = await innloggetBruker(org, "visning");
+    const { taskA, completionId, bildeId } = await oppsett(org);
+
+    const svar = await hentUtforelsesbilde(
+      foresporsel(cookie),
+      bildeCtx(org, taskA, completionId, bildeId),
+    );
+    expect(svar.status).toBe(404);
+    expect((await svar.json()).detail).toMatch(/disk/i);
   });
 });

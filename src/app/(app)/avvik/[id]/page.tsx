@@ -8,6 +8,7 @@ import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/componen
 import { avvik, brukere, enheter, leverandorer, type AvvikDetalj } from "@/lib/klient";
 import { STATUS_VISNING, lesKategorier } from "@/lib/avvikkategorier";
 import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
+import Dokumentviser, { kanForhandsvises } from "@/components/Dokumentviser";
 import { useOkt } from "@/components/OktProvider";
 
 const ALVORLIGHET = [
@@ -493,6 +494,14 @@ function Vedlegg({
   onFeil: (m: string) => void;
 }) {
   const [laster, setLaster] = useState(false);
+  /**
+   * Vedlegget som vises. Samme viser som dokumentarkivet og kontrakter bruker — et avviksbilde
+   * skal kunne ses der avviket står, ikke etter en tur innom nedlastingsmappa.
+   */
+  const [viser, setViser] = useState<AvvikDetalj["vedlegg"][number] | null>(null);
+
+  const filUrl = (vedleggId: string) =>
+    `/api/organizations/${orgId}/deviations/${devId}/vedlegg/${vedleggId}/fil`;
 
   async function lastOpp(filer: FileList | null) {
     if (!filer || filer.length === 0) return;
@@ -539,12 +548,22 @@ function Vedlegg({
         liste.map((v) => (
           <div key={v.id} className="list-item">
             <div style={{ minWidth: 0 }}>
-              <a
-                className="list-tittel vedlegg-lenke"
-                href={`/api/organizations/${orgId}/deviations/${devId}/vedlegg/${v.id}/fil`}
-              >
-                {v.originalName}
-              </a>
+              {/* Kan nettleseren vise typen, er tittelen en knapp som åpner viseren. Kan den
+                  ikke (HEIC fra iPhone, Word), blir den stående som nedlastingslenke — en
+                  «Vis» som åpner et tomt vindu er verre enn ingen. */}
+              {kanForhandsvises(v.contentType) ? (
+                <button
+                  type="button"
+                  className="list-tittel vedlegg-lenke som-lenke"
+                  onClick={() => setViser(v)}
+                >
+                  {v.originalName}
+                </button>
+              ) : (
+                <a className="list-tittel vedlegg-lenke" href={filUrl(v.id)}>
+                  {v.originalName}
+                </a>
+              )}
               <div className="list-meta">
                 {v.uploadedBy} · {dato(v.uploadedAt)}
                 {v.fileSize ? ` · ${Math.round(v.fileSize / 1024)} kB` : ""}
@@ -567,6 +586,15 @@ function Vedlegg({
             )}
           </div>
         ))
+      )}
+
+      {viser && (
+        <Dokumentviser
+          visningsnavn={viser.originalName}
+          contentType={viser.contentType}
+          url={filUrl(viser.id)}
+          onLukk={() => setViser(null)}
+        />
       )}
     </Kort>
   );

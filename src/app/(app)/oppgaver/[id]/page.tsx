@@ -8,7 +8,8 @@ import { Faner, Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/fell
 import { Knapperad, Modal, Nedtrekk, Tekstomrade, Tekstfelt, useSending } from "@/components/skjema";
 import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 import { useOkt } from "@/components/OktProvider";
-import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave } from "@/lib/klient";
+import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave, type Utkvitteringsbilde } from "@/lib/klient";
+import Dokumentviser from "@/components/Dokumentviser";
 import { lagLeverandormelding } from "@/lib/leverandormelding";
 import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
 
@@ -19,6 +20,11 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
   const [fane, setFane] = useState<Fane>("oppgaven");
   const [kvitterer, setKvitterer] = useState(false);
   const [informerer, setInformerer] = useState(false);
+  /** Bildet som vises i stor visning. Samme viser som dokumentarkivet og avviksvedlegg. */
+  const [viser, setViser] = useState<(Utkvitteringsbilde & { completionId: string }) | null>(null);
+
+  const bildeUrl = (completionId: string, bildeId: string) =>
+    `/api/organizations/${orgId}/tasks/${id}/completions/${completionId}/bilder/${bildeId}/fil`;
 
   /**
    * Samme skille som på lista: `visning` kan se alt og kvittere ut, men ikke endre oppsettet.
@@ -160,6 +166,29 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
                       </span>
                     </div>
 
+                    {/* Bildene fra stedet. De har blitt lagret siden QR-flyten kom, men aldri
+                        vist noe sted — styret kunne ikke se beviset for arbeidet de betalte
+                        for. De hører hjemme HER, i raden for den utførelsen de dokumenterer. */}
+                    {u.bilder.length > 0 && (
+                      <div className="utkv-bilder">
+                        {u.bilder.map((b) => (
+                          <button
+                            key={b.id}
+                            type="button"
+                            className="utkv-bilde"
+                            onClick={() => setViser({ ...b, completionId: u.id })}
+                            title={b.originalName}
+                          >
+                            <img
+                              src={`${bildeUrl(u.id, b.id)}?inline`}
+                              alt={b.originalName}
+                              loading="lazy"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Sjekkpunktene SOM DE STO den dagen — kopien i utkvitteringen, ikke dagens
                         mal. Uhukede punkter vises også: «ikke utført» og «ikke spurt om» er
                         ulike ting i en internkontrollperm. */}
@@ -192,6 +221,14 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
           vendorId={data.vendorId}
           vendorNavn={data.vendorName}
           onLukk={() => setInformerer(false)}
+        />
+      )}
+      {viser && (
+        <Dokumentviser
+          visningsnavn={viser.originalName}
+          contentType={viser.contentType}
+          url={bildeUrl(viser.completionId, viser.id)}
+          onLukk={() => setViser(null)}
         />
       )}
     </Layout>

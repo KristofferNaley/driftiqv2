@@ -8,7 +8,6 @@
  *
  * - QR-bildegenerering (`GET /{id}/qr`) og selve QR-innsendingsskjemaet — de er anonyme og
  *   hører til en egen rute utenfor `/organizations/`.
- * - Bilder på utkvitteringer (`completion_photos`) — venter på fillagring.
  */
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -17,6 +16,7 @@ import { z } from "zod";
 import type { Db } from "../db/client";
 import {
   completionChecklistResults,
+  completionPhotos,
   completions,
   taskChecklistItems,
   tasks,
@@ -202,13 +202,54 @@ export async function hentOppgave(db: Db, orgId: string, taskId: string) {
     perUtkvittering.set(r.completionId, liste);
   }
 
+  /**
+   * Bildene leverandøren tok da de kvitterte ut på stedet.
+   *
+   * De har blitt lagret siden QR-flyten kom, og talt mot kundens kvote hele tiden — men de
+   * ble aldri vist noe sted. Styret kunne altså ikke se beviset for arbeidet de betalte for,
+   * og et bilde ingen ser er verre enn intet bilde: det ser ut som dokumentasjon i
+   * kvoteregnskapet uten å være det i praksis.
+   *
+   * Samme grep som sjekkpunktene over: ÉN spørring for alle utførelsene.
+   */
+  const bilder =
+    radene.length === 0
+      ? []
+      : await db
+          .select({
+            id: completionPhotos.id,
+            completionId: completionPhotos.completionId,
+            originalName: completionPhotos.originalName,
+            contentType: completionPhotos.contentType,
+            fileSize: completionPhotos.fileSize,
+          })
+          .from(completionPhotos)
+          .where(
+            and(
+              eq(completionPhotos.orgId, orgId),
+              inArray(completionPhotos.completionId, radene.map((u) => u.id)),
+            ),
+          )
+          .orderBy(asc(completionPhotos.uploadedAt));
+
+  const bilderPer = new Map<string, typeof bilder>();
+  for (const b of bilder) {
+    const liste = bilderPer.get(b.completionId) ?? [];
+    liste.push(b);
+    bilderPer.set(b.completionId, liste);
+  }
+
   return {
     ...berik(oppgave, sist.get(taskId) ?? null),
     vendorName: rad.vendorName,
     unitNavn: rad.unitNavn,
     ansvarligNavn: rad.ansvarligNavn,
     sjekkliste,
-    utkvitteringer: radene.map((u) => ({ ...u, punkter: perUtkvittering.get(u.id) ?? [] })),
+    utkvitteringer: radene.map((u) => ({
+      ...u,
+      punkter: perUtkvittering.get(u.id) ?? [],
+      bilder: bilderPer.get(u.id) ?? [],
+    })),
   };
 }
 

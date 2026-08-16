@@ -155,6 +155,14 @@ export type Utkvitteringspunkt = {
   order: number;
 };
 
+/** Bildet leverandøren tok på stedet. Filen hentes fra utkvitteringens egen filrute. */
+export type Utkvitteringsbilde = {
+  id: string;
+  originalName: string;
+  contentType: string | null;
+  fileSize: number | null;
+};
+
 export type Utkvittering = {
   id: string;
   completedAt: string;
@@ -162,6 +170,7 @@ export type Utkvittering = {
   notes: string | null;
   manual: boolean;
   punkter: Utkvitteringspunkt[];
+  bilder: Utkvitteringsbilde[];
 };
 
 export type OppgaveMedHistorikk = Oppgave & {

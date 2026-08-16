@@ -2064,6 +2064,14 @@ textarea.qr-input { resize: vertical; }
 
 .vedlegg-lenke { color: var(--accent); text-decoration: none; }
 .vedlegg-lenke:hover { text-decoration: underline; }
+/* Tittelen er en <button> når fila kan forhåndsvises, og skal se ut som lenken ved siden av.
+   `font-family` og `color` må stå: knapper arver ingen av dem. Størrelse og vekt kommer fra
+   `.list-tittel` på samme element, så de settes bevisst IKKE her — en `font: inherit` ville
+   overstyrt dem og krympet titlene. */
+.vedlegg-lenke.som-lenke {
+  border: none; background: none; padding: 0; text-align: left; cursor: pointer;
+  font-family: var(--font-sans); color: var(--accent);
+}
 
 .kategori-av { display: flex; align-items: center; gap: 7px; font-size: var(--fs-label); color: var(--muted); flex-shrink: 0; }
 .kategori-av input { accent-color: var(--accent); }
@@ -2928,6 +2936,21 @@ textarea.qr-input { resize: vertical; }
 .utkv-rad { padding: 13px 20px; border-bottom: 1px solid var(--border); }
 .utkv-rad:last-child { border-bottom: none; }
 .utkv-hode { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* Bildene fra stedet, som miniatyrer i utkvitteringsraden. `auto-fill` framfor faste
+   kolonner: én utkvittering har som regel ett bilde, en annen har seks, og begge skal se
+   riktige ut uten et eget breakpoint. */
+.utkv-bilder {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 96px));
+  gap: 8px; margin-top: 10px;
+}
+/* <button>, så font og bakgrunn må settes eksplisitt — knapper arver ingen av delene. */
+.utkv-bilde {
+  border: 1px solid var(--border); border-radius: 9px; padding: 0; overflow: hidden;
+  background: var(--surface2); cursor: pointer; aspect-ratio: 4 / 3;
+  font-family: var(--font-sans); color: inherit;
+}
+.utkv-bilde:hover { border-color: var(--accent); }
+.utkv-bilde img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .utkv-punkter { margin-top: 9px; padding-left: 2px; }
 .utkv-antall { font-size: var(--fs-label); color: var(--muted); margin-bottom: 5px; }
 /* Grønt bare når ALT er huket av. Er noe utelatt, skal tallet ikke se ut som en godkjenning. */
