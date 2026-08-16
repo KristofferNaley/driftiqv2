@@ -47,14 +47,75 @@ if (!V1_URL) {
 
 const v1 = new Pool({ connectionString: V1_URL });
 
+/**
+ * Oppslag i v1s FAKTISKE skjema, fylt av `lesV1Skjema()` før første spørring.
+ *
+ * ## Hvorfor dette trengs
+ *
+ * Skriptet må kunne kjøre mot mer enn én v1-versjon. Testmiljøet lå på v1 0.8.3, mens
+ * produksjonen på server01 fortsatt sto på 0.8.2 da overgangen ble gjort (16.08.2026) —
+ * og 0.8.3 hadde lagt til både kolonner (`tasks.due_date`,
+ * `deviations.responsible_user_id`, `pricing_config.leads_notify_emails`) og hele tabeller
+ * (`unit_works`, `unit_work_documents`). En `kilde` skrevet for 0.8.3 feiler mot 0.8.2 med
+ * «column … does not exist», og migreringen stopper på tabell nummer tre.
+ *
+ * ## Hvorfor det IKKE er hardkodet til 0.8.2
+ *
+ * Å bare bytte de manglende kolonnene med `NULL` ville løst dagen og ødelagt neste kjøring:
+ * mot en v1 som FAKTISKE har `due_date`, ville skriptet stille ha kastet ekte fristdatoer.
+ * Derfor spør vi databasen i stedet for å anta, og hver gang et fallback brukes, SIES det
+ * høyt i loggen. En manglende kolonne skal være en beskjed, ikke en stillhet.
+ */
+type Har = (tabell: string, kolonne: string) => boolean;
+
 type Tabell = {
   navn: string;
-  /** SELECT mot v1. Kolonnenavnene her må matche kolonnene i v2. */
-  kilde: string;
+  /**
+   * SELECT mot v1. Kolonnenavnene her må matche kolonnene i v2.
+   *
+   * Er den en FUNKSJON, bygges spørringen etter at v1s skjema er lest — bruk `har(…)` til å
+   * velge mellom ekte kolonne og `NULL`-fallback. Se `v1kol()`.
+   */
+  kilde: string | ((har: Har) => string);
   kolonner: string[];
   /** Kolonner som skal oppdateres hvis raden finnes fra før. Tom = la eksisterende rad stå. */
   oppdater?: string[];
+  /**
+   * Tabellen finnes ikke i alle v1-versjoner. Mangler den i kilden, hoppes den over med en
+   * tydelig linje i loggen i stedet for å velte hele migreringen. Sett den KUN på tabeller
+   * som er nye i en senere v1 enn den eldste vi migrerer fra — en tabell som forsvinner
+   * uventet skal fortsatt være en feil.
+   */
+  valgfriIV1?: true;
 };
+
+/**
+ * Kolonne fra v1 hvis den finnes, ellers `NULL` med riktig type og samme alias.
+ *
+ * Typen må stå: uten `::date` blir en tom kolonne `text` i resultatsettet, og INSERT-en i
+ * v2 feiler på typemismatch i stedet for der problemet er.
+ */
+function v1kol(har: Har, tabell: string, kolonne: string, type: string): string {
+  if (har(tabell, kolonne)) return kolonne;
+  manglendeKolonner.push(`${tabell}.${kolonne}`);
+  return `NULL::${type} AS ${kolonne}`;
+}
+
+/** Fylles av `v1kol()` og skrives ut samlet til slutt — se kommentaren på `Har`. */
+const manglendeKolonner: string[] = [];
+
+/** Leser v1s public-skjema én gang, og gir et oppslag som ikke treffer databasen igjen. */
+async function lesV1Skjema(): Promise<{ har: Har; harTabell: (t: string) => boolean }> {
+  const { rows } = await v1.query<{ table_name: string; column_name: string }>(
+    `SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'`,
+  );
+  const kolonner = new Set(rows.map((r) => `${r.table_name}.${r.column_name}`));
+  const tabeller = new Set(rows.map((r) => r.table_name));
+  return {
+    har: (t, k) => kolonner.has(`${t}.${k}`),
+    harTabell: (t) => tabeller.has(t),
+  };
+}
 
 /**
  * Rekkefølgen er fremmednøkkelrekkefølge og kan ikke sorteres om: organisasjoner før
@@ -123,9 +184,47 @@ const TABELLER: Tabell[] = [
   },
   {
     navn: "user_org_memberships",
-    kilde: `SELECT id, user_id, org_id, role::text AS role, title, notification_prefs,
+    // `notification_prefs` lå på ORGANISASJONEN i v1 til og med 0.8.2 (ett sett brytere og
+    // én e-postadresse for hele laget) og flyttet til medlemskapet i 0.8.3. Migrerer vi fra
+    // en 0.8.2-base, finnes kolonnen ikke her, og medlemskapene får NULL — altså
+    // standardvalgene i src/lib/varselvalg.ts. Se notatet i overleveringen: de gamle
+    // org-valgene er en egen vurdering, ikke noe dette skriptet skal gjette seg til.
+    //
+    // ── Nivået ──────────────────────────────────────────────────────────────────────────
+    // v1 0.8.3 lagret nivået direkte (`orgadmin`/`redigering`/`visning`) og kunne kopieres
+    // rått. v1 0.8.2 hadde det spredt på TRE felt, og en rå kopi feiler på
+    // «invalid input value for enum accesslevelenum: "admin"»:
+    //
+    //   role             admin/superadmin styrer de kontosensitive sidene (Brukere,
+    //                    Innstillinger) — det er v2s `orgadmin`.
+    //   title            fri tekst, men styrer redigeringsrett i driftsmodulene: alt UNNTATT
+    //                    et eksakt «varamedlem» gir full redigering (v1s auth.py
+    //                    `_has_full_edit_tier`). Derfor er ELSE-grenen `redigering`, ikke
+    //                    `visning` — motsatt vei ville stille fratatt hele styret skriverett.
+    //   access_override  eksplisitt unntak per person, vinner over tittelen.
+    //
+    // Rekkefølgen under er v1s egen: `role` først (kontotilgang er den sterkeste), så
+    // overstyringen, så tittelen. Merk at v2 ikke kan uttrykke v1s ene rare kombinasjon —
+    // en admin som ER varamedlem hadde kontotilgang UTEN redigering. Den finnes ikke i
+    // dataene (sjekket 16.08.2026), og orgadmin er det nærmeste hvis den skulle dukke opp.
+    kilde: (har) => {
+      const overstyring = har("user_org_memberships", "access_override")
+        ? `WHEN access_override = 'visning' THEN 'visning'
+                     WHEN access_override = 'full' THEN 'redigering'`
+        : "";
+      return `SELECT id, user_id, org_id,
+                   CASE
+                     WHEN role::text IN ('orgadmin', 'redigering', 'visning') THEN role::text
+                     WHEN role::text IN ('admin', 'superadmin', 'kontoansvarlig') THEN 'orgadmin'
+                     ${overstyring}
+                     WHEN lower(trim(COALESCE(title, ''))) = 'varamedlem' THEN 'visning'
+                     ELSE 'redigering'
+                   END AS role,
+                   title,
+                   ${v1kol(har, "user_org_memberships", "notification_prefs", "text")},
                    COALESCE(created_at, now()) AS created_at
-            FROM user_org_memberships`,
+            FROM user_org_memberships`;
+    },
     kolonner: ["id", "user_id", "org_id", "role", "title", "notification_prefs", "created_at"],
     // `notification_prefs` er med i `oppdater`: kjøres migreringen om igjen etter at kunden
     // har endret varslene sine i v1, skal v2 følge etter — ellers står v2 på et gammelt sett.
@@ -208,8 +307,11 @@ const TABELLER: Tabell[] = [
   {
     navn: "tasks",
     // qr_token kopieres UENDRET. Se modulkommentaren.
-    kilde: `SELECT id, org_id, vendor_id, responsible_user_id, title, description, location,
-                   frequency::text AS frequency, start_date, due_date, qr_token, unit_id,
+    // `due_date` på oppgaver kom i v1 0.8.3; i 0.8.2 er en oppgave ren gjentakelse
+    // (`frequency` + `start_date`) og har ingen egen frist å ta med.
+    kilde: (har) => `SELECT id, org_id, vendor_id, responsible_user_id, title, description, location,
+                   frequency::text AS frequency, start_date,
+                   ${v1kol(har, "tasks", "due_date", "date")}, qr_token, unit_id,
                    COALESCE(active, true) AS active,
                    COALESCE(show_on_arshjul, false) AS show_on_arshjul,
                    COALESCE(created_at, now()) AS created_at
@@ -279,6 +381,9 @@ const TABELLER: Tabell[] = [
   },
   {
     navn: "unit_works",
+    // Hele modulen «arbeid på enhet» kom i v1 0.8.3. Migreres det fra en eldre v1, finnes
+    // tabellen ikke, og det er ikke en feil — det er bare ingenting å hente.
+    valgfriIV1: true,
     kilde: `SELECT id, org_id, unit_id, unit_label, element_id,
                    COALESCE(category, 'annet') AS category,
                    COALESCE(work_type, 'vedlikehold') AS work_type,
@@ -292,6 +397,8 @@ const TABELLER: Tabell[] = [
   },
   {
     navn: "unit_work_documents",
+    // Følger unit_works — se kommentaren der.
+    valgfriIV1: true,
     kilde: `SELECT id, work_id, org_id, COALESCE(doc_type, 'annet') AS doc_type, title,
                    filename, original_name, content_type, file_size, uploaded_by,
                    COALESCE(uploaded_at, now()) AS uploaded_at
@@ -491,11 +598,16 @@ const TABELLER: Tabell[] = [
   },
   {
     navn: "deviations",
-    kilde: `SELECT id, org_id, number, task_id, completion_id, vendor_id, unit_id,
+    // `responsible_user_id` (ekte FK til users) kom i v1 0.8.3. I 0.8.2 finnes bare
+    // `assigned_to`, som er fritekst — den er med uansett, og v2 bruker den nettopp som
+    // «bærer av gamle verdier» (se src/db/schema/avvik.ts). Ingenting går tapt ved NULL her;
+    // det som mangler er koblingen til en konkret bruker, og den fantes ikke i 0.8.2.
+    kilde: (har) => `SELECT id, org_id, number, task_id, completion_id, vendor_id, unit_id,
                    round_id, round_item_id, title,
                    description, category, severity, COALESCE(status, 'ny') AS status,
                    reported_by, COALESCE(reported_at, now()) AS reported_at,
-                   responsible_user_id, assigned_to, due_date, resolved_at, resolved_by,
+                   ${v1kol(har, "deviations", "responsible_user_id", "varchar")},
+                   assigned_to, due_date, resolved_at, resolved_by,
                    resolution_notes
             FROM deviations`,
     kolonner: ["id", "org_id", "number", "task_id", "completion_id", "vendor_id", "unit_id", "round_id", "round_item_id", "title", "description", "category", "severity", "status", "reported_by", "reported_at", "responsible_user_id", "assigned_to", "due_date", "resolved_at", "resolved_by", "resolution_notes"],
@@ -601,7 +713,11 @@ const TABELLER: Tabell[] = [
     navn: "pricing_config",
     // Én rad («default»). Uten den faller panelet tilbake til innebygde priser, og et
     // abonnement regnet ut i v2 ville ikke stemt med fakturaen kunden allerede har fått.
-    kilde: `SELECT id, floor_price, tiers, module_defaults, hidden_modules, leads_notify_emails,
+    // `leads_notify_emails` (lista over varselmottakere) kom i v1 0.8.3. Er den ikke der,
+    // står lista tom i v2, og LEADS_NOTIFY_EMAIL i .env er reserven — se kommentaren på
+    // plattformVarslingsadresser() i src/lib/prismodell.ts.
+    kilde: (har) => `SELECT id, floor_price, tiers, module_defaults, hidden_modules,
+                   ${v1kol(har, "pricing_config", "leads_notify_emails", "text")},
                    COALESCE(updated_at, now()) AS updated_at
             FROM pricing_config`,
     kolonner: ["id", "floor_price", "tiers", "module_defaults", "hidden_modules", "leads_notify_emails", "updated_at"],
@@ -651,8 +767,8 @@ function siter(navn: string): string {
   return `"${navn}"`;
 }
 
-async function kopier(t: Tabell): Promise<number> {
-  const { rows } = await v1.query(t.kilde);
+async function kopier(t: Tabell, kildeSql: string): Promise<number> {
+  const { rows } = await v1.query(kildeSql);
   if (rows.length === 0) return 0;
   if (TORRKJOR) return rows.length;
 
@@ -847,9 +963,28 @@ async function main(): Promise<void> {
   // Kjøres også ved tørrkjøring: rekkefølgen er nettopp det en tørrkjøring skal avsløre.
   await sjekkRekkefolge(TABELLER.map((t) => t.navn));
 
+  // Leses FØR første spørring: `kilde` som er en funksjon bygges av v1s faktiske skjema.
+  const { har, harTabell } = await lesV1Skjema();
+
+  const hoppetOver: string[] = [];
   for (const t of tabeller) {
-    const antall = await kopier(t);
+    if (t.valgfriIV1 && !harTabell(t.navn)) {
+      hoppetOver.push(t.navn);
+      console.log(`  ${t.navn.padEnd(24)} —  (finnes ikke i denne v1-versjonen)`);
+      continue;
+    }
+    const kildeSql = typeof t.kilde === "function" ? t.kilde(har) : t.kilde;
+    const antall = await kopier(t, kildeSql);
     console.log(`  ${t.navn.padEnd(24)} ${antall}`);
+  }
+
+  // Sies HØYT, ikke bare i forbifarten: står det noe her, er v1 en eldre versjon enn den
+  // skriptet er skrevet mot, og feltene under er tomme i v2 fordi de ikke fantes — ikke
+  // fordi migreringen mistet dem. Er lista uventet, STOPP og finn ut hvorfor.
+  if (manglendeKolonner.length > 0 || hoppetOver.length > 0) {
+    console.log("\n  ── v1 manglet dette (eldre v1 enn skriptet er skrevet mot) ──");
+    for (const k of manglendeKolonner) console.log(`     kolonne  ${k}  → NULL i v2`);
+    for (const t of hoppetOver) console.log(`     tabell   ${t}  → hoppet over`);
   }
 
   if (TABELLFILTER) {
