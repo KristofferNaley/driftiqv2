@@ -4084,6 +4084,20 @@ textarea.qr-input { resize: vertical; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ── SAFE AREA (installert som app) ──
+   Viewporten er `cover` (se viewport i layout.tsx), så i standalone-modus på iPhone tegner
+   appen bak innsnittet og hjemindikatoren. Innrykkene er 0 i vanlig nettleser — reglene er
+   usynlige helt til appen faktisk er installert. `--topbar-h` deles av toppbaren og
+   logoblokken i sidemenyen; begge får SAMME innrykk, så skillelinjene fortsatt møtes. */
+@supports (padding: env(safe-area-inset-top)) {
+  .topbar {
+    height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+  .sidebar { padding-top: env(safe-area-inset-top); }
+  .page-content { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+}
+
 /* ══ MOBIL — SAMLET STRAMMING ══
  *
  * Skjermbildene fra telefonen (16.08.2026) viste tre ting som gjorde appen tung i hånden:
