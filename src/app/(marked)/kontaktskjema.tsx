@@ -210,8 +210,8 @@ export function Kontaktskjema() {
 
       {feil && <p className="mk-feil">{feil}</p>}
 
-      <button className="mk-knapp" disabled={sender || !navn.trim() || !epost.trim()}>
-        {sender ? "Sender …" : "Avtal en 20 minutters gjennomgang"}
+      <button className="mk-knapp mk-knapp-bred" disabled={sender || !navn.trim() || !epost.trim()}>
+        {sender ? "Sender …" : "Send henvendelse"}
       </button>
       <p className="mk-liten">
         Vi bruker opplysningene kun til å svare deg. Se{" "}

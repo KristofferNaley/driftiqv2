@@ -13,7 +13,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { Kontaktskjema } from "./kontaktskjema";
-import { APP_URL } from "@/lib/urler";
 
 /**
  * Landingssiden.
@@ -372,11 +371,6 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="mk-seksjon smal">
-        <p className="mk-liten">
-          Allerede kunde? <a href={`${APP_URL}/logg-inn`}>Logg inn her</a>.
-        </p>
-      </section>
     </main>
   );
 }
