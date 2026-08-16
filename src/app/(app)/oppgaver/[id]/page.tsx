@@ -8,10 +8,11 @@ import { Faner, Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/fell
 import { Knapperad, Modal, Nedtrekk, Tekstomrade, Tekstfelt, useSending } from "@/components/skjema";
 import EnhetVelger, { type VelgbarEnhet } from "@/components/EnhetVelger";
 import { useOkt } from "@/components/OktProvider";
-import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave, type Sjekkpunkt, type Utkvitteringsbilde } from "@/lib/klient";
+import { brukere, enheter, leverandorer as levKlient, oppgaver, type Oppgave, type OppgaveMedHistorikk, type Sjekkpunkt, type Utkvitteringsbilde } from "@/lib/klient";
 import Dokumentviser from "@/components/Dokumentviser";
 import { lagLeverandormelding } from "@/lib/leverandormelding";
 import { FREQ_ETIKETTER } from "@/lib/oppgaveregler";
+import { byggSerier, type Serie } from "@/lib/maleserier";
 
 export default function Oppgavedetalj({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -57,6 +58,11 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
             // «Logg», ikke «Utkvitteringer»: fanen svarer på «hva har skjedd med denne
             // oppgaven», og det er samme ord som i v1.
             { nokkel: "logg", etikett: `Logg (${data.utkvitteringer.length})` },
+            // Bare når oppgaven faktisk måler noe. En fane som kun kan si «ingen målinger»
+            // er verre enn ingen fane — samme regel som varselfanen i profilmodalen.
+            ...(data.sjekkliste.some((p) => p.type === "tall")
+              ? [{ nokkel: "statistikk" as const, etikett: "Statistikk" }]
+              : []),
           ]}
         />
       }
@@ -126,6 +132,10 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
             kanRedigere={kanRedigere}
             onLagret={last}
           />
+        )}
+
+        {fane === "statistikk" && (
+          <Statistikkpanel utkvitteringer={data.utkvitteringer} sjekkliste={data.sjekkliste} />
         )}
 
         {fane === "logg" && (
@@ -213,7 +223,13 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
       </div>
 
       {kvitterer && (
-        <KvitterUt orgId={orgId!} taskId={id} onLukk={() => setKvitterer(false)} onLagret={last} />
+        <KvitterUt
+          orgId={orgId!}
+          taskId={id}
+          punkter={data.sjekkliste}
+          onLukk={() => setKvitterer(false)}
+          onLagret={last}
+        />
       )}
       {informerer && (
         <InfoTilLeverandor
@@ -235,7 +251,111 @@ export default function Oppgavedetalj({ params }: { params: Promise<{ id: string
   );
 }
 
-type Fane = "oppgaven" | "sjekkliste" | "logg";
+type Fane = "oppgaven" | "sjekkliste" | "logg" | "statistikk";
+
+/**
+ * Måleseriene som graf.
+ *
+ * SVG for hånd, ikke et diagrambibliotek: designsystemet er én CSS-fil uten Tailwind, og et
+ * bibliotek ville dratt inn sin egen tema- og fontverden for en enkelt linje med punkter.
+ */
+function Statistikkpanel({
+  utkvitteringer,
+  sjekkliste,
+}: {
+  utkvitteringer: OppgaveMedHistorikk["utkvitteringer"];
+  sjekkliste: Sjekkpunkt[];
+}) {
+  const serier = byggSerier(
+    utkvitteringer,
+    sjekkliste.filter((p) => p.type === "tall").map((p) => p.id),
+  );
+
+  if (serier.length === 0) {
+    return (
+      <Kort tittel="Målinger">
+        <Tom tekst="Ingen avlesninger ennå. Verdiene dukker opp her etter hvert som oppgaven kvitteres ut." />
+      </Kort>
+    );
+  }
+
+  return (
+    <>
+      {serier.map((s) => (
+        <Kort
+          key={s.nokkel}
+          tittel={`${s.navn}${s.enhet ? ` (${s.enhet})` : ""}`}
+          handling={!s.aktiv && <span className="badge muted">Utgått punkt</span>}
+        >
+          <Graf serie={s} />
+        </Kort>
+      ))}
+      <div className="field-note">
+        Hver serie er ett sjekkpunkt i én enhet. Endres enheten på malen, starter en ny serie —
+        gamle avlesninger beholder enheten de ble målt i, og tall i ulike enheter skal ikke
+        tegnes i samme kurve.
+      </div>
+    </>
+  );
+}
+
+function Graf({ serie }: { serie: Serie }) {
+  const { malinger, enhet } = serie;
+  const verdier = malinger.map((m) => m.verdi);
+  const siste = malinger[malinger.length - 1]!;
+  const maks = Math.max(...verdier);
+  const min = Math.min(...verdier);
+  const snitt = verdier.reduce((a, b) => a + b, 0) / verdier.length;
+
+  // Litt luft over og under, og et gulv på 1 så en flat serie ikke deler på null.
+  const spenn = Math.max(maks - min, 1);
+  const tak = maks + spenn * 0.15;
+  const gulv = min - spenn * 0.15;
+
+  const B = 600;
+  const H = 170;
+  const x = (i: number) => (malinger.length === 1 ? B / 2 : (i / (malinger.length - 1)) * B);
+  const y = (v: number) => H - ((v - gulv) / (tak - gulv)) * H;
+  const linje = malinger.map((m, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(m.verdi).toFixed(1)}`).join(" ");
+  const tall = (v: number) => v.toLocaleString("nb-NO", { maximumFractionDigits: 2 });
+
+  return (
+    <div className="graf">
+      <div className="graf-tall">
+        <span>
+          <b>{tall(siste.verdi)}{enhet && ` ${enhet}`}</b>
+          <em>Siste, {dato(siste.nar)}</em>
+        </span>
+        <span><b>{tall(min)}</b><em>Laveste</em></span>
+        <span><b>{tall(maks)}</b><em>Høyeste</em></span>
+        <span><b>{tall(snitt)}</b><em>Snitt av {malinger.length}</em></span>
+      </div>
+
+      {/* `preserveAspectRatio="none"`: kurven skal fylle bredden den får, og y-aksen har sin
+          egen skala uansett. Tallene ved siden av står i HTML og strekkes derfor ikke. */}
+      <div className="graf-flate">
+        <svg viewBox={`0 0 ${B} ${H}`} preserveAspectRatio="none" role="img"
+             aria-label={`Utvikling for ${serie.navn}, ${malinger.length} avlesninger`}>
+          <path className="graf-linje" d={linje} />
+          {malinger.map((m, i) => (
+            <circle key={`${m.nar}-${i}`} className="graf-punkt" cx={x(i)} cy={y(m.verdi)} r={4}>
+              <title>{`${dato(m.nar)}: ${tall(m.verdi)}${enhet ? ` ${enhet}` : ""}`}</title>
+            </circle>
+          ))}
+        </svg>
+        <span className="graf-akse">
+          <em>{tall(tak)}</em>
+          <em>{tall(gulv)}</em>
+        </span>
+      </div>
+
+      <div className="graf-datoer">
+        <span>{dato(malinger[0]!.nar)}</span>
+        <span>{dato(siste.nar)}</span>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Detaljsvaret, utledet av klientmetoden i stedet for skrevet på nytt. Endres formen på
@@ -686,16 +806,21 @@ function InfoTilLeverandor({
 function KvitterUt({
   orgId,
   taskId,
+  punkter,
   onLukk,
   onLagret,
 }: {
   orgId: string;
   taskId: string;
+  punkter: Sjekkpunkt[];
   onLukk: () => void;
   onLagret: () => Promise<void>;
 }) {
   const [nar, setNar] = useState(new Date().toISOString().slice(0, 10));
   const [notat, setNotat] = useState("");
+  const [avhuket, setAvhuket] = useState<Set<string>>(new Set());
+  /** Som i QR-skjemaet: tekst mens den skrives, tall ved innsending. Se kommentaren der. */
+  const [verdier, setVerdier] = useState<Record<string, string>>({});
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
     onLukk();
@@ -706,13 +831,88 @@ function KvitterUt({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => oppgaver.kvitterUt(orgId, taskId, { completedAt: nar, notes: notat || null, hasDeviation: false }));
+          void send(async () => {
+            // Samme sperre som i QR-skjemaet, og av samme grunn: serveren avviser uansett,
+            // men den som fyller ut skal få vite hvilket punkt det gjelder med en gang.
+            const mangler = punkter.filter(
+              (p) =>
+                p.required &&
+                (p.type === "tall" ? !(verdier[p.id] ?? "").trim() : !avhuket.has(p.id)),
+            );
+            if (mangler.length > 0) {
+              throw new Error(
+                mangler.length === 1
+                  ? `«${mangler[0]!.text}» må fylles ut før oppgaven kan kvitteres ut.`
+                  : `Disse må fylles ut: ${mangler.map((p) => p.text).join(", ")}.`,
+              );
+            }
+            return oppgaver.kvitterUt(orgId, taskId, {
+              completedAt: nar,
+              notes: notat || null,
+              hasDeviation: false,
+              checkedItemIds: [...avhuket],
+              verdier: Object.entries(verdier)
+                .filter(([, v]) => v.trim() !== "")
+                .map(([itemId, v]) => ({ itemId, value: Number(v) }))
+                .filter((v) => Number.isFinite(v.value)),
+            });
+          });
         }}
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <Feil melding={feil} />
         {/* API-et avviser datoer fram i tid — `max` gjør det tydelig før innsending. */}
         <Tekstfelt etikett="Utført dato" type="date" verdi={nar} onEndre={setNar} />
+
+        {/* Sjekklisten hører HJEMME her. Uten den ble hvert punkt ført som ikke utført ved en
+            manuell registrering — loggen sa «utført» og «0 av 3 punkter huket av» om en jobb
+            som var gjort i sin helhet. */}
+        {punkter.length > 0 && (
+          <div className="kvitt-liste">
+            <span className="field-note">Sjekkliste</span>
+            {punkter.map((p) =>
+              p.type === "tall" ? (
+                <label key={p.id} className="kvitt-maling">
+                  <span>
+                    {p.text}
+                    {p.unit && <em> ({p.unit})</em>}
+                    {p.required && <b> må fylles ut</b>}
+                  </span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={verdier[p.id] ?? ""}
+                    placeholder={p.unit ? `Verdi i ${p.unit}` : "Verdi"}
+                    onChange={(e) =>
+                      setVerdier({ ...verdier, [p.id]: e.target.value.replace(",", ".") })
+                    }
+                  />
+                </label>
+              ) : (
+                <label key={p.id} className="kvitt-punkt">
+                  <input
+                    type="checkbox"
+                    checked={avhuket.has(p.id)}
+                    onChange={(e) => {
+                      const neste = new Set(avhuket);
+                      if (e.target.checked) neste.add(p.id);
+                      else neste.delete(p.id);
+                      setAvhuket(neste);
+                    }}
+                  />
+                  <span>
+                    {p.text}
+                    {p.required && <b> må hukes av</b>}
+                  </span>
+                </label>
+              ),
+            )}
+            <span className="field-note">
+              Punkter du ikke huker av føres som ikke utført — det er et gyldig svar.
+            </span>
+          </div>
+        )}
+
         <Tekstomrade
           etikett="Notat"
           verdi={notat}

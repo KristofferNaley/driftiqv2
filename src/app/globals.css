@@ -2970,6 +2970,53 @@ textarea.qr-input { resize: vertical; }
 /* ── SJEKKLISTE-RADEDITOREN ──
    Rad = nummer, tekstfelt, opp/ned/fjern. Feltet tar plassen; knappene er kvadratiske og
    holder seg små — de er verktøy på raden, ikke handlinger på siden. */
+/* ── MÅLESERIER ──
+   SVG for hånd, ikke et diagrambibliotek. Kurven strekkes i bredden (`preserveAspectRatio:
+   none` i markupen), mens tallene rundt står i HTML og beholder sin egen skala. */
+.graf { padding: 16px 20px 14px; }
+.graf-tall {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px; margin-bottom: 16px;
+}
+.graf-tall span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.graf-tall b { font-size: var(--fs-lg); font-weight: 700; }
+.graf-tall em { font-size: var(--fs-label); color: var(--muted); font-style: normal; }
+.graf-flate { display: flex; gap: 10px; align-items: stretch; }
+.graf-flate svg {
+  flex: 1; min-width: 0; height: 170px;
+  /* Uten denne fjerner nettleseren linjefargen ved utskrift, og grafen blir en tom ramme —
+     samme grunn som fargebåndet på oppgavearket. */
+  print-color-adjust: exact; -webkit-print-color-adjust: exact;
+}
+.graf-linje { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.graf-punkt { fill: var(--accent); vector-effect: non-scaling-stroke; }
+/* Aksetallene: bare tak og gulv. En full akse med jevne trinn krever plass grafen ikke har
+   på mobil, og spørsmålet er «hvor ligger den nå, og har den flyttet seg» — ikke avlesning
+   av eksakte verdier, som står i loggen. */
+.graf-akse {
+  display: flex; flex-direction: column; justify-content: space-between;
+  font-size: var(--fs-label); color: var(--muted); flex-shrink: 0;
+}
+.graf-akse em { font-style: normal; }
+.graf-datoer {
+  display: flex; justify-content: space-between;
+  font-size: var(--fs-label); color: var(--muted); margin-top: 8px;
+}
+
+/* Sjekklisten inne i «Registrer utført». Egen ramme rundt, så den leses som ÉN blokk mellom
+   dato og notat i stedet for som løse felter i skjemaet. */
+.kvitt-liste {
+  display: flex; flex-direction: column; gap: 9px;
+  border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px;
+  background: var(--surface);
+}
+.kvitt-punkt { display: flex; align-items: flex-start; gap: 9px; font-size: var(--fs-sm); }
+.kvitt-punkt input { accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+.kvitt-maling { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); }
+.kvitt-maling em { font-style: normal; color: var(--muted); }
+/* Kravet som ord, ikke som stjerne — samme valg som i QR-skjemaet. */
+.kvitt-maling b, .kvitt-punkt b { font-weight: 600; color: var(--warn); }
+
 /* Ett sjekkpunkt: teksten med knappene på én linje, egenskapene på linja under. Presset inn
    på samme rad ble feltene så smale at ingen av dem kunne leses på mobil — og mobil er der
    den som setter opp en sprinklerkontroll faktisk står. */
@@ -3999,3 +4046,11 @@ textarea.qr-input { resize: vertical; }
      Brannvern med åtte punkter er lengre enn en side, og avoid der gir tomme sider. */
   .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* «Vis deaktiverte» i oppgavefilteret. Deaktiverte er ute av lista som standard — de skal
+   ikke gjennomføres mer — men må kunne finnes igjen hvis noen avsluttet en ved et uhell. */
+.oppg-deaktiverte {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--fs-label); color: var(--muted); white-space: nowrap;
+}
+.oppg-deaktiverte input { accent-color: var(--accent); }

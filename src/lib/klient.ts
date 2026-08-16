@@ -152,6 +152,15 @@ export type Utkvitteringspunkt = {
   itemId: string | null;
   text: string;
   checked: boolean;
+  /**
+   * Måleverdien, som STRENG.
+   *
+   * `numeric` kommer slik fra node-postgres, akkurat som bigint — gjennom `Number()` før noe
+   * regnes eller tegnes. Typen sier det med vilje, i stedet for å love et tall som ikke er der.
+   */
+  value: string | null;
+  /** Enheten slik den sto den dagen. Kan avvike fra malens nåværende — det er poenget. */
+  unit: string | null;
   order: number;
 };
 
@@ -195,7 +204,9 @@ export type OppgaveMedHistorikk = Oppgave & {
 };
 
 export const oppgaver = {
-  liste: (o: string) => api.hent<Oppgave[]>(org(o, "/tasks")),
+  /** Deaktiverte er ute som standard — send `medDeaktiverte` for å få dem med. */
+  liste: (o: string, medDeaktiverte = false) =>
+    api.hent<Oppgave[]>(org(o, `/tasks${medDeaktiverte ? "?deaktiverte=1" : ""}`)),
   hent: (o: string, id: string) => api.hent<OppgaveMedHistorikk>(org(o, `/tasks/${id}`)),
   ny: (o: string, d: unknown) => api.send<Oppgave>(org(o, "/tasks"), d),
   endre: (o: string, id: string, d: unknown) => api.endre<Oppgave>(org(o, `/tasks/${id}`), d),
