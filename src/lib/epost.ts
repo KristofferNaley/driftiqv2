@@ -91,6 +91,11 @@ async function send(til: string, emne: string, html: string, svarTil?: string): 
  * inverterer på egen hånd. Mønsteret er inline lys stil + klasse, og mørke overstyringer med
  * !important i <head> — inline-stiler vinner ellers alltid.
  *
+ * REGELEN GJELDER HVER ENESTE FARGE: en td med `color:#0d1b2a` uten klasse blir mørk tekst
+ * på mørkt kort i Apple Mail — usynlig til man markerer den. Feilmeldingsvarslene ble sendt
+ * slik fram til 17.08.2026; sju feltbyggere manglet klassen. Ny tekstfarge = `em-val`
+ * (verdier) eller `em-lbl` (etiketter), aldri bare inline.
+ *
  * Layout er tabeller, ikke flex/grid — Outlook rendrer med Word-motoren.
  */
 
@@ -112,6 +117,8 @@ function ramme(innhold: string): string {
     .em-p    { color:#c3d0e2 !important; }
     .em-foot { background:#0e1626 !important; border-color:#243146 !important; }
     .em-link { color:#00c2ff !important; }
+    .em-val  { color:#f0f4ff !important; }
+    .em-lbl  { color:#93a1b5 !important; }
   }
 </style>
 </head>
@@ -223,8 +230,8 @@ export async function sendKontooppsett(navn: string, til: string, url: string): 
 
 const rad = (venstre: string, hoyre?: string) =>
   `<tr style="border-bottom:1px solid #e2e8f0;">` +
-  `<td style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${venstre}</td>` +
-  (hoyre === undefined ? "" : `<td style="padding:8px 0;font-size:12px;color:#8892a4;">${hoyre}</td>`) +
+  `<td class="em-val" style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${venstre}</td>` +
+  (hoyre === undefined ? "" : `<td class="em-lbl" style="padding:8px 0;font-size:12px;color:#8892a4;">${hoyre}</td>`) +
   `</tr>`;
 
 const tabell = (rader: string) =>
@@ -284,7 +291,7 @@ export async function sendMineForsinkedeOppgaver(
             .map((o) =>
               rad(
                 trygg(o.tittel) +
-                  (o.sted ? `<br><span style="font-size:11px;color:#8892a4;">${trygg(o.sted)}</span>` : ""),
+                  (o.sted ? `<br><span class="em-lbl" style="font-size:11px;color:#8892a4;">${trygg(o.sted)}</span>` : ""),
               ),
             )
             .join(""),
@@ -304,8 +311,8 @@ export async function sendKontrakterUtloper(
     .map(
       (k) =>
         `<tr style="border-bottom:1px solid #e2e8f0;">` +
-        `<td style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${trygg(k.tittel)}</td>` +
-        `<td style="padding:8px 12px 8px 0;font-size:12px;color:#8892a4;">${trygg(k.leverandor ?? "—")}</td>` +
+        `<td class="em-val" style="padding:8px 12px 8px 0;font-size:12px;font-weight:500;color:#0d1b2a;">${trygg(k.tittel)}</td>` +
+        `<td class="em-lbl" style="padding:8px 12px 8px 0;font-size:12px;color:#8892a4;">${trygg(k.leverandor ?? "—")}</td>` +
         // #d97706 og ikke profilens amber: den har for lav kontrast mot hvitt som tekst.
         `<td style="padding:8px 0;font-size:12px;font-weight:600;color:${k.dagerIgjen <= 30 ? "#f04040" : "#d97706"};">${k.dagerIgjen} dager</td>` +
         `</tr>`,
@@ -350,8 +357,8 @@ export async function sendNyLead(
   }
 
   const felt = (etikett: string, verdi: string) =>
-    `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${etikett}</td>` +
-    `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(verdi)}</td></tr>`;
+    `<tr><td class="em-lbl" style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${etikett}</td>` +
+    `<td class="em-val" style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(verdi)}</td></tr>`;
 
   const html = ramme(
     h("Ny interessent fra landingssiden") +
@@ -391,8 +398,8 @@ export async function sendNyFeilmelding(
   const nr = `FM-${String(sak.number ?? 0).padStart(4, "0")}`;
   const etikett = { bug: "Feil", idea: "Forslag", question: "Spørsmål" }[sak.kind] ?? sak.kind;
   const felt = (e: string, v: string) =>
-    `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${e}</td>` +
-    `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(v)}</td></tr>`;
+    `<tr><td class="em-lbl" style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">${e}</td>` +
+    `<td class="em-val" style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(v)}</td></tr>`;
 
   const html = ramme(
     h(`${etikett} meldt inn`) +
@@ -430,10 +437,10 @@ export async function sendFeilmeldingSvar(
       h("Svar på din henvendelse") +
         p(trygg(svar).replace(/\n/g, "<br>")) +
         '<table style="margin:20px 0 0;border-collapse:collapse;width:100%;">' +
-        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Din sak</td>` +
-        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${nr}</td></tr>` +
-        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
-        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
+        `<tr><td class="em-lbl" style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Din sak</td>` +
+        `<td class="em-val" style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${nr}</td></tr>` +
+        `<tr><td class="em-lbl" style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
+        `<td class="em-val" style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
         "</table>",
     ),
   );
@@ -464,8 +471,8 @@ export async function sendFeilmeldingLost(sak: {
             "Ser du fortsatt det samme problemet, er det bare å svare på denne e-posten eller melde fra på nytt i appen.",
         ) +
         '<table style="margin:20px 0 0;border-collapse:collapse;width:100%;">' +
-        `<tr><td style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
-        `<td style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
+        `<tr><td class="em-lbl" style="padding:6px 12px 6px 0;font-size:12px;color:#8892a4;white-space:nowrap;vertical-align:top;">Du skrev</td>` +
+        `<td class="em-val" style="padding:6px 0;font-size:12px;color:#0d1b2a;font-weight:500;">${trygg(sak.description)}</td></tr>` +
         "</table>",
     ),
   );
