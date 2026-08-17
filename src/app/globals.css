@@ -391,7 +391,10 @@ a { color: inherit; text-decoration: none; }
 
 /* Kolonner som brekker av seg selv, uten egne media queries. Bruk denne framfor et fast
    `repeat(N, 1fr)` — det er nettopp faste kolonnetall som ødela mobilvisningen i v1. */
-.auto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+/* 200px minimum, ikke 260: fire nøkkeltallkort skal stå på ÉN rad på en iPad (~870px
+   innhold ved siden av sidemenyen). Ved 260 brøt det fjerde ned som et ensomt kort på rad
+   to — leverandører og kontrakter har fire. auto-fit strekker uansett på brede skjermer. */
+.auto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 
 /* Nøkkeltall-kortets tall. Egen klasse fordi mobilen tar det ett trinn ned. */
 .nokkeltall-verdi { font-size: var(--fs-hero); font-weight: 700; margin-top: 4px; }
@@ -3766,7 +3769,10 @@ textarea.qr-input { resize: vertical; }
 .rv-tiltak-felter { display: flex; gap: 8px; margin-top: 6px; }
 .rv-tiltak-felter .select, .rv-tiltak-felter .input { flex: 1; min-width: 0; padding: 6px 8px; font-size: var(--fs-label); }
 
-@media (max-width: 1100px) {
+/* 1320, ikke 1100: radens faste kolonner (område/frist/status ≈ 456px) + matrisens 390px
+   etterlot tittelen ~10px på en iPad — teksten brakk per ORD. Matrisen legger seg under
+   lista lenge før det blir trangt. */
+@media (max-width: 1320px) {
   .rv-kolonner { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
@@ -4096,6 +4102,12 @@ textarea.qr-input { resize: vertical; }
   }
   .sidebar { padding-top: env(safe-area-inset-top); }
   .page-content { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+}
+
+/* Mellombredder (iPad): hero-tall i firedelte nøkkeltallkort får ikke plass — «9 130 000
+   kr» i 40px er bredere enn et 210px kort. Ett trinn ned; mobilblokken gjør det samme. */
+@media (max-width: 1400px) {
+  .nokkeltall-verdi { font-size: var(--fs-xl); }
 }
 
 /* ══ MOBIL — SAMLET STRAMMING ══

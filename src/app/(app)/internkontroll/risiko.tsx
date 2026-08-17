@@ -31,6 +31,22 @@ import {
   risikonivaKlient as niva,
 } from "@/lib/risikoord";
 
+/**
+ * v1s standard fareområder lagres med NØKKELEN som kategori — migrerte farer bærer
+ * «avfall_skadedyr», mens v2s egen seeder skriver etiketten («Avfall/skadedyr»). Kjente
+ * nøkler vises med etiketten sin; alt annet (kundens egne områder) vises som det er.
+ * KUN visning — verdien i databasen røres ikke, filtrering skjer fortsatt på rå verdi.
+ */
+const OMRADE_ETIKETT: Readonly<Record<string, string>> = {
+  brannvern: "Brannvern",
+  el_sikkerhet: "El-sikkerhet",
+  teknisk_utstyr: "Teknisk utstyr",
+  avfall_skadedyr: "Avfall/skadedyr",
+  kjemikalier: "Kjemikalier",
+  personsikkerhet: "Personsikkerhet",
+};
+const omradeEtikett = (o: string) => OMRADE_ETIKETT[o] ?? o;
+
 const FARESTATUS = Object.entries(FARESTATUS_ETIKETT).map(([verdi, etikett]) => ({ verdi, etikett }));
 
 /** Tooltip på statusmerket i lista — merket alene sa ikke hvorfor raden fortsatt står der. */
@@ -159,7 +175,7 @@ export function Risiko() {
                   className={`rv-chip${omrade === o ? " valgt" : ""}`}
                   onClick={() => setOmrade(omrade === o ? null : o)}
                 >
-                  {o}
+                  {omradeEtikett(o)}
                 </button>
               ))}
             </div>
@@ -199,7 +215,7 @@ export function Risiko() {
                       {f.owner ? ` · ${f.owner}` : ""}
                     </div>
                   </div>
-                  <div className="rv-rad-omrade">{f.category ?? ""}</div>
+                  <div className="rv-rad-omrade">{f.category ? omradeEtikett(f.category) : ""}</div>
                   <div className={`rv-rad-frist${frist && frist < idag ? " over" : ""}`}>
                     {frist ? dato(frist) : ""}
                   </div>
@@ -688,7 +704,7 @@ function FareSkuff({
               // Farens lagrede område skal alltid kunne vises, også om det er alene om navnet.
               ...[...new Set([...omrader, ...(fare?.category ? [fare.category] : [])])].map((o) => ({
                 verdi: o,
-                etikett: o,
+                etikett: omradeEtikett(o),
               })),
               { verdi: NYTT_OMRADE, etikett: "+ Nytt område …" },
             ]}
