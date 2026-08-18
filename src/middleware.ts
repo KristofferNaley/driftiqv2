@@ -30,11 +30,15 @@ const VERT_APP = process.env.VERT_APP?.toLowerCase();
 const VERT_ADMIN = process.env.VERT_ADMIN?.toLowerCase();
 const VERT_MARKED = process.env.VERT_MARKED?.toLowerCase();
 
-/** Stier alle verter må ha: innlogging, API og Next sine egne filer. */
+/** Stier alle verter må ha: innlogging, API, webanalyse og Next sine egne filer. */
 function alltidTillatt(sti: string): boolean {
   return (
     sti.startsWith("/api/") ||
     sti.startsWith("/_next/") ||
+    // Umami-proxyen. Sporingsskriptet lastes fra den verten den besøkende ALLEREDE står på —
+    // står den ikke her, svarer markedsverten 404 på `/stats/script.js` (den slipper bare
+    // gjennom `/` og `/personvern`), og landingssiden er nettopp den vi vil måle.
+    sti.startsWith("/stats/") ||
     sti === "/favicon.ico" ||
     sti === "/robots.txt" ||
     sti === "/sitemap.xml" ||

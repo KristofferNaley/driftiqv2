@@ -39,6 +39,14 @@ services:
       # Kursen som brukes til å vise AI-forbruk i kroner. Anthropic fakturerer i USD, og
       # dette er kun et ESTIMAT for panelet — fasit er fakturaen. Se src/lib/ai.ts.
       USD_TIL_NOK: ${USD_TIL_NOK:-11.0}
+      # Webanalyse (Umami). Kjører som EGEN stack (~/umami på VPS-en) og nås på det delte
+      # `edge`-nettet — den er ikke en del av denne stacken, og finnes ikke lokalt eller i
+      # test. Tomme nettsteds-ID-er = ingen sporing, og alt annet virker; samme mønster som
+      # RESEND_API_KEY. Landingssiden og appen telles hver for seg, panelet ikke i det hele
+      # tatt. Se src/components/Webanalyse.tsx.
+      UMAMI_URL: ${UMAMI_URL:-http://umami:3000}
+      UMAMI_NETTSTED_MARKED: ${UMAMI_NETTSTED_MARKED:-}
+      UMAMI_NETTSTED_APP: ${UMAMI_NETTSTED_APP:-}
       # Vertsdeling. Er de tomme, serverer appen ALT på én vert — det er hvordan lokal
       # utvikling og tilgang via IP fungerer. Se src/middleware.ts.
       VERT_APP: ${VERT_APP:-}

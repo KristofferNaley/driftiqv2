@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Temaveksler } from "./temaveksler";
+import { Webanalyse } from "@/components/Webanalyse";
 import { APP_URL, MARKED_URL } from "@/lib/urler";
 
 /**
@@ -47,6 +48,9 @@ export const viewport: Viewport = { themeColor: "#0d1b2a" };
 export default function MarkedLayout({ children }: { children: ReactNode }) {
   return (
     <div className="mk">
+      {/* Landingssiden er den ene flaten der vi faktisk trenger å vite om folk finner fram.
+          Egen nettsteds-ID, atskilt fra appens. */}
+      <Webanalyse flate="marked" />
       {/* Hopp-lenke: en tastaturbruker skal slippe å tabbe gjennom hele menyen for å nå
           skjemaet, som er hele poenget med siden. */}
       <a className="mk-hopp" href="#kontakt">Hopp til kontaktskjemaet</a>

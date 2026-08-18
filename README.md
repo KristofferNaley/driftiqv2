@@ -176,9 +176,18 @@ en mangler dekning.
    kravet kommer, men håndhevingen (i `sjekkInnloggingssperrer`, lib/tilgang.ts) er ikke
    skrudd på.
 3. Passkeys — en plugin til, nå som Better Auth står.
-4. Webanalyse. v1 serverer Umami førsteparts under `/stats/`; v2 har ingenting. Bevisst
-   utsatt, ikke glemt.
-5. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
+4. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
+
+## Webanalyse
+
+Umami, servert **førsteparts** under `/stats/` — proxyen ligger i
+`src/app/stats/[...sti]/route.ts`, siden v2 ikke har noen nginx slik v1 hadde. Umami selv er
+en egen stack (`~/umami/` på VPS-en) på det delte `edge`-nettet, ikke en del av denne.
+
+Landingssiden og kunde-appen har hver sin nettsteds-ID (`UMAMI_NETTSTED_MARKED` /
+`UMAMI_NETTSTED_APP`); plattformpanelet har bevisst ingen. Er en ID tom, legges ingen
+skripttagg inn — derfor er analysen av i test og lokalt, og skal være det: testklikk hører
+ikke hjemme i prod-tallene.
 
 ## Portert så langt
 

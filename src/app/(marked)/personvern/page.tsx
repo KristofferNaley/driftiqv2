@@ -10,6 +10,11 @@ export const metadata: Metadata = {
  *
  * Kort med vilje. En erklæring ingen leser fordi den er ti sider, oppfyller formkravet og
  * ikke formålet.
+ *
+ * «Webanalyse»-avsnittet er portert fra v1 og MÅ stå så lenge Umami er skrudd på (se
+ * `src/components/Webanalyse.tsx`). Det er ikke en formalitet: setningen «vi bruker ingen
+ * tredjeparts annonsenettverk» rett over er sann også med Umami, og uten avsnittet ville
+ * siden ved første øyekast lest som at vi ikke måler noe i det hele tatt.
  */
 export default function Personvern() {
   return (
@@ -51,6 +56,20 @@ export default function Personvern() {
         <p>
           Nettsiden setter ingen sporingsinformasjonskapsler, og vi bruker ingen
           tredjeparts annonsenettverk.
+        </p>
+
+        <h2>Webanalyse</h2>
+        <p>
+          Vi bruker <strong>Umami</strong>, en selvhostet analyseløsning som kjører på vår
+          egen server. Den setter <strong>ingen informasjonskapsler</strong>, lagrer ikke
+          IP-adressen din, og følger deg ikke på tvers av nettsteder. Derfor finnes det
+          heller ingen cookie-banner her. Det registreres kun aggregert statistikk: hvilke
+          sider som besøkes, omtrentlig geografi på landnivå, nettlesertype og hvor besøket
+          kom fra.
+        </p>
+        <p>
+          Skriften på nettstedet lastes fra vår egen server, ikke fra en font-CDN, av samme
+          grunn: et oppslag mot en tredjepart ville sendt IP-adressen din dit.
         </p>
 
         <h2>Dine rettigheter</h2>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { OktProvider } from "@/components/OktProvider";
+import { Webanalyse } from "@/components/Webanalyse";
 
 /**
  * Alt under `(app)` krever innlogging. Gruppen er parentesert, så den ikke havner i URL-en:
@@ -27,5 +28,13 @@ import { OktProvider } from "@/components/OktProvider";
 export const metadata: Metadata = { manifest: "/manifest.webmanifest" };
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  return <OktProvider versjon="1.0.0">{children}</OktProvider>;
+  return (
+    <OktProvider versjon="1.0.0">
+      {/* Hvilke moduler som faktisk brukes, og hvor mye. Egen nettsteds-ID, atskilt fra
+          landingssiden — «hvem fant oss» og «hva brukes» er to ulike spørsmål.
+          Plattformpanelet har bevisst ingen; se Webanalyse.tsx. */}
+      <Webanalyse flate="app" />
+      {children}
+    </OktProvider>
+  );
 }
