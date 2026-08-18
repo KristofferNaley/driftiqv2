@@ -2237,6 +2237,10 @@ textarea.qr-input { resize: vertical; }
 @media (max-width: 900px) {
   .pf-bbl-rad { grid-template-columns: 1fr 1fr; }
   .pf-bbl-rad.hode { display: none; }
+  /* Knappene i en halv kolonne med `justify-content: flex-end` la seg som en trapp —
+     tre ulikt brede knapper høyrestilt under hverandre. Egen rad i full bredde i stedet,
+     samme grep som `.pf-brukerrad` bruker lenger nede. */
+  .pf-handlinger { grid-column: 1 / -1; justify-content: flex-start; }
   .pf-trinn-hode { display: none; }
   .pf-trinn-rad { grid-template-columns: 1fr 1fr; }
 }
