@@ -282,24 +282,27 @@ export default function Leads() {
   const stegIdx = valgt ? LOP.indexOf(valgt.status as (typeof LOP)[number]) : -1;
 
   return (
-    <Ramme tittel="Leads">
-      {feil && <div className="feilmelding">{feil}</div>}
-
-      <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
-        <p className="pf-dempet" style={{ maxWidth: "70ch" }}>
-          Interessenter fra landingssiden — selskapsdata hentes fra Enhetsregisteret,
-          kontaktinfo skriver de inn selv. Hvem som varsles på e-post styres under{" "}
-          <Link className="pf-lenke-inline" href="/plattform/prismodell">Prismodell</Link>.
-        </p>
-        <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+    <Ramme
+      tittel="Leads"
+      handlinger={
+        <>
           <button className="btn btn-ghost" onClick={eksporter} disabled={filtrert.length === 0}>
             Eksporter
           </button>
           <button className="btn" onClick={() => setManuellApen(true)}>
             Legg inn lead manuelt
           </button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      {feil && <div className="feilmelding">{feil}</div>}
+
+      {/* Hva en lead ER, ser du av lista. Det ENE som ikke er å finne noe annet sted, er
+          hvor varslingen styres — den setningen blir stående, alene og på én linje. */}
+      <p className="pf-dempet">
+        Hvem som varsles på e-post når det kommer en ny, styres under{" "}
+        <Link className="pf-lenke-inline" href="/plattform/prismodell">Prismodell</Link>.
+      </p>
 
       <div className="pf-kpi-grid">
         <div className={`pf-kpi${venter.length > 0 ? " pf-kpi-varsel" : ""}`}>

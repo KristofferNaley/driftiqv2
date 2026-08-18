@@ -1503,12 +1503,35 @@ textarea.qr-input { resize: vertical; }
 .pf-bruker-blokk .pf-navn { color: #fff; }
 .pf-bruker-blokk .pf-under { color: var(--pf); }
 
+/* Andre gridkolonne: toppbar over innhold, som `.topbar` + `.app-main` i kunde-appen.
+   Høyden er `--topbar-h`, delt med `.pf-merke` i menyen — ellers møtes ikke skillelinjene. */
+.pf-hoved { display: flex; flex-direction: column; min-width: 0; }
+.pf-topp {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  height: var(--topbar-h); padding: 0 22px;
+  background: #14101f; border-bottom: 1px solid #2a2140;
+  position: sticky; top: 0; z-index: 20;
+}
+/* ☰ er unødvendig når menyen står der permanent. Mobilblokken slår den på igjen. */
+.pf-topp .menu-btn { display: none; }
+/* Menyflaten er mørk i BEGGE temaer, så `var(--text)` fra `.menu-btn` ville gitt mørk
+   knapp på mørk flate i lys modus — samme felle som har truffet `<button>` her tre ganger. */
+.pf-topp-tittel {
+  color: #fff; font-size: var(--fs-lg); font-weight: 700; margin: 0; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Knappene viker aldri — tittelen tar ellipsis i stedet, som i appens toppbar. */
+.pf-topp-handlinger {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+  min-width: 0; overflow-x: auto; scrollbar-width: none;
+}
+.pf-topp-handlinger .btn { flex-shrink: 0; white-space: nowrap; }
+
 .pf-innhold {
   padding: 22px; max-width: var(--content-max); width: 100%;
   display: flex; flex-direction: column; gap: 16px; min-width: 0;
 }
 .pf-innhold > * { flex-shrink: 0; }
-.pf-tittel { font-size: var(--fs-lg); font-weight: 700; margin: 0; }
 .pf-dempet { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
 .pf-tekst { font-size: var(--fs-sm); line-height: 1.6; margin: 0 0 12px; }
 .pf-lenke-inline { color: var(--pf); text-decoration: none; }
@@ -1578,10 +1601,27 @@ textarea.qr-input { resize: vertical; }
 .pf-felt span:last-child { font-size: var(--fs-sm); font-weight: 500; text-align: right; }
 
 @media (max-width: 900px) {
+  /* Menyen er en SKUFF, ikke en brettet rad.
+   *
+   * Den flettede raden ga elleve punkter i to ragged kolonner — 600px, over halve
+   * telefonskjermen, før innholdet i det hele tatt begynte — og skjulte samtidig
+   * `.pf-meny-fot`, altså profilen, temaveksleren og veien tilbake til kunde-appen. De
+   * fantes ikke på mobil.
+   *
+   * Mekanikken er kunde-appens, med vilje: samme `transform`, samme varighet, samme
+   * `.sidebar-backdrop`. To skuffer som oppfører seg ulikt er verre enn én som er kjedelig.
+   */
   .pf-side { grid-template-columns: 1fr; }
-  .pf-meny { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 8px; }
-  .pf-meny-gruppe, .pf-meny-fot { display: none; }
-  .pf-merke { border-bottom: none; height: auto; padding: 6px 10px; }
+  .pf-meny {
+    position: fixed; top: 0; left: 0; z-index: 50;
+    width: var(--sidebar-w); height: 100dvh;
+    transform: translateX(-100%); transition: transform 0.18s;
+  }
+  .pf-meny.apen { transform: translateX(0); }
+  .pf-topp { padding: 0 12px; }
+  .pf-topp .menu-btn { display: flex; align-items: center; color: #fff; }
+  .pf-topp-tittel { font-size: var(--fs-md); }
+  .pf-innhold { padding: 16px 14px; }
   .pf-rad { grid-template-columns: minmax(0, 1fr) 110px; }
   .pf-rad > *:nth-child(2), .pf-rad > *:nth-child(3), .pf-rad > *:nth-child(4) { display: none; }
   .pf-sesjonsrad { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

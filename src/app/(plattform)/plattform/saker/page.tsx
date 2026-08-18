@@ -276,24 +276,19 @@ export default function Saker() {
   const antall = (f: (typeof FILTRE)[number]) =>
     f === "alle" ? alle.length : alle.filter((s) => s.status === f).length;
 
+  /* Innledningsavsnittet er fjernet: teknisk kontekst LEGGES ved automatisk, og det ser
+     du på hver enkelt sak — en linje som forklarer det på hver visning er noe du leser
+     én gang og deretter scroller forbi for alltid. */
   return (
-    <Ramme tittel="Innmeldinger">
-      {feil && <div className="feilmelding">{feil}</div>}
-
-      <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
-        <p className="pf-dempet" style={{ maxWidth: "74ch" }}>
-          Feil, forslag og spørsmål fra kundene. Teknisk kontekst legges ved automatisk, så du
-          slipper å spørre om versjon og nettleser.
-        </p>
-        <button
-          className="btn btn-ghost"
-          style={{ marginLeft: "auto" }}
-          onClick={eksporter}
-          disabled={filtrert.length === 0}
-        >
+    <Ramme
+      tittel="Innmeldinger"
+      handlinger={
+        <button className="btn btn-ghost" onClick={eksporter} disabled={filtrert.length === 0}>
           Eksporter
         </button>
-      </div>
+      }
+    >
+      {feil && <div className="feilmelding">{feil}</div>}
 
       <div className="pf-kpi-grid">
         <div className={`pf-kpi${ubesvarte.length > 0 ? " pf-kpi-varsel" : ""}`}>

@@ -20,6 +20,7 @@ import {
   Landmark,
   LayoutGrid,
   LayoutTemplate,
+  Menu,
   Search,
   Users,
   type LucideIcon,
@@ -61,7 +62,23 @@ const MENY: ReadonlyArray<{ sti: string; etikett: string; ikon: LucideIcon }> = 
   { sti: "/plattform/system", etikett: "System", ikon: Activity },
 ];
 
-export function Ramme({ tittel, children }: { tittel: string; children: ReactNode }) {
+export function Ramme({
+  tittel,
+  handlinger,
+  children,
+}: {
+  tittel: string;
+  /**
+   * Sidens handlingsknapper, i toppbaren til høyre. Samme prop og samme rolle som i
+   * kunde-appens `Layout` — knappene skal ligge samme sted i begge flatene.
+   *
+   * Før dette lå de i en flexrad sammen med et avsnitt forklarende tekst øverst i
+   * innholdet. På mobil brøt raden: tre linjer tekst, så knappene på egen linje, og
+   * innholdet begynte en halv skjerm nede.
+   */
+  handlinger?: ReactNode;
+  children: ReactNode;
+}) {
   const { bruker } = useOkt();
   const sti = usePathname();
   /**
@@ -76,6 +93,18 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
   // Absolutt til appverten når vertene er delt: /dashboard er 404 her.
   const appLenke = useAppLenke();
 
+  /**
+   * Menyen som skuff på mobil — samme mekanikk som kunde-appens `Layout`/`Sidebar`.
+   *
+   * Panelet hadde ingen: under 900px ble sidemenyen brettet om til en flettet rad som tok
+   * 600px av skjermen før innholdet begynte, og `.pf-meny-fot` ble skjult — altså ingen vei
+   * til profilen, temaet eller kunde-appen fra telefonen i det hele tatt.
+   *
+   * Ingen `collapsed`-variant som i appen: panelet har ingen ikonmodus å slå over til, og
+   * en tilstand som huskes mellom besøk gir lite når menyen uansett bare er 11 punkter.
+   */
+  const [menyApen, setMenyApen] = useState(false);
+
   // Åpne saker som teller på «Feilmeldinger» — innboksen skal synes uten å åpnes.
   // Feiler kallet, vises bare ingen teller; menyen skal aldri velte på det.
   const [apneSaker, setApneSaker] = useState(0);
@@ -89,8 +118,9 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
 
   return (
     <div className="pf-side">
-      <nav className="pf-meny">
-        <Link href="/plattform" className="pf-merke">
+      {menyApen && <div className="sidebar-backdrop" onClick={() => setMenyApen(false)} />}
+      <nav className={`pf-meny${menyApen ? " apen" : ""}`} aria-label="Plattformmeny">
+        <Link href="/plattform" className="pf-merke" onClick={() => setMenyApen(false)}>
           <span className="pf-mark" aria-hidden>
             {bruker ? initialer(bruker.name) : "PA"}
           </span>
@@ -107,7 +137,12 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
           const aktiv = p.sti === "/plattform" ? sti === p.sti : sti.startsWith(p.sti);
           const Ikon = p.ikon;
           return (
-            <Link key={p.sti} href={p.sti} className={`pf-lenke${aktiv ? " aktiv" : ""}`}>
+            <Link
+              key={p.sti}
+              href={p.sti}
+              className={`pf-lenke${aktiv ? " aktiv" : ""}`}
+              onClick={() => setMenyApen(false)}
+            >
               <Ikon size={17} strokeWidth={1.9} aria-hidden />
               <span>{p.etikett}</span>
               {p.sti === "/plattform/saker" && apneSaker > 0 && (
@@ -145,10 +180,26 @@ export function Ramme({ tittel, children }: { tittel: string; children: ReactNod
         </div>
       </nav>
 
-      <main className="pf-innhold">
-        <h1 className="pf-tittel">{tittel}</h1>
-        {children}
-      </main>
+      {/* Toppbaren gjelder alle bredder, som i kunde-appen: tittel til venstre, handlinger
+          til høyre. ☰ vises bare under 900px — over det står menyen der permanent, og
+          panelet har ingen sammenslått ikonmodus å veksle til. */}
+      <div className="pf-hoved">
+        <header className="pf-topp">
+          <button
+            type="button"
+            className="menu-btn"
+            onClick={() => setMenyApen(true)}
+            aria-label="Vis meny"
+            aria-expanded={menyApen}
+          >
+            <Menu size={20} strokeWidth={2} aria-hidden />
+          </button>
+          <h1 className="pf-topp-tittel">{tittel}</h1>
+          {handlinger && <div className="pf-topp-handlinger">{handlinger}</div>}
+        </header>
+
+        <main className="pf-innhold">{children}</main>
+      </div>
 
       {profilApen && (
         <ProfilModal

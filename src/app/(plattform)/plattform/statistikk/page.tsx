@@ -221,28 +221,24 @@ export default function Statistikk() {
     URL.revokeObjectURL(a.href);
   }
 
+  /* Siden viser hvordan FORRETNINGEN og PRODUKTET står. Tall om kundenes eget arbeid,
+     som antall åpne avvik, hører hjemme hos kunden — ikke her. Det sto som brødtekst
+     øverst; det er en regel for den som bygger siden, ikke informasjon for den som
+     leser den, og hører derfor hjemme her. */
   return (
-    <Ramme tittel="Statistikk">
+    <Ramme
+      tittel="Statistikk"
+      handlinger={
+        <button className="btn btn-ghost" onClick={eksporter} disabled={tabell.length === 0}>
+          Eksporter
+        </button>
+      }
+    >
       {feil && <div className="feilmelding">{feil}</div>}
       {!data ? (
         <p className="pf-dempet">Henter …</p>
       ) : (
         <>
-          <div style={{ display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
-            <p className="pf-dempet" style={{ maxWidth: "74ch" }}>
-              Hvordan forretningen og produktet faktisk står. Tall om kundenes eget arbeid,
-              som antall åpne avvik, hører hjemme hos kunden — ikke her.
-            </p>
-            <button
-              className="btn btn-ghost"
-              style={{ marginLeft: "auto" }}
-              onClick={eksporter}
-              disabled={tabell.length === 0}
-            >
-              Eksporter
-            </button>
-          </div>
-
           <div className="pf-verktoylinje">
             {([30, 90, 365] as const).map((p) => (
               <button
