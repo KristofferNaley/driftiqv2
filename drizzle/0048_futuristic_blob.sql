@@ -1,1 +1,0 @@
-CREATE INDEX "idx_audit_events_org_tid" ON "audit_events" USING btree ("org_id","occurred_at");
