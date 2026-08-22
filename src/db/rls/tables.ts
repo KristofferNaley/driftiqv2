@@ -50,6 +50,9 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Innmeldinger fra «Meld feil». Plattformpanelet leser dem på tvers via withoutRls,
   // men en kunde skal aldri kunne lese en annen kundes innmelding.
   "feedback_reports",
+  // Hendelsesloggen (v2-tillegg, finnes ikke i v1s rls.py). Org-eid revisjonsdata —
+  // en kunde skal aldri se en annen kundes hendelser.
+  "audit_events",
 ];
 
 /**

@@ -31,5 +31,6 @@ export * from "./internkontroll";
 export * from "./ai";
 export * from "./vendors";
 export * from "./tasks";
+export * from "./hendelser";
 export * from "./leads";
 export * from "./feedback";

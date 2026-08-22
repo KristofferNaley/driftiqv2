@@ -337,6 +337,13 @@
       "when": 1786913192881,
       "tag": "0047_sok_indekser",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787411550196,
+      "tag": "0048_futuristic_blob",
+      "breakpoints": true
     }
   ]
 }
