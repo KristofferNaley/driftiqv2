@@ -196,6 +196,13 @@ i raden (protokollen skal lese likt om ti år, også etter navnebytte eller slet
 (QR-flyten er anonym), ikke en mangel. Sjekklistepunkter følger samme tanke: uendret tekst
 beholder id-en, et omdøpt punkt er et NYTT punkt.
 
+**Hendelsesloggen** (`audit_events`, `lib/hendelser.ts`): mutasjoner med revisjonsverdi —
+tilgangsendringer, sletting, eksport, nøkler, tildelinger — logges med `loggHendelse(db, …)`
+fra lib-funksjonen, i SAMME transaksjon som handlingen. Aldri lesing (unntak: eksport).
+`event`-teksten er norsk fritekst i fortid; maskinsiden bæres av `module`/`entity`.
+Innlogging går til `auth_events` (brukernivå, UNNTATT, feiler stille) via krokene i auth.ts.
+Oppbevaring håndheves av jobben «hendelsesrydding» — grensene er konstanter i hendelser.ts.
+
 ### E-post
 
 - Alt utgående går gjennom `src/lib/epost.ts` (`ramme()`-malen — tabell-HTML for Outlook,
