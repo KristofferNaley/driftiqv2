@@ -1,4 +1,5 @@
 import { lesKropp, orgRute } from "@/lib/api";
+import { aktorFor } from "@/lib/aktor";
 import { avtaleInn, hentAvtaler, opprettAvtale } from "@/lib/parkering";
 
 export const GET = orgRute({
@@ -10,5 +11,5 @@ export const GET = orgRute({
 export const POST = orgRute({
   nivaa: "redigering",
   modul: "parkering",
-  handler: async ({ db, orgId, req }) => opprettAvtale(db, orgId, await lesKropp(req, avtaleInn)),
+  handler: async ({ db, orgId, bruker, req }) => opprettAvtale(db, orgId, await lesKropp(req, avtaleInn), aktorFor(bruker)),
 });

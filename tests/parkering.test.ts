@@ -26,6 +26,9 @@ import {
   slettFraVenteliste,
   slettPlass,
 } from "../src/lib/parkering";
+import { anonymAktor } from "../src/lib/aktor";
+
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -173,7 +176,7 @@ describe("leieavtaler", () => {
       opprettPlass(db, org, { number: "1", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false }),
     );
     const avtale = await i(org, (db) =>
-      opprettAvtale(db, org, { spotId: plass.id, tenantName: "Leietaker", pricePerMonth: 800 }),
+      opprettAvtale(db, org, { spotId: plass.id, tenantName: "Leietaker", pricePerMonth: 800 }, KARI),
     );
     return { org, plass, avtale };
   }
@@ -189,7 +192,7 @@ describe("leieavtaler", () => {
     const { org, plass } = await plassMedAvtale();
     const feil = await feilFra(() =>
       i(org, (db) =>
-        opprettAvtale(db, org, { spotId: plass.id, tenantName: "Nummer to", pricePerMonth: 900 }),
+        opprettAvtale(db, org, { spotId: plass.id, tenantName: "Nummer to", pricePerMonth: 900 }, KARI),
       ),
     );
     expect(feil.status).toBe(400);
@@ -198,7 +201,7 @@ describe("leieavtaler", () => {
 
   it("frigjør plassen når avtalen avsluttes — og beholder raden som historikk", async () => {
     const { org, plass, avtale } = await plassMedAvtale();
-    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id, KARI));
 
     const plasser = await i(org, (db) => hentPlasser(db, org));
     expect(plasser.find((p) => p.id === plass.id)?.status).toBe("ledig");
@@ -212,19 +215,19 @@ describe("leieavtaler", () => {
 
   it("en avsluttet avtale sperrer ikke for ny utleie av samme plass", async () => {
     const { org, plass, avtale } = await plassMedAvtale();
-    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id, KARI));
     const ny = await i(org, (db) =>
-      opprettAvtale(db, org, { spotId: plass.id, tenantName: "Neste leietaker", pricePerMonth: 800 }),
+      opprettAvtale(db, org, { spotId: plass.id, tenantName: "Neste leietaker", pricePerMonth: 800 }, KARI),
     );
     expect(ny.tenantName).toBe("Neste leietaker");
     // Dobbel avslutning er en feil, ikke en no-op.
-    const feil = await feilFra(() => i(org, (db) => avsluttAvtale(db, org, avtale.id)));
+    const feil = await feilFra(() => i(org, (db) => avsluttAvtale(db, org, avtale.id, KARI)));
     expect(feil.status).toBe(400);
   });
 
   it("tildeling fra ventelisten fjerner oppføringen i samme operasjon", async () => {
     const { org, plass, avtale } = await plassMedAvtale();
-    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id, KARI));
     const ventende = await i(org, (db) =>
       leggPaVenteliste(db, org, { name: "Elin Vik", unitLabel: "H0301", requestedType: "lading" }),
     );
@@ -234,7 +237,7 @@ describe("leieavtaler", () => {
         tenantName: "H0301, Elin Vik",
         pricePerMonth: 700,
         waitlistEntryId: ventende.id,
-      }),
+      }, KARI),
     );
     expect(await i(org, (db) => hentVenteliste(db, org))).toEqual([]);
   });
@@ -244,7 +247,7 @@ describe("leieavtaler", () => {
     // ikke stille gjøre den utleiebar igjen.
     const { org, plass, avtale } = await plassMedAvtale();
     await i(org, (db) => endrePlass(db, org, plass.id, { status: "disponert" }));
-    await i(org, (db) => avsluttAvtale(db, org, avtale.id));
+    await i(org, (db) => avsluttAvtale(db, org, avtale.id, KARI));
 
     const plasser = await i(org, (db) => hentPlasser(db, org));
     expect(plasser.find((p) => p.id === plass.id)?.status).toBe("disponert");
@@ -258,7 +261,7 @@ describe("leieavtaler", () => {
     );
 
     const feil = await feilFra(() =>
-      i(a, (db) => opprettAvtale(db, a, { spotId: plassB.id, tenantName: "Tyv", pricePerMonth: 1 })),
+      i(a, (db) => opprettAvtale(db, a, { spotId: plassB.id, tenantName: "Tyv", pricePerMonth: 1 }, KARI)),
     );
     expect(feil.status).toBe(404);
   });

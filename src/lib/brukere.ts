@@ -15,8 +15,10 @@ import type { Db } from "../db/client";
 import { account, twoFactor } from "../db/schema/auth";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { ikkeFunnet, ugyldig } from "./api";
+import type { Aktor } from "./aktor";
+import { loggHendelse } from "./hendelser";
 // Etikettene bor i en ren fil uten server-importer — se kommentaren der.
-import { NIVAER } from "./nivaer";
+import { NIVAER, NIVA_ETIKETT } from "./nivaer";
 
 export { NIVAER, NIVA_ETIKETT, TILGANGSNIVAER } from "./nivaer";
 
@@ -70,6 +72,16 @@ export async function hentBrukere(db: Db, orgId: string) {
   }));
 }
 
+/** Navnet til den en handling GJELDER — til hendelsesteksten. Aktøren har sitt eget navn. */
+async function navnPaa(db: Db, brukerId: string): Promise<string> {
+  const rader = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, brukerId))
+    .limit(1);
+  return rader[0]?.name ?? "ukjent bruker";
+}
+
 /** Antall orgadmins. Brukes til å hindre at den siste fjernes. */
 async function antallAdmins(db: Db, orgId: string, utenom?: string): Promise<number> {
   const betingelser = [eq(userOrgMemberships.orgId, orgId), eq(userOrgMemberships.role, "orgadmin")];
@@ -110,7 +122,7 @@ export async function sendOppsettEpost(epost: string): Promise<void> {
  * selv. Ingen andre enn dem kjenner det da — heller ikke den som inviterte, og heller ikke
  * DriftIQ. Samme modell som v1.
  */
-export async function inviterBruker(db: Db, orgId: string, data: z.infer<typeof inviterInn>) {
+export async function inviterBruker(db: Db, orgId: string, data: z.infer<typeof inviterInn>, av: Aktor) {
   const finnes = await db
     .select()
     .from(users)
@@ -147,6 +159,15 @@ export async function inviterBruker(db: Db, orgId: string, data: z.infer<typeof 
     title: data.title ?? null,
   });
 
+  await loggHendelse(db, orgId, av, {
+    modul: "org",
+    entitet: "bruker",
+    entitetId: brukerId,
+    hendelse: finnes[0]
+      ? `Ga ${data.name} (${data.email}) tilgang med nivå «${NIVA_ETIKETT[data.role]}»`
+      : `Inviterte ${data.name} (${data.email}) med nivå «${NIVA_ETIKETT[data.role]}»`,
+  });
+
   // E-posten sendes IKKE herfra. Vi står inne i en transaksjon, og Better Auth slår opp
   // adressen på en annen tilkobling — raden finnes ikke for den ennå. Kallstedet sender via
   // `etterCommit`. Se kommentaren i api.ts.
@@ -159,7 +180,7 @@ export async function endreMedlemskap(
   brukerId: string,
   data: z.infer<typeof medlemEndring>,
   /** Den innloggede — sperren mot å endre eget nivå trenger å vite hvem som spør. */
-  utfortAvId: string,
+  av: Aktor,
 ) {
   const rader = await db
     .select()
@@ -172,7 +193,7 @@ export async function endreMedlemskap(
   // Sitt eget nivå kan ingen endre — en kontoadmin som degraderer seg selv står i
   // lesevisning i samme øyeblikk, og er de to admins som gjør det samme, er kunden låst
   // ute. En annen kontoadmin må gjøre det; sperren under tar i tillegg den siste.
-  if (data.role !== undefined && data.role !== medlemskap.role && brukerId === utfortAvId) {
+  if (data.role !== undefined && data.role !== medlemskap.role && brukerId === av.brukerId) {
     throw ugyldig("Du kan ikke endre ditt eget tilgangsnivå — be en annen kontoadmin gjøre det.");
   }
 
@@ -186,6 +207,17 @@ export async function endreMedlemskap(
 
   if (data.name) {
     await db.update(users).set({ name: data.name }).where(eq(users.id, brukerId));
+  }
+
+  // Kun nivåendringen logges — navn- og tittelretting er vedlikehold, ikke tilgang.
+  if (data.role !== undefined && data.role !== medlemskap.role) {
+    const navn = await navnPaa(db, brukerId);
+    await loggHendelse(db, orgId, av, {
+      modul: "org",
+      entitet: "bruker",
+      entitetId: brukerId,
+      hendelse: `Endret tilgangsnivå for ${navn} til «${NIVA_ETIKETT[data.role]}»`,
+    });
   }
 
   // Bare feltene som faktisk hører til medlemskapet. Drizzle kaster på `.set({})`, så et
@@ -207,7 +239,7 @@ export async function endreMedlemskap(
  * Fjerner brukerens tilgang til DENNE org-en. Kontoen består — brukeren kan sitte i flere
  * styrer, og en oppsigelse i ett lag skal ikke stenge dem ute av et annet.
  */
-export async function fjernFraOrg(db: Db, orgId: string, brukerId: string) {
+export async function fjernFraOrg(db: Db, orgId: string, brukerId: string, av: Aktor) {
   const rader = await db
     .select()
     .from(userOrgMemberships)
@@ -219,6 +251,13 @@ export async function fjernFraOrg(db: Db, orgId: string, brukerId: string) {
   if (medlemskap.role === "orgadmin" && (await antallAdmins(db, orgId, brukerId)) === 0) {
     throw ugyldig("Organisasjonen må ha minst én administrator.");
   }
+
+  await loggHendelse(db, orgId, av, {
+    modul: "org",
+    entitet: "bruker",
+    entitetId: brukerId,
+    hendelse: `Fjernet ${await navnPaa(db, brukerId)} fra organisasjonen`,
+  });
 
   await db
     .delete(userOrgMemberships)
@@ -232,8 +271,8 @@ export async function fjernFraOrg(db: Db, orgId: string, brukerId: string) {
  * (se Tofaktor-fanen i ProfilModal). Egen tofaktor styres av samme grunn kun derfra —
  * denne veien har ikke passordbeviset, og skal derfor ikke virke på en selv.
  */
-export async function resettTofaktor(db: Db, orgId: string, brukerId: string, utfortAvId: string) {
-  if (brukerId === utfortAvId) {
+export async function resettTofaktor(db: Db, orgId: string, brukerId: string, av: Aktor) {
+  if (brukerId === av.brukerId) {
     throw ugyldig("Din egen tofaktor styrer du under Min profil — der bekreftes endringen med passord.");
   }
 
@@ -248,4 +287,11 @@ export async function resettTofaktor(db: Db, orgId: string, brukerId: string, ut
 
   await db.delete(twoFactor).where(eq(twoFactor.userId, brukerId));
   await db.update(users).set({ twoFactorEnabled: false }).where(eq(users.id, brukerId));
+
+  await loggHendelse(db, orgId, av, {
+    modul: "org",
+    entitet: "bruker",
+    entitetId: brukerId,
+    hendelse: `Nullstilte tofaktor for ${await navnPaa(db, brukerId)}`,
+  });
 }

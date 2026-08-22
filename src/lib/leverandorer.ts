@@ -22,6 +22,8 @@ import {
   vendors,
 } from "../db/schema/vendors";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
+import type { Aktor } from "./aktor";
+import { loggHendelse } from "./hendelser";
 
 export const RELASJONSTYPER = ["avtale", "handelskonto", "adhoc"] as const;
 export const ADGANGSSTATUSER = ["utlevert", "bør_sjekkes", "innlevert"] as const;
@@ -300,12 +302,20 @@ export async function leggTilAdgang(
   orgId: string,
   vendorId: string,
   data: z.infer<typeof adgangInn>,
+  av: Aktor,
 ) {
-  await hentLeverandor(db, orgId, vendorId);
+  const leverandor = await hentLeverandor(db, orgId, vendorId);
   const [ny] = await db
     .insert(vendorAccessItems)
     .values({ id: randomUUID(), orgId, vendorId, ...data })
     .returning();
+  // Nøkler og adgangspunkter er fysisk tilgang til bygget — hver endring skal kunne ettergås.
+  await loggHendelse(db, orgId, av, {
+    modul: "leverandorer",
+    entitet: "adgang",
+    entitetId: ny!.id,
+    hendelse: `Registrerte adgang «${ny!.title}» hos ${leverandor.name}`,
+  });
   return ny!;
 }
 
@@ -315,24 +325,37 @@ export async function endreAdgang(
   vendorId: string,
   itemId: string,
   data: Partial<z.infer<typeof adgangInn>>,
+  av: Aktor,
 ) {
-  await hentLeverandor(db, orgId, vendorId);
+  const leverandor = await hentLeverandor(db, orgId, vendorId);
   const [endret] = await db
     .update(vendorAccessItems)
     .set(data)
     .where(and(eq(vendorAccessItems.id, itemId), eq(vendorAccessItems.vendorId, vendorId)))
     .returning();
   if (!endret) throw ikkeFunnet("Adgangselement");
+  await loggHendelse(db, orgId, av, {
+    modul: "leverandorer",
+    entitet: "adgang",
+    entitetId: itemId,
+    hendelse: `Endret adgang «${endret.title}» hos ${leverandor.name}`,
+  });
   return endret;
 }
 
-export async function slettAdgang(db: Db, orgId: string, vendorId: string, itemId: string) {
-  await hentLeverandor(db, orgId, vendorId);
+export async function slettAdgang(db: Db, orgId: string, vendorId: string, itemId: string, av: Aktor) {
+  const leverandor = await hentLeverandor(db, orgId, vendorId);
   const slettet = await db
     .delete(vendorAccessItems)
     .where(and(eq(vendorAccessItems.id, itemId), eq(vendorAccessItems.vendorId, vendorId)))
-    .returning({ id: vendorAccessItems.id });
+    .returning({ id: vendorAccessItems.id, title: vendorAccessItems.title });
   if (slettet.length === 0) throw ikkeFunnet("Adgangselement");
+  await loggHendelse(db, orgId, av, {
+    modul: "leverandorer",
+    entitet: "adgang",
+    entitetId: itemId,
+    hendelse: `Fjernet adgang «${slettet[0]!.title}» hos ${leverandor.name}`,
+  });
 }
 
 // ---------------------------------------------------------------------------------------

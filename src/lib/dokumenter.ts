@@ -18,6 +18,8 @@ import { documentFolders, documents } from "../db/schema/dokumenter";
 import { elementDocuments } from "../db/schema/vedlikehold";
 import { contracts } from "../db/schema/kontrakter";
 import { ikkeFunnet, ugyldig } from "./api";
+import type { Aktor } from "./aktor";
+import { loggHendelse } from "./hendelser";
 import { lagreFil, lagringsstatus, slettFil } from "./lagring";
 
 const MODUL = "documents";
@@ -210,9 +212,16 @@ export async function endreMappe(
  * Både flyttingen og sletting av undertreet må gjøres eksplisitt: verken `documents.folder`
  * eller `documentFolders.parentId` er fremmednøkler, siden de rommer slug ELLER id.
  */
-export async function slettMappe(db: Db, orgId: string, folderId: string) {
-  await hentMappe(db, orgId, folderId);
+export async function slettMappe(db: Db, orgId: string, folderId: string, av: Aktor) {
+  const mappe = await hentMappe(db, orgId, folderId);
   const ids = await etterkommere(db, orgId, folderId);
+
+  await loggHendelse(db, orgId, av, {
+    modul: "dokumentarkiv",
+    entitet: "mappe",
+    entitetId: folderId,
+    hendelse: `Slettet mappen «${mappe.name}» — dokumentene ble flyttet til «Annet»`,
+  });
 
   const flyttet = await db
     .update(documents)
@@ -295,8 +304,14 @@ export async function endreDokument(
   return endret!;
 }
 
-export async function slettDokument(db: Db, orgId: string, docId: string) {
+export async function slettDokument(db: Db, orgId: string, docId: string, av: Aktor) {
   const dok = await hentDokument(db, orgId, docId);
+  await loggHendelse(db, orgId, av, {
+    modul: "dokumentarkiv",
+    entitet: "dokument",
+    entitetId: docId,
+    hendelse: `Slettet «${dok.title}» (${dok.originalName})`,
+  });
   // Raden først, disken etterpå — samme resonnement som i Kontrakter.
   await db.delete(documents).where(and(eq(documents.id, docId), eq(documents.orgId, orgId)));
   await slettFil(orgId, MODUL, dok.filename);

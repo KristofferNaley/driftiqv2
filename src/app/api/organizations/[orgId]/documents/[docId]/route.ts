@@ -1,4 +1,5 @@
 import { lesKropp, orgRute } from "@/lib/api";
+import { aktorFor } from "@/lib/aktor";
 import { dokumentEndring, endreDokument, hentDokument, slettDokument } from "@/lib/dokumenter";
 
 type P = { docId: string };
@@ -20,5 +21,5 @@ export const DELETE = orgRute<P>({
   nivaa: "redigering",
   modul: "dokumentarkiv",
   status: 204,
-  handler: ({ db, orgId, params }) => slettDokument(db, orgId, params.docId),
+  handler: ({ db, orgId, bruker, params }) => slettDokument(db, orgId, params.docId, aktorFor(bruker)),
 });

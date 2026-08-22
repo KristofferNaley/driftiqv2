@@ -1,4 +1,5 @@
 import { orgRute } from "@/lib/api";
+import { aktorFor } from "@/lib/aktor";
 import { resettTofaktor } from "@/lib/brukere";
 
 type P = { brukerId: string };
@@ -11,5 +12,5 @@ type P = { brukerId: string };
 export const DELETE = orgRute<P>({
   nivaa: "admin",
   status: 204,
-  handler: ({ db, orgId, bruker, params }) => resettTofaktor(db, orgId, params.brukerId, bruker.id),
+  handler: ({ db, orgId, bruker, params }) => resettTofaktor(db, orgId, params.brukerId, aktorFor(bruker)),
 });

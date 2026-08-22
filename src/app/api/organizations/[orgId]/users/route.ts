@@ -1,4 +1,5 @@
 import { lesKropp, orgRute } from "@/lib/api";
+import { aktorFor } from "@/lib/aktor";
 import { hentBrukere, inviterBruker, inviterInn, sendOppsettEpost } from "@/lib/brukere";
 
 /**
@@ -22,9 +23,9 @@ export const GET = orgRute({
  */
 export const POST = orgRute({
   nivaa: "admin",
-  handler: async ({ db, orgId, req, etterCommit }) => {
+  handler: async ({ db, orgId, bruker, req, etterCommit }) => {
     const data = await lesKropp(req, inviterInn);
-    const resultat = await inviterBruker(db, orgId, data);
+    const resultat = await inviterBruker(db, orgId, data, aktorFor(bruker));
     if (resultat.nyKonto) etterCommit(() => sendOppsettEpost(data.email));
     return resultat;
   },

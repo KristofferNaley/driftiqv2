@@ -1,4 +1,5 @@
 import { lesKropp, orgRute } from "@/lib/api";
+import { aktorFor } from "@/lib/aktor";
 import { endreMappe, mappeEndring, slettMappe } from "@/lib/dokumenter";
 
 type P = { folderId: string };
@@ -14,5 +15,5 @@ export const PUT = orgRute<P>({
 export const DELETE = orgRute<P>({
   nivaa: "redigering",
   modul: "dokumentarkiv",
-  handler: ({ db, orgId, params }) => slettMappe(db, orgId, params.folderId),
+  handler: ({ db, orgId, bruker, params }) => slettMappe(db, orgId, params.folderId, aktorFor(bruker)),
 });

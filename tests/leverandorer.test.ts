@@ -22,6 +22,9 @@ import {
   slettKontakt,
   slettLeverandor,
 } from "../src/lib/leverandorer";
+import { anonymAktor } from "../src/lib/aktor";
+
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -189,7 +192,7 @@ describe("sletting", () => {
     const org = await nyOrg();
     const lev = await i(org, (db) => opprettLeverandor(db, org, grunn));
     await i(org, (db) => leggTilKontakt(db, org, lev.id, { name: "Ola", isPrimary: true }));
-    await i(org, (db) => leggTilAdgang(db, org, lev.id, { title: "Nøkkel 12", status: "utlevert" }));
+    await i(org, (db) => leggTilAdgang(db, org, lev.id, { title: "Nøkkel 12", status: "utlevert" }, KARI));
     await i(org, (db) => leggTilNotat(db, org, lev.id, "Kari", { text: "Ringte" }));
 
     await i(org, (db) => slettLeverandor(db, org, lev.id));

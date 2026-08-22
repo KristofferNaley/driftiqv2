@@ -27,6 +27,10 @@ import {
   slettMappe,
 } from "../src/lib/dokumenter";
 import { bruktLagring, filSti } from "../src/lib/lagring";
+import { anonymAktor } from "../src/lib/aktor";
+
+/** Aktøren i slettetestene — hendelsesloggen trenger et navn, id-koblingen testes i hendelser.test.ts. */
+const KARI = anonymAktor("Kari");
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -162,7 +166,7 @@ describe("sletting av mappe", () => {
     const m = await i(org, (db) => opprettMappe(db, org, { name: "Gammel", icon: "📁" }));
     await i(org, (db) => lastOppDokument(db, org, "Kari", fil(), dok({ folder: m.id })));
 
-    const resultat = await i(org, (db) => slettMappe(db, org, m.id));
+    const resultat = await i(org, (db) => slettMappe(db, org, m.id, KARI));
     expect(resultat.flyttedeDokumenter).toBe(1);
 
     const igjen = await i(org, (db) => hentDokumenter(db, org));
@@ -175,7 +179,7 @@ describe("sletting av mappe", () => {
     const barn = await i(org, (db) => opprettMappe(db, org, { name: "Barn", icon: "📁", parentId: rot.id }));
     await i(org, (db) => lastOppDokument(db, org, "Kari", fil(), dok({ folder: barn.id })));
 
-    const resultat = await i(org, (db) => slettMappe(db, org, rot.id));
+    const resultat = await i(org, (db) => slettMappe(db, org, rot.id, KARI));
     expect(resultat.slettedeMapper).toBe(2);
     expect(resultat.flyttedeDokumenter).toBe(1);
   });
@@ -201,7 +205,7 @@ describe("dokumenter", () => {
   it("frigjør kvoten og fjerner fila ved sletting", async () => {
     const org = await nyOrg();
     const d = await i(org, (db) => lastOppDokument(db, org, "Kari", fil(), dok()));
-    await i(org, (db) => slettDokument(db, org, d.id));
+    await i(org, (db) => slettDokument(db, org, d.id, KARI));
 
     expect(await i(org, (db) => bruktLagring(db, org))).toBe(0);
     await expect(stat(filSti(org, "documents", d.filename))).rejects.toThrow();

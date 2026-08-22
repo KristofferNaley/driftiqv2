@@ -15,6 +15,10 @@ import { Pool, type PoolClient } from "pg";
 import { lukkPooler, withOrg } from "../src/db/client";
 import { ApiFeil } from "../src/lib/api";
 import { endreMedlemskap, fjernFraOrg, resettTofaktor } from "../src/lib/brukere";
+import type { Aktor } from "../src/lib/aktor";
+
+/** Den innloggede som aktør. Selvsperrene sammenligner på `brukerId`, navnet er pynt her. */
+const som = (id: string): Aktor => ({ navn: "Testbruker", brukerId: id });
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -101,7 +105,7 @@ describe("eget tilgangsnivå", () => {
     await medlem(b, org, "orgadmin");
 
     const feil = await withOrg(org, (db) =>
-      feiler(() => endreMedlemskap(db, org, a, { role: "redigering" }, a)),
+      feiler(() => endreMedlemskap(db, org, a, { role: "redigering" }, som(a))),
     );
     expect(feil?.status).toBe(400);
     expect(feil?.message).toMatch(/eget tilgangsnivå/);
@@ -116,7 +120,7 @@ describe("eget tilgangsnivå", () => {
     // UI-et sender hele skjemaet, også nivået man allerede har. Sperren skal bare slå til
     // når nivået faktisk ENDRES — ellers kunne ingen rette sitt eget navn.
     await withOrg(org, (db) =>
-      endreMedlemskap(db, org, a, { name: "Nytt Navn", title: "Styreleder", role: "orgadmin" }, a),
+      endreMedlemskap(db, org, a, { name: "Nytt Navn", title: "Styreleder", role: "orgadmin" }, som(a)),
     );
     const { rows } = await eier.query<{ name: string }>("SELECT name FROM users WHERE id = $1", [a]);
     expect(rows[0]?.name).toBe("Nytt Navn");
@@ -130,7 +134,7 @@ describe("eget tilgangsnivå", () => {
     await medlem(a, org, "orgadmin");
     await medlem(b, org, "orgadmin");
 
-    await withOrg(org, (db) => endreMedlemskap(db, org, a, { role: "visning" }, b));
+    await withOrg(org, (db) => endreMedlemskap(db, org, a, { role: "visning" }, som(b)));
     expect(await nivaaFor(a, org)).toBe("visning");
   });
 });
@@ -144,7 +148,7 @@ describe("siste kontoadmin", () => {
     await medlem(b, org, "redigering");
 
     const feil = await withOrg(org, (db) =>
-      feiler(() => endreMedlemskap(db, org, a, { role: "redigering" }, b)),
+      feiler(() => endreMedlemskap(db, org, a, { role: "redigering" }, som(b))),
     );
     expect(feil?.status).toBe(400);
     expect(feil?.message).toMatch(/minst én administrator/);
@@ -156,7 +160,7 @@ describe("siste kontoadmin", () => {
     const a = await nyBruker();
     await medlem(a, org, "orgadmin");
 
-    const feil = await withOrg(org, (db) => feiler(() => fjernFraOrg(db, org, a)));
+    const feil = await withOrg(org, (db) => feiler(() => fjernFraOrg(db, org, a, som(a))));
     expect(feil?.status).toBe(400);
     expect(await nivaaFor(a, org)).toBe("orgadmin");
   });
@@ -188,7 +192,7 @@ describe("tofaktor-nullstilling", () => {
     await medlem(b, org, "redigering");
     await medTofaktor(b);
 
-    await withOrg(org, (db) => resettTofaktor(db, org, b, admin));
+    await withOrg(org, (db) => resettTofaktor(db, org, b, som(admin)));
 
     const etter = await tofaktorTilstand(b);
     expect(etter.flagg).toBe(false);
@@ -202,7 +206,7 @@ describe("tofaktor-nullstilling", () => {
     await medTofaktor(admin);
 
     const feil = await withOrg(org, (db) =>
-      feiler(() => resettTofaktor(db, org, admin, admin)),
+      feiler(() => resettTofaktor(db, org, admin, som(admin))),
     );
     expect(feil?.status).toBe(400);
     expect((await tofaktorTilstand(admin)).rader).toBe(1);
@@ -219,7 +223,7 @@ describe("tofaktor-nullstilling", () => {
     await medlem(c, orgB, "orgadmin");
     await medTofaktor(c);
 
-    const feil = await withOrg(orgA, (db) => feiler(() => resettTofaktor(db, orgA, c, admin)));
+    const feil = await withOrg(orgA, (db) => feiler(() => resettTofaktor(db, orgA, c, som(admin))));
     expect(feil?.status).toBe(404);
     expect((await tofaktorTilstand(c)).rader).toBe(1);
   });

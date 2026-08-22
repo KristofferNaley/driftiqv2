@@ -12,6 +12,8 @@ import { z } from "zod";
 import type { Db } from "../db/client";
 import { parkingLeases, parkingSpots, parkingWaitlist } from "../db/schema/parking";
 import { ikkeFunnet, ugyldig } from "./api";
+import type { Aktor } from "./aktor";
+import { loggHendelse } from "./hendelser";
 
 /**
  * v1s tre eierskapsformer — og PRODUKSJONSDATAENS. Første utkast hadde «felles»/«privat»,
@@ -221,7 +223,7 @@ export async function hentAvtaler(db: Db, orgId: string) {
  * forespørselen. I v1 var dette to `db.add`/`setattr` fulgt av én commit, altså også atomisk,
  * men avhengig av at ingen la inn en commit imellom.
  */
-export async function opprettAvtale(db: Db, orgId: string, data: z.infer<typeof avtaleInn>) {
+export async function opprettAvtale(db: Db, orgId: string, data: z.infer<typeof avtaleInn>, av: Aktor) {
   const plass = await hentPlass(db, orgId, data.spotId);
 
   // «Én aktiv avtale per plass» håndheves her — historikken gjorde den unike nøkkelen umulig.
@@ -260,6 +262,16 @@ export async function opprettAvtale(db: Db, orgId: string, data: z.infer<typeof 
       .where(and(eq(parkingWaitlist.id, waitlistEntryId), eq(parkingWaitlist.orgId, orgId)));
   }
 
+  // «Hvem ga plassen til hvem» er det tildelingssaker strander på — derfor i loggen.
+  await loggHendelse(db, orgId, av, {
+    modul: "parkering",
+    entitet: "leieavtale",
+    entitetId: ny!.id,
+    hendelse: waitlistEntryId
+      ? `Tildelte plass ${plass.number} til ${data.tenantName} fra ventelisten`
+      : `Tildelte plass ${plass.number} til ${data.tenantName}`,
+  });
+
   return ny!;
 }
 
@@ -269,7 +281,7 @@ export async function opprettAvtale(db: Db, orgId: string, data: z.infer<typeof 
  * bare hvis den faktisk sto som «utleid»: sto den som «disponert», har styret tatt den til
  * eget bruk, og den skal ikke stille bli utleiebar igjen.
  */
-export async function avsluttAvtale(db: Db, orgId: string, leaseId: string) {
+export async function avsluttAvtale(db: Db, orgId: string, leaseId: string, av: Aktor) {
   const rader = await db
     .select()
     .from(parkingLeases)
@@ -294,6 +306,14 @@ export async function avsluttAvtale(db: Db, orgId: string, leaseId: string) {
     .update(parkingLeases)
     .set({ endedAt: new Date() })
     .where(and(eq(parkingLeases.id, leaseId), eq(parkingLeases.orgId, orgId)));
+
+  const plass = await hentPlass(db, orgId, avtale.spotId);
+  await loggHendelse(db, orgId, av, {
+    modul: "parkering",
+    entitet: "leieavtale",
+    entitetId: leaseId,
+    hendelse: `Avsluttet leieforholdet for ${avtale.tenantName} på plass ${plass.number}`,
+  });
 }
 
 // ---------------------------------------------------------------------------------------
