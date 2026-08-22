@@ -11,6 +11,11 @@ import { Ramme } from "../ramme";
  * nå, spurt mot databasen — ikke lest fra en konfigurasjonsverdi som ble satt ved oppstart.
  */
 
+type Innlogging = {
+  id: string; userId: string | null; email: string;
+  event: "innlogget" | "feilet" | "avvist" | "utlogget"; ip: string | null; occurredAt: string;
+};
+
 type Helse = {
   database: {
     navn: string;
@@ -36,6 +41,7 @@ const NAAR: Intl.DateTimeFormatOptions = {
 
 export default function System() {
   const [helse, setHelse] = useState<Helse | null>(null);
+  const [innlogginger, setInnlogginger] = useState<Innlogging[]>([]);
   const [feil, setFeil] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,6 +49,8 @@ export default function System() {
       .hent<Helse>("/plattform/system")
       .then(setHelse)
       .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke hente systemstatus"));
+    // Innloggingsloggen er sitt eget kall — feiler den, skal helsekortene fortsatt vises.
+    api.hent<Innlogging[]>("/plattform/innlogginger").then(setInnlogginger).catch(() => {});
   }, []);
 
   if (!helse) {
@@ -180,6 +188,35 @@ export default function System() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="pf-kort">
+        <div className="pf-kort-hode">
+          <span>Siste innlogginger</span>
+        </div>
+        {/* auth_events — brukernivå, derfor her og aldri i kunde-appen. Ryddes etter 90 dager. */}
+        {innlogginger.length === 0 ? (
+          <div className="pf-kort-kropp">
+            <p className="pf-dempet">Ingen innloggingshendelser registrert ennå.</p>
+          </div>
+        ) : (
+          innlogginger.map((i) => (
+            <div
+              key={i.id}
+              className="pf-kort-kropp"
+              style={{ borderTop: "1px solid var(--border)", display: "flex", gap: "14px", alignItems: "baseline", flexWrap: "wrap" }}
+            >
+              <div style={{ flex: 1, minWidth: "220px" }}>{i.email}</div>
+              <span className={`badge ${i.event === "innlogget" ? "ok" : i.event === "utlogget" ? "muted" : "danger"}`}>
+                {i.event}
+              </span>
+              <div style={{ minWidth: "180px", textAlign: "right" }}>
+                <div>{new Date(i.occurredAt).toLocaleString("nb-NO", NAAR)}</div>
+                {i.ip && <div className="field-note">{i.ip}</div>}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       <p className="field-note">
