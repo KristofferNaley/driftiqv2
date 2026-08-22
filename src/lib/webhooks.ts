@@ -32,6 +32,7 @@ import { orgWebhooks, type OrgWebhook } from "../db/schema/webhooks";
 import type { Aktor } from "./aktor";
 import { ikkeFunnet } from "./api";
 import { loggHendelse } from "./hendelser";
+import { MARKED_URL } from "./urler";
 import {
   WEBHOOK_HENDELSER,
   WEBHOOK_TYPER,
@@ -232,14 +233,30 @@ export type WebhookMelding = {
  * tredjeparter og skal låses av tester, ikke av forsiktighet.
  */
 export function byggKropp(type: WebhookType, orgNavn: string, m: WebhookMelding): unknown {
+  // Avsenderprofilen. Ikonet må ligge på en OFFENTLIG adresse — Discord henter det selv,
+  // og markedsverten er den som garantert svarer uten sesjon.
+  const AVSENDER = "DriftIQ";
+  const IKON = `${MARKED_URL}/ikon-512.png`;
+
   switch (type) {
     case "discord":
       // <lenke> hindrer Discord i å lage forhåndsvisningskort av app-lenken.
+      // `username`/`avatar_url` overstyrer webhookens egen profil per melding, så varselet
+      // står som «DriftIQ» med logo uansett hva kunden kalte webhooken sin.
       return {
+        username: AVSENDER,
+        avatar_url: IKON,
         content: `**${orgNavn} — ${m.tittel}**\n${m.tekst}${m.lenke ? `\n<${m.lenke}>` : ""}`,
       };
     case "slack":
+      // `username`/`icon_url` respekteres bare av ELDRE incoming webhooks — moderne
+      // Slack-apper ignorerer dem stille (krever chat:write.customize, som en webhook ikke
+      // har). Sendes likevel: gratis der det virker, harmløst der det ikke gjør det.
+      // Reelt bestemmes avsenderen av appen kunden lager — derav rådet i hjelpeteksten om
+      // å kalle den DriftIQ og laste opp logoen.
       return {
+        username: AVSENDER,
+        icon_url: IKON,
         text: `*${orgNavn} — ${m.tittel}*\n${m.tekst}${m.lenke ? `\n<${m.lenke}|Åpne i DriftIQ>` : ""}`,
       };
     case "teams":
@@ -256,7 +273,24 @@ export function byggKropp(type: WebhookType, orgNavn: string, m: WebhookMelding)
               type: "AdaptiveCard",
               version: "1.4",
               body: [
-                { type: "TextBlock", text: orgNavn, size: "Small", isSubtle: true },
+                // Avsenderen i Teams er alltid Workflows-boten — det eier Microsoft. Logoen
+                // ligger derfor i kortet i stedet, som visuell signatur.
+                {
+                  type: "ColumnSet",
+                  columns: [
+                    {
+                      type: "Column",
+                      width: "auto",
+                      items: [{ type: "Image", url: IKON, size: "Small", width: "24px", altText: "DriftIQ" }],
+                    },
+                    {
+                      type: "Column",
+                      width: "stretch",
+                      verticalContentAlignment: "Center",
+                      items: [{ type: "TextBlock", text: `DriftIQ · ${orgNavn}`, size: "Small", isSubtle: true, wrap: true }],
+                    },
+                  ],
+                },
                 { type: "TextBlock", text: m.tittel, weight: "Bolder", size: "Medium", wrap: true },
                 { type: "TextBlock", text: m.tekst, wrap: true },
               ],

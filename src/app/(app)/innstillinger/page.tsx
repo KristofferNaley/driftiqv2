@@ -818,7 +818,7 @@ const WEBHOOK_HJELP: Record<WebhookType, string> = {
   teams:
     "I Teams: åpne Workflows-appen og lag flyten «When a Teams webhook request is received» mot kanalen eller gruppechatten, og lim inn URL-en du får. Gruppechat krever at alle deltakerne er i samme organisasjon — bruk en kanal hvis noen er eksterne.",
   slack:
-    "I Slack: lag en app med «Incoming Webhooks» (api.slack.com/apps), aktiver den for kanalen og lim inn URL-en.",
+    "I Slack: lag en app med «Incoming Webhooks» (api.slack.com/apps), aktiver den for kanalen og lim inn URL-en. Avsendernavnet og ikonet i Slack styres av appen dere lager — kall den gjerne DriftIQ.",
   discord:
     "I Discord: kanalinnstillinger → Integrasjoner → Webhooks → Ny webhook, og kopier URL-en.",
   generisk:

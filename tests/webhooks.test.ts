@@ -120,15 +120,23 @@ describe("formatene (kontrakter mot tredjepart)", () => {
     data: { nummer: 7 },
   };
 
-  it("discord: { content } med orgnavn og lenke i <> (ingen forhåndsvisning)", () => {
-    const kropp = byggKropp("discord", "Testlaget", melding) as { content: string };
+  it("discord: { content } med orgnavn, lenke i <> og DriftIQ som avsenderprofil", () => {
+    const kropp = byggKropp("discord", "Testlaget", melding) as {
+      content: string; username: string; avatar_url: string;
+    };
     expect(kropp.content).toContain("Testlaget");
     expect(kropp.content).toContain("<https://app.example/avvik/x>");
+    expect(kropp.username).toBe("DriftIQ");
+    expect(kropp.avatar_url).toMatch(/^https?:\/\/.+\/ikon-512\.png$/);
   });
 
-  it("slack: { text } med lenke i slack-format", () => {
-    const kropp = byggKropp("slack", "Testlaget", melding) as { text: string };
+  it("slack: { text } med lenke i slack-format og avsenderfeltene (eldre webhooks)", () => {
+    const kropp = byggKropp("slack", "Testlaget", melding) as {
+      text: string; username: string; icon_url: string;
+    };
     expect(kropp.text).toContain("<https://app.example/avvik/x|Åpne i DriftIQ>");
+    expect(kropp.username).toBe("DriftIQ");
+    expect(kropp.icon_url).toContain("/ikon-512.png");
   });
 
   it("teams: Adaptive Card i message-konvolutt — ikke ren tekst", () => {
@@ -140,6 +148,8 @@ describe("formatene (kontrakter mot tredjepart)", () => {
     expect(kropp.attachments[0]!.contentType).toBe("application/vnd.microsoft.card.adaptive");
     expect(kropp.attachments[0]!.content.type).toBe("AdaptiveCard");
     expect(kropp.attachments[0]!.content.actions).toHaveLength(1);
+    // Avsenderen i Teams er alltid Workflows-boten, så logoen skal ligge I kortet.
+    expect(JSON.stringify(kropp.attachments[0]!.content.body)).toContain("/ikon-512.png");
   });
 
   it("generisk: hele hendelsen som strukturert JSON — feltene er en kontrakt utad", () => {
