@@ -26,7 +26,9 @@ import { users as usersTabell } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
 import { sendForsinkedeOppgaver, sendKontrakterUtloper, sendMineForsinkedeOppgaver } from "./epost";
 import { erForsinket } from "./oppgaveregler";
+import { APP_URL } from "./urler";
 import { mottakere, varselPa } from "./varsler";
+import { varsleWebhooks, type WebhookMelding } from "./webhooks";
 
 /**
  * Dager igjen som utløser et kontraktvarsel.
@@ -49,7 +51,14 @@ export async function kjorVarsler(naa: Date = new Date()) {
   // 1 = mandag. Ukesammendragene går bare da; daglige sammendrag ville blitt støy.
   const erMandag = naa.getDay() === 1;
 
-  const sendt = { forsinkede: 0, mine: 0, kontrakter: 0 };
+  const sendt = { forsinkede: 0, mine: 0, kontrakter: 0, webhooks: 0 };
+
+  /**
+   * Webhook-meldingene samles opp INNE i jobbtransaksjonen og sendes ETTER den — sending
+   * hører ikke hjemme i en transaksjon (samme regel som `etterCommit` i lib/api.ts), og
+   * `varsleWebhooks` åpner sin egen org-kontekst.
+   */
+  const webhookKo: Array<{ orgId: string; melding: WebhookMelding }> = [];
 
   // Uten org-kontekst: jobben går på tvers av ALLE kunder, og det er nettopp det
   // «bakgrunnsjobb» er begrunnet med i `db/client.ts`.
@@ -76,6 +85,24 @@ export async function kjorVarsler(naa: Date = new Date()) {
           liste.push(o);
           perAnsvarlig.set(o.ansvarligId, liste);
         }
+        // Én samlemelding per org — webhooken går til en felles kanal, ikke til personer.
+        const viste = forsinkede.slice(0, 10);
+        webhookKo.push({
+          orgId: org.id,
+          melding: {
+            hendelse: "oppgave.forsinket",
+            tittel:
+              forsinkede.length === 1
+                ? "1 forsinket oppgave"
+                : `${forsinkede.length} forsinkede oppgaver`,
+            tekst:
+              viste.map((o) => `• ${o.tittel}${o.sted ? ` (${o.sted})` : ""}`).join("\n") +
+              (forsinkede.length > viste.length ? `\n… og ${forsinkede.length - viste.length} til` : ""),
+            lenke: `${APP_URL}/oppgaver`,
+            data: { antall: forsinkede.length },
+          },
+        });
+
         for (const [brukerId, mine] of perAnsvarlig) {
           if (!(await varselPa(db, brukerId, org.id, "my_overdue_task"))) continue;
           const bruker = mine[0]!;
@@ -96,9 +123,30 @@ export async function kjorVarsler(naa: Date = new Date()) {
           await sendKontrakterUtloper(org.navn, m.epost, utloper);
           sendt.kontrakter++;
         }
+
+        webhookKo.push({
+          orgId: org.id,
+          melding: {
+            hendelse: "kontrakt.utloper",
+            tittel:
+              utloper.length === 1
+                ? "1 avtale nærmer seg utløp"
+                : `${utloper.length} avtaler nærmer seg utløp`,
+            tekst: utloper
+              .map((k) => `• ${k.tittel}${k.leverandor ? ` (${k.leverandor})` : ""} — ${k.dagerIgjen} dager igjen`)
+              .join("\n"),
+            lenke: `${APP_URL}/kontrakter`,
+            data: { antall: utloper.length },
+          },
+        });
       }
     }
   });
+
+  for (const { orgId, melding } of webhookKo) {
+    await varsleWebhooks(orgId, melding);
+    sendt.webhooks++;
+  }
 
   return sendt;
 }

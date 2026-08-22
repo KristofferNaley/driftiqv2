@@ -4,10 +4,17 @@ import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
 import { Faner, Feil, Kort, Rad, Tom, datoTid, useOrgData } from "@/components/felles";
-import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
-import { enheter, hendelser as hendelserApi, organisasjon, type Adressetreff, type Enhet, type OrgInfo } from "@/lib/klient";
+import { Avkryssing, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
+import { enheter, hendelser as hendelserApi, organisasjon, webhooks as webhooksApi, type Adressetreff, type Enhet, type OrgInfo, type Webhook } from "@/lib/klient";
 import { lesKategorier } from "@/lib/avvikkategorier";
 import { MENY } from "@/lib/moduler";
+import {
+  WEBHOOK_HENDELSER,
+  WEBHOOK_HENDELSE_ETIKETT,
+  WEBHOOK_TYPER,
+  WEBHOOK_TYPE_ETIKETT,
+  type WebhookType,
+} from "@/lib/webhookvalg";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
 function storrelse(n: number): string {
@@ -18,7 +25,7 @@ function storrelse(n: number): string {
 }
 
 export default function Innstillinger() {
-  const [fane, setFane] = useState<"org" | "kategorier" | "leiligheter" | "fellesomrader" | "hendelser">("org");
+  const [fane, setFane] = useState<"org" | "kategorier" | "leiligheter" | "fellesomrader" | "integrasjoner" | "hendelser">("org");
   const { aktivOrg } = useOkt();
   return (
     <Layout
@@ -32,8 +39,13 @@ export default function Innstillinger() {
             { nokkel: "kategorier", etikett: "Avvikskategorier" },
             { nokkel: "leiligheter", etikett: "Leiligheter" },
             { nokkel: "fellesomrader", etikett: "Fellesområder" },
-            // API-et bak er admin-gatet uansett — fanen skjules så andre slipper en 403.
-            ...(aktivOrg?.nivaa === "orgadmin" ? [{ nokkel: "hendelser" as const, etikett: "Hendelseslogg" }] : []),
+            // API-ene bak er admin-gatet uansett — fanene skjules så andre slipper en 403.
+            ...(aktivOrg?.nivaa === "orgadmin"
+              ? [
+                  { nokkel: "integrasjoner" as const, etikett: "Integrasjoner" },
+                  { nokkel: "hendelser" as const, etikett: "Hendelseslogg" },
+                ]
+              : []),
           ]}
         />
       }
@@ -43,6 +55,7 @@ export default function Innstillinger() {
         {fane === "kategorier" && <Kategorier />}
         {fane === "leiligheter" && <Enheter visning="bolig" />}
         {fane === "fellesomrader" && <Enheter visning="fellesareal" />}
+        {fane === "integrasjoner" && <Integrasjoner />}
         {fane === "hendelser" && <Hendelseslogg />}
       </div>
     </Layout>
@@ -682,6 +695,213 @@ function KartverketImport({
           />
         </>
       )}
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Webhooks — «varsle styrets Teams-kanal når …». Kun for kontoadmin: URL-ene gir
+ * skrivetilgang til styrets kanaler og skal ikke leses av alle.
+ */
+function Integrasjoner() {
+  const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => webhooksApi.liste(o));
+  const [ny, setNy] = useState(false);
+  const [endrer, setEndrer] = useState<Webhook | null>(null);
+  const [tester, setTester] = useState<string | null>(null);
+  const [testresultat, setTestresultat] = useState<Record<string, string>>({});
+
+  async function test(w: Webhook) {
+    if (!orgId) return;
+    setTester(w.id);
+    setFeil(null);
+    try {
+      const res = await webhooksApi.test(orgId, w.id);
+      setTestresultat((t) => ({ ...t, [w.id]: res.ok ? "Testmelding levert ✓" : `Feilet: ${res.feil}` }));
+      await last();
+    } catch (e) {
+      setFeil(e instanceof Error ? e.message : "Testen feilet");
+    } finally {
+      setTester(null);
+    }
+  }
+
+  async function slett(w: Webhook) {
+    if (!orgId) return;
+    setFeil(null);
+    try {
+      await webhooksApi.slett(orgId, w.id);
+      await last();
+    } catch (e) {
+      setFeil(e instanceof Error ? e.message : "Kunne ikke slette webhooken");
+    }
+  }
+
+  return (
+    <>
+      <Feil melding={feil} />
+      <Kort
+        tittel="Webhooks"
+        handling={
+          <button className="btn btn-ghost" onClick={() => setNy(true)}>
+            ＋ Ny webhook
+          </button>
+        }
+      >
+        {laster || !data ? (
+          <Tom tekst="Henter …" />
+        ) : data.length === 0 ? (
+          <Tom tekst="Ingen webhooks ennå. Få varsler rett i styrets Teams-kanal, Slack eller Discord når det meldes avvik eller oppgaver kvitteres ut." />
+        ) : (
+          data.map((w) => (
+            <div key={w.id} className="list-item">
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="list-tittel">
+                  {w.name}
+                  {!w.active && (
+                    <span className="badge muted" style={{ marginLeft: "8px" }}>Av</span>
+                  )}
+                </div>
+                <div className="list-meta">
+                  {WEBHOOK_TYPE_ETIKETT[w.targetType as WebhookType] ?? w.targetType} ·{" "}
+                  {w.events
+                    .map((e) => WEBHOOK_HENDELSE_ETIKETT[e as (typeof WEBHOOK_HENDELSER)[number]] ?? e)
+                    .join(", ")}
+                </div>
+                <div className="list-meta">
+                  {testresultat[w.id] ??
+                    (w.lastAttemptAt
+                      ? w.lastOk
+                        ? `Siste sending levert (${datoTid(w.lastAttemptAt)})`
+                        : `Siste sending feilet: ${w.lastError} (${datoTid(w.lastAttemptAt)})`
+                      : "Ikke sendt ennå — bruk «Test»")}
+                </div>
+              </div>
+              <span style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                <button className="btn btn-ghost" disabled={tester === w.id} onClick={() => void test(w)}>
+                  {tester === w.id ? "Tester …" : "Test"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => setEndrer(w)}>
+                  Endre
+                </button>
+                <button className="btn btn-ghost" style={{ color: "var(--muted)" }} onClick={() => void slett(w)}>
+                  Slett
+                </button>
+              </span>
+            </div>
+          ))
+        )}
+      </Kort>
+
+      <div className="field-note">
+        En webhook sender et varsel til en adresse dere velger når noe skjer i DriftIQ. Et
+        varsel som ikke kommer frem stopper aldri handlingen det gjelder — feiler adressen,
+        vises det her. Oppsett og endringer føres i hendelsesloggen.
+      </div>
+
+      {ny && <WebhookSkjema orgId={orgId!} onLukk={() => setNy(false)} onLagret={last} />}
+      {endrer && (
+        <WebhookSkjema
+          orgId={orgId!}
+          utgangspunkt={endrer}
+          onLukk={() => setEndrer(null)}
+          onLagret={last}
+        />
+      )}
+    </>
+  );
+}
+
+/** Hvordan man får tak i webhook-URL-en, per måltype — vises under adressefeltet. */
+const WEBHOOK_HJELP: Record<WebhookType, string> = {
+  teams:
+    "I Teams: åpne Workflows-appen og lag flyten «When a Teams webhook request is received» mot kanalen eller gruppechatten, og lim inn URL-en du får. Gruppechat krever at alle deltakerne er i samme organisasjon — bruk en kanal hvis noen er eksterne.",
+  slack:
+    "I Slack: lag en app med «Incoming Webhooks» (api.slack.com/apps), aktiver den for kanalen og lim inn URL-en.",
+  discord:
+    "I Discord: kanalinnstillinger → Integrasjoner → Webhooks → Ny webhook, og kopier URL-en.",
+  generisk:
+    "Sender rå JSON ({ hendelse, tidspunkt, organisasjon, tittel, tekst, lenke, data }) — for Zapier, Make, n8n eller egne systemer.",
+};
+
+function WebhookSkjema({
+  orgId,
+  utgangspunkt,
+  onLukk,
+  onLagret,
+}: {
+  orgId: string;
+  utgangspunkt?: Webhook;
+  onLukk: () => void;
+  onLagret: () => Promise<void>;
+}) {
+  const [navn, setNavn] = useState(utgangspunkt?.name ?? "");
+  const [type, setType] = useState<string>(utgangspunkt?.targetType ?? "teams");
+  const [url, setUrl] = useState(utgangspunkt?.url ?? "");
+  const [valgte, setValgte] = useState<Set<string>>(new Set(utgangspunkt?.events ?? []));
+  const [aktiv, setAktiv] = useState(utgangspunkt?.active ?? true);
+  const { sender, feil, send } = useSending(async () => {
+    await onLagret();
+    onLukk();
+  });
+
+  return (
+    <Modal tittel={utgangspunkt ? "Endre webhook" : "Ny webhook"} onLukk={onLukk} bredde={560}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const data = { name: navn, targetType: type, url, events: [...valgte], active: aktiv };
+          void send(() =>
+            utgangspunkt ? webhooksApi.endre(orgId, utgangspunkt.id, data) : webhooksApi.ny(orgId, data),
+          );
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+      >
+        <Feil melding={feil} />
+        <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} plassholder="Styrets Teams-kanal" />
+        <Nedtrekk
+          etikett="Mål"
+          verdi={type}
+          onEndre={setType}
+          valg={WEBHOOK_TYPER.map((t) => ({ verdi: t, etikett: WEBHOOK_TYPE_ETIKETT[t] }))}
+        />
+        <Tekstfelt
+          etikett="Webhook-URL"
+          verdi={url}
+          onEndre={setUrl}
+          plassholder="https://…"
+          notat={WEBHOOK_HJELP[type as WebhookType]}
+        />
+        <div className="field">
+          <span className="field-label">Send varsel ved</span>
+          {WEBHOOK_HENDELSER.map((h) => (
+            <label
+              key={h}
+              style={{ display: "flex", alignItems: "center", gap: "9px", padding: "3px 0", cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={valgte.has(h)}
+                onChange={(e) => {
+                  const neste = new Set(valgte);
+                  if (e.target.checked) neste.add(h);
+                  else neste.delete(h);
+                  setValgte(neste);
+                }}
+              />
+              <span style={{ fontSize: "var(--fs-sm)" }}>{WEBHOOK_HENDELSE_ETIKETT[h]}</span>
+            </label>
+          ))}
+        </div>
+        <Avkryssing
+          etikett="Aktiv"
+          verdi={aktiv}
+          onEndre={setAktiv}
+          notat="Skru av i stedet for å slette hvis kanalen bare skal pause varslene."
+        />
+        <Knapperad onAvbryt={onLukk} sender={sender} deaktivert={valgte.size === 0 || !navn.trim() || !url.trim()} />
+      </form>
     </Modal>
   );
 }

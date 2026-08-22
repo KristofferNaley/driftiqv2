@@ -53,6 +53,9 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Hendelsesloggen (v2-tillegg, finnes ikke i v1s rls.py). Org-eid revisjonsdata —
   // en kunde skal aldri se en annen kundes hendelser.
   "audit_events",
+  // Kundens webhooks (v2-tillegg). URL-ene kan avsløre interne kanalnavn og gir
+  // skrivetilgang til kundens chat — en annen kunde skal aldri kunne lese eller endre dem.
+  "org_webhooks",
 ];
 
 /**

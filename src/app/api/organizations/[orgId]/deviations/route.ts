@@ -1,6 +1,8 @@
 import { lesKropp, orgRute } from "@/lib/api";
 import { avvikInn, avvikSok, avvikStatistikk, hentAvvik, hentKategorier, opprettAvvik } from "@/lib/avvik";
 import { aktorFor } from "@/lib/aktor";
+import { APP_URL } from "@/lib/urler";
+import { varsleWebhooks } from "@/lib/webhooks";
 
 /**
  * Avvikslista med filtre, sortering, paginering og nøkkeltall — i ÉN forespørsel.
@@ -31,6 +33,23 @@ export const GET = orgRute({
 export const POST = orgRute({
   nivaa: "lesing",
   modul: "avvik",
-  handler: async ({ db, orgId, bruker, req }) =>
-    opprettAvvik(db, orgId, aktorFor(bruker), await lesKropp(req, avvikInn)),
+  handler: async ({ db, orgId, bruker, req, etterCommit }) => {
+    const ny = await opprettAvvik(db, orgId, aktorFor(bruker), await lesKropp(req, avvikInn));
+    etterCommit(() =>
+      varsleWebhooks(orgId, {
+        hendelse: "avvik.nytt",
+        tittel: `Nytt avvik #${ny.number}: ${ny.title}`,
+        tekst: [
+          `Meldt av ${ny.reportedBy}`,
+          ny.severity ? `Alvorlighet: ${ny.severity}` : null,
+          ny.category ? `Kategori: ${ny.category}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        lenke: `${APP_URL}/avvik/${ny.id}`,
+        data: { avvikId: ny.id, nummer: ny.number, alvorlighet: ny.severity, kategori: ny.category },
+      }),
+    );
+    return ny;
+  },
 });

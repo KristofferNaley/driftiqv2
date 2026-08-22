@@ -709,6 +709,24 @@ export const hendelser = {
   },
 };
 
+export type Webhook = {
+  id: string; name: string; targetType: string; url: string; events: string[];
+  active: boolean; lastAttemptAt: string | null; lastOk: boolean | null; lastError: string | null;
+  createdAt: string;
+};
+
+export type WebhookInn = {
+  name: string; targetType: string; url: string; events: string[]; active: boolean;
+};
+
+export const webhooks = {
+  liste: (o: string) => api.hent<Webhook[]>(org(o, "/webhooks")),
+  ny: (o: string, d: WebhookInn) => api.send<Webhook>(org(o, "/webhooks"), d),
+  endre: (o: string, id: string, d: WebhookInn) => api.endre<Webhook>(org(o, `/webhooks/${id}`), d),
+  slett: (o: string, id: string) => api.slett(org(o, `/webhooks/${id}`)),
+  test: (o: string, id: string) => api.send<{ ok: boolean; feil: string | null }>(org(o, `/webhooks/${id}/test`), {}),
+};
+
 export type OrgBruker = {
   id: string; name: string; email: string; active: boolean; lastLoginAt: string | null;
   platformRole: string; nivaa: string; title: string | null; harSattPassord: boolean;

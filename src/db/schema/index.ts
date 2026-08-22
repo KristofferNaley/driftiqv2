@@ -32,5 +32,6 @@ export * from "./ai";
 export * from "./vendors";
 export * from "./tasks";
 export * from "./hendelser";
+export * from "./webhooks";
 export * from "./leads";
 export * from "./feedback";

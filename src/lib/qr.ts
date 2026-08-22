@@ -38,6 +38,7 @@ import { units } from "../db/schema/units";
 import { vendors } from "../db/schema/vendors";
 import { ikkeFunnet, ugyldig } from "./api";
 import { lagreFil } from "./lagring";
+import { varsleWebhooks } from "./webhooks";
 import { anonymAktor } from "./aktor";
 import { opprettUtkvittering, utkvitteringInn } from "./oppgaver";
 
@@ -127,9 +128,9 @@ export async function hentQrKontekst(token: string) {
  * det er ingen kontekst her.
  */
 export async function registrerViaQr(token: string, data: z.infer<typeof qrUtkvittering>) {
-  return withoutRls("qr-anonym", async (db) => {
+  const resultat = await withoutRls("qr-anonym", async (db) => {
     const rader = await db
-      .select({ id: tasks.id, orgId: tasks.orgId, leverandor: vendors.name })
+      .select({ id: tasks.id, orgId: tasks.orgId, tittel: tasks.title, leverandor: vendors.name })
       .from(tasks)
       .leftJoin(vendors, eq(vendors.id, tasks.vendorId))
       .where(and(eq(tasks.qrToken, token), eq(tasks.active, true)))
@@ -151,8 +152,28 @@ export async function registrerViaQr(token: string, data: z.infer<typeof qrUtkvi
       avvikstittel: "Avvik registrert via QR",
     });
 
-    return { id: utkvittering.id };
+    return {
+      id: utkvittering.id,
+      orgId: oppgave.orgId,
+      oppgaveId: oppgave.id,
+      tittel: oppgave.tittel,
+      utfortAv: utfortAv.navn,
+    };
   });
+
+  // ETTER blokken med vilje: sending hører ikke hjemme i en transaksjon (samme regel som
+  // `etterCommit` i lib/api.ts), og `varsleWebhooks` åpner sin egen org-kontekst — nå ER
+  // org-en kjent, selv om flyten inn hit var anonym. Feiler stille; leverandøren foran
+  // heisen skal aldri se en feilside fordi styrets Teams-kanal er nede.
+  await varsleWebhooks(resultat.orgId, {
+    hendelse: "oppgave.fullfort",
+    tittel: `Oppgave kvittert ut: ${resultat.tittel}`,
+    tekst: `Utført av ${resultat.utfortAv} (via QR-kode)`,
+    lenke: null,
+    data: { oppgaveId: resultat.oppgaveId, utfortAv: resultat.utfortAv, viaQr: true },
+  });
+
+  return { id: resultat.id };
 }
 
 /**
