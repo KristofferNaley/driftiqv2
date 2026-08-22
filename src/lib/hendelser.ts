@@ -21,7 +21,7 @@
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client";
-import { auditEvents } from "../db/schema/hendelser";
+import { auditEvents, authEvents } from "../db/schema/hendelser";
 import { users } from "../db/schema/users";
 import type { Aktor } from "./aktor";
 import type { ModulNokkel } from "./moduler";
@@ -103,5 +103,56 @@ export async function slettGamleHendelser(db: Db, naa: Date): Promise<number> {
     .delete(auditEvents)
     .where(lt(auditEvents.occurredAt, grense))
     .returning({ id: auditEvents.id });
+  return slettet.length;
+}
+
+// ---------------------------------------------------------------------------------------
+// Innloggingshendelser (auth_events) — brukernivå, se kommentaren i skjemafila
+// ---------------------------------------------------------------------------------------
+
+/** Kortere enn hendelsesloggen: dette er sikkerhetsspor, ikke HMS-dokumentasjon. */
+export const AUTH_OPPBEVARING_DAGER = 90;
+
+export type AuthHendelseType = "innlogget" | "feilet" | "avvist" | "utlogget";
+
+/**
+ * Skriver en innloggingshendelse — og feiler STILLE, i kontrast til `loggHendelse`:
+ * et loggkall skal aldri stoppe en innlogging eller utlogging. Kalles fra auth.ts med
+ * `authDb`, utenfor org-kontekst.
+ */
+export async function loggAuthHendelse(
+  db: Db,
+  h: { userId?: string | null; email: string; hendelse: AuthHendelseType; ip?: string | null },
+): Promise<void> {
+  try {
+    await db.insert(authEvents).values({
+      id: randomUUID(),
+      userId: h.userId ?? null,
+      email: h.email,
+      event: h.hendelse,
+      ip: h.ip ?? null,
+    });
+  } catch (e) {
+    console.error("[hendelser] Fikk ikke skrevet innloggingshendelse:", e instanceof Error ? e.message : e);
+  }
+}
+
+/** Innloggingsloggen, nyeste først. Kun for plattformpanelet — tabellen er brukernivå. */
+export async function hentAuthHendelser(db: Db, filter: { side?: number } = {}) {
+  const side = Math.max(0, filter.side ?? 0);
+  return db
+    .select()
+    .from(authEvents)
+    .orderBy(desc(authEvents.occurredAt), desc(authEvents.id))
+    .limit(HENDELSER_SIDESTORRELSE)
+    .offset(side * HENDELSER_SIDESTORRELSE);
+}
+
+export async function slettGamleAuthHendelser(db: Db, naa: Date): Promise<number> {
+  const grense = new Date(naa.getTime() - AUTH_OPPBEVARING_DAGER * 24 * 60 * 60 * 1000);
+  const slettet = await db
+    .delete(authEvents)
+    .where(lt(authEvents.occurredAt, grense))
+    .returning({ id: authEvents.id });
   return slettet.length;
 }

@@ -25,7 +25,7 @@
  */
 
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
@@ -34,6 +34,7 @@ import { APP_URL, sendKontooppsett, sendPassordreset } from "./epost";
 import { authDb, withoutRls } from "../db/client";
 import { account, jwks, session, twoFactor as twoFactorTabell, verification } from "../db/schema/auth";
 import { users } from "../db/schema/users";
+import { loggAuthHendelse } from "./hendelser";
 import { Tilgangsfeil, sjekkInnloggingssperrer } from "./tilgang";
 
 function paakrevd(navn: string): string {
@@ -60,6 +61,23 @@ function tillatteOrigins(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   return [...new Set([base, ...ekstra])];
+}
+
+/** Klientens IP bak tunnelen. cloudflared setter X-Forwarded-For; første hopp er klienten. */
+function klientIp(headers: unknown): string | null {
+  if (!(headers instanceof Headers)) return null;
+  const videresendt = headers.get("x-forwarded-for");
+  return videresendt?.split(",")[0]?.trim() || null;
+}
+
+/** E-posten til en bruker-id, for innloggingsloggen. Kontoen kan være slettet i mellomtiden. */
+async function epostFor(userId: string): Promise<string> {
+  const rad = await authDb
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return rad[0]?.email ?? "ukjent";
 }
 
 export const auth = betterAuth({
@@ -186,8 +204,56 @@ export const auth = betterAuth({
 
           return { data: sesjon };
         },
+        /**
+         * Innloggingsloggen (`auth_events`). `after` og ikke `before`: sesjonen finnes
+         * faktisk nå. Dekker også innlogging som fullføres via tofaktor — sesjonen
+         * opprettes først når koden er tastet. `loggAuthHendelse` feiler stille.
+         */
+        after: async (sesjon) => {
+          await loggAuthHendelse(authDb, {
+            userId: sesjon.userId,
+            email: await epostFor(sesjon.userId),
+            hendelse: "innlogget",
+            ip: sesjon.ipAddress ?? null,
+          });
+        },
+      },
+      delete: {
+        /**
+         * «Utlogget» i vid forstand: aktiv utlogging, tilbaketrukket sesjon og opprydding
+         * av en utløpt sesjon havner alle her — for sikkerhetssporet er skillet uvesentlig,
+         * poenget er NÅR sesjonen sluttet å virke.
+         */
+        after: async (sesjon) => {
+          await loggAuthHendelse(authDb, {
+            userId: sesjon.userId,
+            email: await epostFor(sesjon.userId),
+            hendelse: "utlogget",
+            ip: sesjon.ipAddress ?? null,
+          });
+        },
       },
     },
+  },
+
+  /**
+   * Mislykkede innloggingsforsøk. Kun her ser vi utfallet av selve kallet: et avvist
+   * passord blir aldri en databasehendelse. `returned` er APIError ved feil —
+   * 401 = feil passord/ukjent konto («feilet»), 403 = sperrene i session.create-kroken
+   * («avvist»: deaktivert bruker/org eller utløpt abonnement).
+   */
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email") return;
+      const svar = (ctx.context as { returned?: unknown }).returned;
+      if (!(svar instanceof APIError)) return;
+      const epost = typeof ctx.body?.email === "string" ? ctx.body.email.trim().toLowerCase() : "ukjent";
+      await loggAuthHendelse(authDb, {
+        email: epost,
+        hendelse: svar.status === "FORBIDDEN" ? "avvist" : "feilet",
+        ip: klientIp(ctx.headers),
+      });
+    }),
   },
 
   plugins: [

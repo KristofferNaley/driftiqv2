@@ -41,3 +41,27 @@ export const auditEvents = pgTable("audit_events", {
 ]);
 
 export type AuditEvent = typeof auditEvents.$inferSelect;
+
+/**
+ * Innloggingshendelser — egen tabell, med vilje IKKE i `audit_events`.
+ *
+ * Innlogging er på BRUKERNIVÅ, ikke org-nivå: en bruker som sitter i to borettslag skal
+ * ikke få innloggingene sine eksponert for begge styrene. Tabellen står derfor i UNNTATT
+ * (leses kun av plattformpanelet) og har kort oppbevaring — se `lib/hendelser.ts`.
+ *
+ * `email` kopieres inn: mislykkede forsøk har ingen bruker å peke på, og raden skal
+ * kunne leses etter at kontoen er slettet.
+ */
+export const authEvents = pgTable("auth_events", {
+  id: varchar("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  email: varchar("email").notNull(),
+  /** «innlogget», «feilet», «avvist» (deaktivert/sperret) eller «utlogget». */
+  event: varchar("event").notNull(),
+  ip: varchar("ip"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("idx_auth_events_tid").on(t.occurredAt),
+]);
+
+export type AuthEvent = typeof authEvents.$inferSelect;

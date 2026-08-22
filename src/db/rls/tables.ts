@@ -139,6 +139,9 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   verification: "Better Auth: engangstokens, slås opp uten org-kontekst",
   jwks: "Better Auth: nøkkelpar for JWT-signering, ingen kundedata",
   two_factor: "Better Auth: TOTP-hemmelighet, verifiseres før org-kontekst finnes",
+  // Innloggingshendelser er brukernivå, ikke org-eid — en bruker i to lag skal ikke få
+  // innloggingene sine eksponert for begge styrene. Leses kun av plattformpanelet.
+  auth_events: "innloggingslogg på brukernivå, skrives før org-kontekst finnes",
 };
 
 /**
