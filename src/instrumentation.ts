@@ -68,4 +68,37 @@ export async function register(): Promise<void> {
   );
 
   console.log(`[varsler] Planlagt: ${varsler.plan}.`);
+
+  const rydding = JOBBER.find((j) => j.nokkel === "hendelsesrydding")!;
+
+  cron.schedule(
+    rydding.cron,
+    () => {
+      void (async () => {
+        try {
+          await medKjoringslogg("hendelsesrydding", async () => {
+            const { withoutRls } = await import("./db/client");
+            const { slettGamleHendelser, slettGamleAuthHendelser } = await import("./lib/hendelser");
+            // Oppbevaringsgrensene er policy og bor som konstanter i lib/hendelser.ts.
+            const naa = new Date();
+            const [hendelser, innlogginger] = await withoutRls("bakgrunnsjobb", async (db) => [
+              await slettGamleHendelser(db, naa),
+              await slettGamleAuthHendelser(db, naa),
+            ]);
+            const detalj = `${hendelser} hendelser, ${innlogginger} innloggingsrader slettet`;
+            console.log(`[hendelsesrydding] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[hendelsesrydding] Jobben feilet:", e);
+          void sendDriftsvarsel(
+            `⚠️ Bakgrunnsjobben «hendelsesrydding» feilet: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      })();
+    },
+    { timezone: rydding.timezone },
+  );
+
+  console.log(`[hendelsesrydding] Planlagt: ${rydding.plan}.`);
 }

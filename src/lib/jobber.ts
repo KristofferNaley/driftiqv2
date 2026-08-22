@@ -33,6 +33,15 @@ export const JOBBER: Jobb[] = [
     plan: "Hver dag kl. 07:00 (Europe/Oslo)",
     kilde: "app",
   },
+  {
+    nokkel: "hendelsesrydding",
+    navn: "Hendelsesrydding",
+    beskrivelse: "Sletter hendelseslogg eldre enn 3 år og innloggingslogg eldre enn 90 dager",
+    cron: "0 4 * * *",
+    timezone: "Europe/Oslo",
+    plan: "Hver natt kl. 04:00 (Europe/Oslo)",
+    kilde: "app",
+  },
   // Vertsjobbene går i vertens LOKALTID (satt til Europe/Oslo 14.08.2026 — cron må
   // restartes etter et tidssonebytte, den leser sonen ved oppstart).
   {

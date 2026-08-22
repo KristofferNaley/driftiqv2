@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { useOkt } from "@/components/OktProvider";
-import { Faner, Feil, Kort, Rad, Tom, useOrgData } from "@/components/felles";
+import { Faner, Feil, Kort, Rad, Tom, datoTid, useOrgData } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
-import { enheter, organisasjon, type Adressetreff, type Enhet, type OrgInfo } from "@/lib/klient";
+import { enheter, hendelser as hendelserApi, organisasjon, type Adressetreff, type Enhet, type OrgInfo } from "@/lib/klient";
 import { lesKategorier } from "@/lib/avvikkategorier";
+import { MENY } from "@/lib/moduler";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
 function storrelse(n: number): string {
@@ -17,7 +18,8 @@ function storrelse(n: number): string {
 }
 
 export default function Innstillinger() {
-  const [fane, setFane] = useState<"org" | "kategorier" | "leiligheter" | "fellesomrader">("org");
+  const [fane, setFane] = useState<"org" | "kategorier" | "leiligheter" | "fellesomrader" | "hendelser">("org");
+  const { aktivOrg } = useOkt();
   return (
     <Layout
       tittel="Innstillinger"
@@ -30,6 +32,8 @@ export default function Innstillinger() {
             { nokkel: "kategorier", etikett: "Avvikskategorier" },
             { nokkel: "leiligheter", etikett: "Leiligheter" },
             { nokkel: "fellesomrader", etikett: "Fellesområder" },
+            // API-et bak er admin-gatet uansett — fanen skjules så andre slipper en 403.
+            ...(aktivOrg?.nivaa === "orgadmin" ? [{ nokkel: "hendelser" as const, etikett: "Hendelseslogg" }] : []),
           ]}
         />
       }
@@ -39,6 +43,7 @@ export default function Innstillinger() {
         {fane === "kategorier" && <Kategorier />}
         {fane === "leiligheter" && <Enheter visning="bolig" />}
         {fane === "fellesomrader" && <Enheter visning="fellesareal" />}
+        {fane === "hendelser" && <Hendelseslogg />}
       </div>
     </Layout>
   );
@@ -678,6 +683,90 @@ function KartverketImport({
         </>
       )}
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+
+/** Modulnavnet i filteret og på radene. «org» er ikke en modul — bruker- og org-administrasjon. */
+function modulEtikett(nokkel: string): string {
+  if (nokkel === "org") return "Administrasjon";
+  return MENY[nokkel as keyof typeof MENY]?.etikett ?? nokkel;
+}
+
+/**
+ * Hendelsesloggen — «hvem gjorde hva». Kun for kontoadmin; skrives av systemet og kan ikke
+ * redigeres eller slettes herfra. Radene ELDES ut automatisk (3 år — se lib/hendelser.ts).
+ */
+function Hendelseslogg() {
+  const [modul, setModul] = useState("");
+  const [side, setSide] = useState(0);
+  const { data, feil, laster } = useOrgData(
+    (o) => hendelserApi.liste(o, { modul: modul || undefined, side }),
+    [modul, side],
+  );
+
+  const sisteSide = data ? side >= Math.ceil(data.antall / data.sideStorrelse) - 1 : true;
+  const moduler = [...new Set(["org", ...Object.keys(MENY)])];
+
+  return (
+    <>
+      <Feil melding={feil} />
+      <Kort
+        tittel={`Hendelser${data ? ` (${data.antall})` : ""}`}
+        handling={
+          <select
+            className="input"
+            aria-label="Filtrer på modul"
+            value={modul}
+            onChange={(e) => {
+              setModul(e.target.value);
+              setSide(0);
+            }}
+          >
+            <option value="">Alle moduler</option>
+            {moduler.map((m) => (
+              <option key={m} value={m}>
+                {modulEtikett(m)}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        {laster || !data ? (
+          <Tom tekst="Henter …" />
+        ) : data.hendelser.length === 0 ? (
+          <Tom tekst="Ingen hendelser ennå. Tilgangsendringer, slettinger, tildelinger og eksport havner her etter hvert som de skjer." />
+        ) : (
+          data.hendelser.map((h) => (
+            <div key={h.id} className="list-item">
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="list-tittel">{h.event}</div>
+                <div className="list-meta">
+                  {h.actorName} · {modulEtikett(h.module)} · {datoTid(h.occurredAt)}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </Kort>
+
+      {data && data.antall > data.sideStorrelse && (
+        <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+          <button className="btn btn-ghost" disabled={side === 0} onClick={() => setSide(side - 1)}>
+            ← Nyere
+          </button>
+          <button className="btn btn-ghost" disabled={sisteSide} onClick={() => setSide(side + 1)}>
+            Eldre →
+          </button>
+        </div>
+      )}
+
+      <div className="field-note">
+        Loggen føres av systemet og kan ikke endres. Hendelser slettes automatisk etter tre
+        år; innloggingshistorikk lagres separat og kortere.
+      </div>
+    </>
   );
 }
 

@@ -688,6 +688,27 @@ export const organisasjon = {
   settModuler: (o: string, moduler: string[]) => api.endre(`/organizations/${o}/modules`, { moduler }),
 };
 
+// `Hendelse` er opptatt av årshjulet — dette er hendelsesLOGGEN («hvem gjorde hva»).
+export type Logghendelse = {
+  id: string; orgId: string; actorName: string; actorUserId: string | null;
+  occurredAt: string; module: string; entity: string; entityId: string | null; event: string;
+};
+
+export type Hendelsesside = {
+  hendelser: Logghendelse[]; antall: number; side: number; sideStorrelse: number;
+};
+
+export const hendelser = {
+  liste: (o: string, filter: { modul?: string; aktor?: string; side?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (filter.modul) q.set("modul", filter.modul);
+    if (filter.aktor) q.set("aktor", filter.aktor);
+    if (filter.side) q.set("side", String(filter.side));
+    const s = q.toString();
+    return api.hent<Hendelsesside>(org(o, `/hendelser${s ? `?${s}` : ""}`));
+  },
+};
+
 export type OrgBruker = {
   id: string; name: string; email: string; active: boolean; lastLoginAt: string | null;
   platformRole: string; nivaa: string; title: string | null; harSattPassord: boolean;
