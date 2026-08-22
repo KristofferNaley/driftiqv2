@@ -266,6 +266,16 @@ export async function verifiserRoller(): Promise<void> {
   }
 }
 
+/**
+ * Helsesjekken til /api/health — svarer databasen? Går via approllen, altså samme vei som
+ * innloggede forespørsler, så et passordbytte på approllen fanges selv om eierrollen
+ * (migrasjoner) fortsatt kommer til. Rører ingen tabeller; ligger her så rå pooltilgang
+ * forblir denne filas privilegium.
+ */
+export async function sjekkDatabase(): Promise<void> {
+  await appPool.query("SELECT 1");
+}
+
 export async function lukkPooler(): Promise<void> {
   await Promise.all([appPool.end(), adminPool.end()]);
 }

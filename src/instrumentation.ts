@@ -28,6 +28,12 @@ export async function register(): Promise<void> {
   const { kjorVarsler } = await import("./lib/varselsjobb");
   const { medKjoringslogg } = await import("./lib/jobbkjoring");
   const { JOBBER } = await import("./lib/jobber");
+  const { sendDriftsvarsel } = await import("./lib/driftsvarsel");
+
+  // Én melding per oppstart er deploy-/restartsignalet i Discord-kanalen. En restart ingen
+  // ba om er verdt å se; en crash-loop synes som en strøm av disse. At meldingen sendes
+  // beviser samtidig at oppstarten kom forbi migrasjoner og RLS-oppsett.
+  void sendDriftsvarsel("Appen startet — deploy eller restart.");
 
   // Uttrykk og tidssone leses fra jobbregisteret — plattformpanelet viser samme liste,
   // og to kilder til «når kjører varslene» ville driftet fra hverandre.
@@ -49,8 +55,12 @@ export async function register(): Promise<void> {
             return detalj;
           });
         } catch (e) {
-          // Jobben skal aldri velte serveren. Feiler den én morgen, kjører den neste.
+          // Jobben skal aldri velte serveren. Feiler den én morgen, kjører den neste —
+          // men stille skal det ikke være: kjøringsloggen i panelet leser ingen daglig.
           console.error("[varsler] Jobben feilet:", e);
+          void sendDriftsvarsel(
+            `⚠️ Bakgrunnsjobben «varsler» feilet: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       })();
     },
