@@ -56,7 +56,9 @@ services:
       VERT_ADMIN: ${VERT_ADMIN:-}
       VERT_MARKED: ${VERT_MARKED:-}
     ports:
-      - "3008:3008"
+      # Kun for lokal tilgang fra verten (curl/feilsøking). All ekte trafikk går via
+      # cloudflared → driftiqv2-app-1:3008 på edge-nettet og rører ikke denne mappingen.
+      - "127.0.0.1:3008:3008"
     volumes:
       # Filene må overleve at containeren bygges på nytt.
       - uploads:/app/uploads
