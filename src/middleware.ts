@@ -40,6 +40,9 @@ function alltidTillatt(sti: string): boolean {
     // gjennom `/` og `/personvern`), og landingssiden er nettopp den vi vil måle.
     sti.startsWith("/stats/") ||
     sti === "/favicon.ico" ||
+    // Manifestet fanges ikke av matcherens filendelse-unntak (kun bildeformater), så uten
+    // denne svarer markeds- og panelverten 404 — og nettleseren mister PWA-ikonene der.
+    sti === "/manifest.webmanifest" ||
     sti === "/robots.txt" ||
     sti === "/sitemap.xml" ||
     erInnlogging(sti)
