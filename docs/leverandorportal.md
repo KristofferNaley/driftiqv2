@@ -27,6 +27,14 @@ er vanskelige å kopiere i etterkant.
 Portalen henger sammen med partnerregisteret (se «Kobling» under) og er det naturlige
 steg to etter et «Bruker DriftIQ»-merke på leverandørkortet.
 
+**Nettverkseffekten er lokal.** Et heisfirma i Bergen hjelper ingen i Trondheim — men i
+Bergen er det gull. Strategien er derfor tetthet i én by før bredde: ti borettslag og fem
+kjente bergensleverandører er et sterkere nettverk enn femti kunder spredt utover landet.
+For et styre er «kjente lokale leverandører bruker systemet» sosialt bevis fra aktører de
+allerede stoler på — et bedre salgsargument enn noen funksjonsliste. Naturlig første
+partner: heisfirmaet som allerede har gitt uoppfordret positiv tilbakemelding, som pilot
+mot å være referanse.
+
 ## To personaer definerer designet
 
 **Vaktmesteren — bredde.** Mange små oppgaver, gjerne hele kategorier, på tvers av flere
@@ -98,6 +106,9 @@ lagres før borettslaget aktivt gir tilgang.
   gir uansett egen cookie; spørsmålet er datamodellen.)
 - Skal vaktmesteren kunne se rutinebeskrivelser/sjekklister, eller kun tildelte oppgaver?
 - Varsling: e-post til leverandøren ved ny tildeling? (Gjenbruk `epost.ts`-rammen.)
-- Prising: gratis leverandørside er hypotesen — revurderes når portalen ev. blir noe
-  leverandøren selv betaler for (utvidede funksjoner, flere brukere).
+- ~~Prising~~ **Avklart 26.08.2026**: å registrere dokumentasjon for et borettslag koster
+  leverandøren ingenting — det er borettslagets internkontroll, og borettslaget betaler
+  for den. Døren holdes åpen for at leverandøren senere kan betale for *sine egne*
+  verktøy (flere brukere, egen historikk på tvers av kunder, rapporter), men grunnflyten
+  i verdikjeden er kundens kostnad.
 - Offline-toleranse for utfører-rollen (PWA-en finnes; hvor langt skal den strekkes?).
