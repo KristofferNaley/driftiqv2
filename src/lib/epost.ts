@@ -11,7 +11,7 @@ import { APP_URL } from "./urler";
 export { APP_URL };
 
 const API_KEY = process.env.RESEND_API_KEY ?? "";
-const FRA = process.env.FROM_EMAIL ?? "DriftIQ <noreply@driftiq.no>";
+const FRA = process.env.FROM_EMAIL ?? "DriftIQ <hei@varsel.driftiq.no>";
 
 
 /**
@@ -45,18 +45,26 @@ export function mottakerTillatt(til: string): boolean {
 /**
  * `svarTil` setter Reply-To.
  *
- * Alt vi sender kommer FRA `noreply@` — det er riktig for varsler, som ingen skal svare på.
- * Men meldingen til en leverandør er en e-post fra STYRET, og en leverandør som trykker «svar»
- * skal treffe styremedlemmet som sendte den. Uten Reply-To havner svaret i en postkasse ingen
- * leser, og leverandøren tror de har svart.
+ * Alt vi sender kommer FRA `hei@varsel.driftiq.no` — ingen leser den postkassen. Det er
+ * riktig for varsler, som ingen skal svare på. Men meldingen til en leverandør er en e-post
+ * fra STYRET, og en leverandør som trykker «svar» skal treffe styremedlemmet som sendte den.
+ * Uten Reply-To havner svaret i en postkasse ingen leser, og leverandøren tror de har svart.
+ *
+ * Kaster ALDRI. Utfallet returneres i stedet, slik at `scripts/test-epost.ts` kan skille
+ * en avvist sending fra en vellykket — for appen selv er en tapt e-post en driftssak, ikke
+ * en feil i handlingen brukeren utførte.
  */
-async function send(til: string, emne: string, html: string, svarTil?: string): Promise<void> {
-  if (!API_KEY) return;
+export type Sendresultat =
+  | { ok: true; id: string | null }
+  | { ok: false; grunn: "ingen-nokkel" | "domenevakt" | "avvist" | "feil"; melding: string };
+
+async function send(til: string, emne: string, html: string, svarTil?: string): Promise<Sendresultat> {
+  if (!API_KEY) return { ok: false, grunn: "ingen-nokkel", melding: "RESEND_API_KEY er ikke satt" };
   if (!mottakerTillatt(til)) {
     // Logges høyt: en e-post som forsvinner stille under testing ser ut som en feil i
     // koden, og da leter man på feil sted.
     console.warn(`[epost] BLOKKERT av domenevakt — ${til} ville fått «${emne}»`);
-    return;
+    return { ok: false, grunn: "domenevakt", melding: `${til} står ikke i EPOST_TILLATTE_DOMENER` };
   }
   try {
     const svar = await new Resend(API_KEY).emails.send({
@@ -71,13 +79,15 @@ async function send(til: string, emne: string, html: string, svarTil?: string): 
     // som en vellykket, og feilen oppdages først når noen sier at e-posten aldri kom.
     if (svar.error) {
       console.error(`[epost] Resend avviste sending til ${til}: ${svar.error.message}`);
-      return;
+      return { ok: false, grunn: "avvist", melding: svar.error.message };
     }
     console.log(`[epost] Sendt til ${til} (${svar.data?.id ?? "uten id"}) — «${emne}»`);
+    return { ok: true, id: svar.data?.id ?? null };
   } catch (e) {
     // Nettverksfeil o.l. Sendingen skal aldri velte kallet som utløste den: brukeren har
     // gjort noe som lyktes, og at varselet ikke kom fram er en driftssak.
     console.error(`[epost] Feil ved sending til ${til}:`, e);
+    return { ok: false, grunn: "feil", melding: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -210,8 +220,8 @@ export async function sendPassordreset(navn: string, til: string, url: string): 
  * ennå, så «sett ditt» og «tilbakestill» er teknisk sett samme handling. Ordlyden er en
  * annen fordi situasjonen er det: du har aldri hatt et passord her.
  */
-export async function sendKontooppsett(navn: string, til: string, url: string): Promise<void> {
-  await send(
+export async function sendKontooppsett(navn: string, til: string, url: string): Promise<Sendresultat> {
+  return send(
     til,
     "Velkommen til DriftIQ — sett opp kontoen din",
     ramme(
