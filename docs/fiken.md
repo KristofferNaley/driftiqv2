@@ -397,12 +397,51 @@ Spesifikasjonen og alle svarene fra 03.09.2026 ligger ikke i repoet; hent spesif
 på nytt fra adressen over ved behov. OAuth-appens client id/secret hører hjemme i
 test-`.env`, aldri i chat eller commit.
 
-## Åpne spørsmål
+## Åpne avklaringer (samlet 03.09.2026)
 
-- Segmentet: finnes det selvforvaltede kunder i dag? (Se premisset over.)
-- Skal speilede kjøp være synlige for `visning`-nivået, eller kun `orgadmin`? Regnskap er
-  mer sensitivt enn oppgaver.
-- Oppbevaring: hvor lenge beholdes speilet etter frakobling? Forslag: slettes ved
-  frakobling, med hendelse i loggen.
-- Fikens produksjonsgodkjenning: søknaden til `api@fiken.no` bør sendes når fase 1 er
-  klikkbar i test, ikke før.
+Det som ikke kan avgjøres fra API-et eller koden. Rekkefølgen er etter hva som blokkerer
+mest.
+
+**Forutsetning for alt:** testmiljøet på VPS-en (README «Neste steg» 4). Ingenting i
+dette notatet bygges før det finnes.
+
+**Beslutninger (Kristoffer)**
+
+1. **Hvilket foretak fakturerer i Del 2.** DriftIQ AS finnes ikke ennå (Trodlaskar
+   Holding AS → DriftIQ AS). Fiken-foretaket må være den juridiske enheten som sender
+   fakturaene, og produksjonssøknaden hos Fiken må komme fra den.
+2. **OAuth-appen «DriftIQ» i Fiken:** bekreft at den er opprettet, med skrivetilgang
+   (ikke «Kun lesetilgang» — se «Én app med skrivetilgang»), og med første redirect-URI
+   mot testmiljøet, ikke prod.
+3. **Synlighet:** skal speilede kjøp og utestående per eier vises for `visning`-nivået,
+   eller kun `orgadmin`? Regnskap er mer sensitivt enn oppgaver.
+4. **Oppbevaring ved frakobling:** forslag — speilet slettes, med hendelse i loggen;
+   fakturahistorikken (Fiken-id-er) beholdes fordi den peker på noe som fortsatt finnes
+   i Fiken.
+
+**Må sjekkes utenfor Fiken**
+
+5. **AvtaleGiro og KID.** KID var `null` på demoforetaket — krever avtale med banken.
+   Om AvtaleGiro-trekk kan startes via Fiken er uavklart, og mange eiere betaler
+   felleskostnader slik. Avklares med Fiken-support før fase 3.
+6. **Eierseksjonslovens grenser** for regnskaps- og revisjonsplikt (antall seksjoner) —
+   tegner idealkunden presist. Tallene er ikke slått opp.
+7. **Mva-regelen for sameier** (utenfor mva-området, inngående mva er kostnad) — skrevet
+   fra hukommelsen; verifiser mot Skatteetaten før den havner i hjelpetekst eller vilkår.
+8. **Fikens produksjonsgodkjenning** (`api@fiken.no`): prosess og ledetid er ukjent.
+   Søknaden sendes når fase 1 er klikkbar i test, ikke før — men spør om ledetid nå.
+
+**Ikke testet ennå (krever ting vi ikke har)**
+
+9. **EHF-mottak** (`GET /ehf`): krever at et foretak faktisk mottar EHF (ELMA-
+   registrering). Formen er kjent fra spesifikasjonen, ikke fra ekte svar.
+10. **Nytt regnskapsår** kan ikke opprettes via API. Hvordan det ser ut for styret i
+    Fiken, og hvor tidlig det kan gjøres, avgjør hvor tidlig halvårskjøringen 1.1 kan
+    forberedes.
+11. **`method: auto`** ved sending — hva Fiken velger for en kontakt uten EHF og uten
+    e-post (brev? feil?). Testet kun `email`.
+
+**Avklart i dag** (står i teksten over, gjentas ikke her): segment = små
+selvadministrerte sameier; modulen er grunnpakke; DriftIQ eier grunndataene og bruker
+NS 4102; halvårsbatch via `POST /invoices`; databehandleravtale for eiere; ikke leseapp;
+idempotens via `orderReference`.
