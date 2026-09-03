@@ -226,6 +226,12 @@ a { color: inherit; text-decoration: none; }
 }
 .logo-tekst { font-size: var(--fs-md); font-weight: 800; letter-spacing: -0.3px; }
 .logo-tekst .iq { color: var(--logo-iq); }
+/* Testmiljøet: «TEST» ved logoen, samme oransje som båndet på PWA-ikonet. Styres av
+   data-miljo fra (app)/layout.tsx — prod har ikke attributtet og ser ingenting. */
+[data-miljo="test"] .logo-tekst::after {
+  content: "TEST"; margin-left: 7px; padding: 1px 6px; border-radius: 6px; vertical-align: 2px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.6px; background: #f5a623; color: #0d1b2a;
+}
 
 .sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 10px 14px; display: flex; flex-direction: column; gap: 2px; }
 .nav-gruppe {

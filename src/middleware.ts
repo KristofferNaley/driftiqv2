@@ -43,6 +43,8 @@ function alltidTillatt(sti: string): boolean {
     // Manifestet fanges ikke av matcherens filendelse-unntak (kun bildeformater), så uten
     // denne svarer markeds- og panelverten 404 — og nettleseren mister PWA-ikonene der.
     sti === "/manifest.webmanifest" ||
+    // Testmiljøets manifest (TEST-ikoner) — lenkes av app-layouten når VERT_APP er test.
+    sti === "/manifest-test.webmanifest" ||
     sti === "/robots.txt" ||
     sti === "/sitemap.xml" ||
     erInnlogging(sti)

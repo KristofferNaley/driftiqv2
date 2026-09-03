@@ -1,0 +1,14 @@
+{
+  "name": "DriftIQ TEST",
+  "short_name": "TEST IQ",
+  "description": "Testmiljø for DriftIQ — ikke produksjon",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0d1b2a",
+  "theme_color": "#f5a623",
+  "icons": [
+    { "src": "/ikon-192-test.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/ikon-512-test.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/ikon-maskable-512-test.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
