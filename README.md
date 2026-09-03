@@ -1,7 +1,8 @@
 # DriftIQ v2
 
-Omskrivingen til Next.js + Better Auth. Kjører parallelt med v1 og deler ingenting med den
-utover den sentrale Postgres-serveren.
+Omskrivingen til Next.js + Better Auth. **I produksjon siden 25.08.2026** (`app.driftiq.no`,
+`admin.driftiq.no`, `driftiq.no`); v1 er tatt ned. Delte aldri noe med v1 utover den
+sentrale Postgres-serveren.
 
 **Status: fase 1 og 2 ferdig.** Kundeappen er komplett — dashbord med flyttbare widgets,
 alle modulsidene, detaljvisninger, anonym QR-flyt, utskriftsark og varselsjobber.
@@ -15,11 +16,13 @@ endres, og AI-rådgiveren åpner med statuskort regnet fra lagets egne tall.
 
 Gjenstår (fase 3): leverandørportalen (null brukere i dag) og modulkatalogen på `/moduler`.
 
-| Miljø | App | Backend | Database |
-|---|---|---|---|
-| Prod (v1) | 3002 / 3003 | 8000 | `driftiq` |
-| Test (v1) | 3005 / 3006 | 8001 | `driftiq_test` |
-| **v2** | **3008** | i appen | **`driftiq_v2`** |
+| Miljø | App | Database |
+|---|---|---|
+| **Prod (v2)** | **3008** — localhost, via Cloudflare-tunnelen | **`driftiq_v2`** |
+
+v1 (prod 3002/3003/8000, test 3005/3006/8001, databasene `driftiq` og `driftiq_test`) er
+tatt ned. v2 har ikke noe eget testmiljø ennå — testsuiten kjører mot produksjonsbasen (se
+«Tester» i CLAUDE.md).
 
 ## Første gang
 
@@ -55,19 +58,20 @@ docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npm install && npx 
 docker compose up -d --build
 ```
 
-Prosjektnavnet blir `driftiqv2` av mappenavnet, godt adskilt fra v1s `driftiq` (prod) og
-`driftiq-test` — ingen `-p` er nødvendig her. Prosjektnavn-fella gjelder v1-repoet, der
-testmiljøet må kjøres med `-p driftiq-test` for ikke å kollidere med prod.
+Prosjektnavnet blir `driftiqv2` av mappenavnet; ingen `-p` er nødvendig. Settes det opp et
+testmiljø fra samme repo på samme vert, må det kjøres med eget `-p` — v1-lærdommen var at
+test og prod ellers kolliderer på prosjektnavn.
 
 ## Kjørende miljø
 
-Stacken er verifisert oppe på port 3008 mot ekte migrerte data: innlogging, sesjon,
-`/api/meg`, alle modulendepunktene, skriving, validering, modulgate og tenantisolasjon.
+Stacken er produksjon og kjører på port 3008 mot de migrerte kundedataene: innlogging,
+sesjon, `/api/meg`, alle modulendepunktene, skriving, validering, modulgate og tenantisolasjon.
 En bruker uten medlemskap i org-en får 403, og en avslått modul får 403 — begge med API-ets
 egen norske melding.
 
-Testbruker i v2-databasen: `claude@driftiq.test`, medlem (orgadmin) i to organisasjoner, så
-org-velgeren faktisk har noe å vise. Passordet er satt lokalt og finnes ikke i repoet.
+Testbruker i databasen: `claude@driftiq.test`, medlem (orgadmin) i to organisasjoner, så
+org-velgeren faktisk har noe å vise. Passordet er satt lokalt og finnes ikke i repoet. Merk
+at brukeren og organisasjonene den er medlem i ligger i produksjonsbasen.
 
 **Plattformpanelet kan ikke UI-testes av en agent.** Begge plattformadmin-kontoene er ekte
 brukere, og en agent skriver ikke passord inn i innloggingsfelt — og skal heller ikke heve
@@ -176,7 +180,10 @@ en mangler dekning.
    kravet kommer, men håndhevingen (i `sjekkInnloggingssperrer`, lib/tilgang.ts) er ikke
    skrudd på.
 3. Passkeys — en plugin til, nå som Better Auth står.
-4. Ved overgang: sett `VERT_APP=app.driftiq.no` og `VERT_MARKED=driftiq.no`.
+4. Et testmiljø adskilt fra prod. I dag kjører testsuiten mot produksjonsbasen, og
+   `test.driftiq.no` er ikke lenger rutet noe sted.
+5. Sikkerhetskopien ut av VPS-en. `/root/backup/backup-driftiqv2.sh` tar nattlig `pg_dump`
+   og tar av opplastingene, men kopiene ligger lokalt, og restore er ikke testet.
 
 ## Webanalyse
 
@@ -267,8 +274,9 @@ Fem steg, i denne rekkefølgen:
 
 ## Datamigrering fra v1
 
-`scripts/migrer-fra-v1.ts` kopierer direkte fra v1s database. Idempotent, så den kan kjøres
-om igjen rett før overgangen for å hente det som er kommet til.
+Overgangen er gjennomført (25.08.2026). Skriptet beholdes som dokumentasjon av hva som ble
+kopiert og hvordan. `scripts/migrer-fra-v1.ts` kopierer direkte fra en v1-database og er
+idempotent — det ble kjørt om igjen rett før overgangen for å hente det som var kommet til.
 
 ```bash
 DATABASE_URL_V1=postgresql://... npx tsx scripts/migrer-fra-v1.ts --torrkjor

@@ -2,18 +2,30 @@
 
 Loggen starter ved 1.0.0. v2 er en omskriving, ikke en videreføring av v1s versjonsrekke:
 v1 stoppet på 0.8.3, og v2 tar over nummeret ved første utgivelse fordi det er første gang
-appen faktisk erstatter noe som var i bruk. v1s egen logg ligger i `~/stacks/driftiq`.
+appen faktisk erstatter noe som var i bruk. v1s egen logg fulgte v1-repoet, som ikke lenger
+ligger på VPS-en.
 
 Kun **utgitt** arbeid får et nummer. Ligger endringen som en lokal commit, hører den ikke
 hjemme her ennå.
 
 ---
 
+## Produksjonsovertakelse – 2026-08-25
+
+Ikke en versjon, men et skifte i hva loggen beskriver: `app.driftiq.no`, `admin.driftiq.no`
+og `driftiq.no` peker nå på v2 (port 3008, databasen `driftiq_v2`). v1 0.8.3 er tatt ned,
+og testmiljøet (`test.driftiq.no`) er ikke lenger rutet — v2 har ikke noe eget testmiljø.
+Alt i 1.0.0 og alle commits på `main` etter den kjører dermed i produksjon. Samme dag:
+nattlig sikkerhetskopi av database og opplastinger (`/root/backup/backup-driftiqv2.sh`,
+cron 03:05, lokalt på VPS-en, 14 dagers oppbevaring), og port 3008 bundet til localhost så
+all trafikk går via Cloudflare-tunnelen.
+
 ## v1.0.0 – 2026-08-16
 
 Første utgivelse av v2, og overtakelsen av testmiljøet: `test.driftiq.no` og
 `test-admin.driftiq.no` peker nå på v2 (port 3008, databasen `driftiq_v2`), og v1s
-testcontainere er slått av. Prod (`app.driftiq.no`) står urørt på v1 0.8.3.
+testcontainere er slått av. Prod (`app.driftiq.no`) sto da fortsatt på v1 0.8.3;
+overtakelsen kom 25.08 (se over).
 
 ### Én app i stedet for tre
 - v1s React-frontend, admin-frontend og FastAPI-backend er erstattet av én Next.js-app som

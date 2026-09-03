@@ -4,9 +4,12 @@ Arbeidsnotater for Claude Code i dette repoet — **DriftIQ v2** (Next.js 16 + D
 Better Auth). `README.md` dekker stack, oppsett, deploy og *hvorfor* arkitekturen er som den
 er — her står det som ikke er åpenbart fra koden, og det som er lett å gjøre feil.
 
-v1 ligger i `~/stacks/driftiq` og er paritetsfasit: skal en modul bygges ut, les v1-siden og
-lag funksjonsliste først. v1 og v2 deler ingenting utover den sentrale Postgres-serveren
-(og passordhashene, se «Auth»).
+**v2 er produksjon siden 25.08.2026** (`app.driftiq.no`, `admin.driftiq.no`, `driftiq.no`).
+v1 (FastAPI + React) er tatt ned, og v1-repoet ligger ikke lenger på VPS-en
+(`~/stacks/driftiq` finnes ikke). Det uporterte (leverandørportalen, modulkatalogen — se
+README «Hva som IKKE er portert») må derfor bygges fra designnotatene i `docs/`, ikke fra
+v1-koden. v1 og v2 delte aldri noe utover den sentrale Postgres-serveren (og passordhashene,
+se «Auth»).
 
 ## Språk
 
@@ -40,9 +43,10 @@ docker compose up -d --build && docker compose exec app npm run test
 - `next lint` finnes ikke i Next 16 — oppsettet ligger i `eslint.config.mjs`, skrevet for å
   fange nøyaktig det bygget ikke fanger: `no-undef` og `rules-of-hooks` som `error`,
   DOM-globalene (`MouseEvent`, `HTMLInputElement`, `navigator`, …) listet eksplisitt.
-- Appen kjører på **3008** (v1: prod 3002/3003/8000, test 3005/3006/8001). Databasen er
-  `driftiq_v2` på den sentrale Postgres 17-serveren (verten «postgres» på `edge`-nettet) —
-  ikke en del av stacken.
+- Appen kjører på **3008**, bundet til localhost — Cloudflare-tunnelen når containeren via
+  `edge`-nettet. **Dette er produksjon.** Det finnes ikke noe eget testmiljø for v2.
+  Databasen er `driftiq_v2` på den sentrale Postgres 18-serveren (verten «postgres» på
+  `edge`-nettet) — ikke en del av stacken.
 - `docker compose up -d --build` — deploy krever alltid `--build`; standalone-bygget bakes
   inn i imaget, og et `git pull` alene endrer ingenting for det som kjører.
 - E-postoppsettet verifiseres med `scripts/test-epost.ts` (sjekker nøkkel, avsender og
@@ -51,6 +55,10 @@ docker compose up -d --build && docker compose exec app npm run test
 ### Tester
 
 Testene kjører mot **samme database som appen** (`driftiq_v2`) — ingen egen testbase.
+**Siden 25.08.2026 er det produksjonsbasen.** Regelen under om å aldri røre rader testen
+ikke selv har opprettet er dermed ikke lenger en ryddighetsregel, men det eneste som står
+mellom testsuiten og kundedata — og en test som feiler midt i `afterEach` etterlater sine
+egne rader i prod. Et adskilt testmiljø står som neste steg i README.
 Derfor `fileParallelism: false` i `vitest.config.ts`: filene rydder med `DELETE` og ville
 sett hverandres data parallelt. Ingenting hoppes over uten DB; uten `DATABASE_URL` krasjer
 alt.
@@ -147,8 +155,8 @@ Ingen rutehandler skrives for hånd — en `route.ts` er 3–6 linjer med
 
 ### Auth (Better Auth)
 
-- Passord hashes med **bcrypt/12** — samme format som v1, så begge leser samme hasher.
-  Endres rundene, låses v1 ute.
+- Passord hashes med **bcrypt/12** — samme format som v1, så de migrerte hashene leses
+  uendret. Endres rundene, låses alle migrerte brukere ute til de bytter passord.
 - `disableSignUp: true` — brukere opprettes av orgadmin. `additionalFields` `role`/`active`
   har `input: false`; uten det kunne et profilkall sendt `role: "superadmin"`.
 - **`BETTER_AUTH_TRUSTED_ORIGINS`**: uten den svarer innlogging 403 `INVALID_ORIGIN` fra
@@ -156,8 +164,9 @@ Ingen rutehandler skrives for hånd — en `route.ts` er 3–6 linjer med
   heller ikke curl mot localhost (localhost ER baseURL). Hver `VERT_*` må stå der.
 - `authDb` er `withoutRls("innlogging")` materialisert — trygt kun fordi Better Auth bare
   rører `UNNTATT`-tabeller. Legg aldri en org-eid tabell i auth-skjemaet.
-- JWT-plugin med JWKS på `/api/auth/jwks` finnes for at v1s FastAPI skal kunne validere
-  v2-sesjoner i overgangsfasen.
+- JWT-plugin med JWKS på `/api/auth/jwks` ble lagt inn for at v1s FastAPI skulle validere
+  v2-sesjoner i overgangen. v1 er nede, og ingenting annet i v2 bruker den (sjekket
+  01.09.2026) — kandidat for fjerning, sammen med `jwks`-tabellen.
 
 ### Registerfiler — mønsteret bak
 
@@ -211,9 +220,9 @@ Oppbevaring håndheves av jobben «hendelsesrydding» — grensene er konstanter
   en avvist sending (typisk uverifisert avsenderdomene) ut som en vellykket.
 - Tom `RESEND_API_KEY` = ingenting sendes, alt går videre — et manglende varsel skal aldri
   velte en handling brukeren utførte.
-- **Domenevakten (`EPOST_TILLATTE_DOMENER`) skal PÅ i test** — testbasen er en kopi av prod
-  med ekte, leverbare adresser. Den er AV når variabelen ikke er satt, med vilje: prod skal
-  ikke avhenge av at noen husker den.
+- **Domenevakten (`EPOST_TILLATTE_DOMENER`)** er AV når variabelen ikke er satt, med vilje:
+  prod skal ikke avhenge av at noen husker den. Settes det opp et testmiljø med kopi av
+  prod-basen igjen, skal den PÅ der — basen har ekte, leverbare adresser.
 - Send aldri fra en handler direkte — `etterCommit`.
 
 ### Bakgrunnsjobber
@@ -362,11 +371,14 @@ layoutene med, og `CHANGELOG.md` få en oppføring i samme commit.
 
 **1.0.0 (16.08.2026)** er første utgivelse: v2 overtok testmiljøet (`test.driftiq.no`,
 `test-admin.driftiq.no`) fra v1 0.8.3. v2 starter altså ikke på v1s nummerrekke.
-`CHANGELOG.md` er den interne loggen; bare **utgitt** arbeid får et nummer, patch er
-standard.
+**25.08.2026 overtok v2 produksjonen** (`app.driftiq.no`); det ga ingen ny versjon, bare en
+datert oppføring i loggen, og `versjon`-propen står fortsatt på 1.0.0 selv om `main` har
+gått videre. `CHANGELOG.md` er den interne loggen; bare **utgitt** arbeid får et nummer,
+patch er standard.
 
-Den **kundevendte** loggen finnes ennå ikke — verken fil eller changelog-rute. Den kommer
-når v2 tar over prod, og da gjelder v1-regelen: to logger med samme versjonsnummer.
+Den **kundevendte** loggen finnes ennå ikke — verken fil eller changelog-rute. Den skulle
+kommet med prod-overtakelsen og er dermed forfalt; når den lages gjelder v1-regelen: to
+logger med samme versjonsnummer.
 
 ## Ved endringer
 
