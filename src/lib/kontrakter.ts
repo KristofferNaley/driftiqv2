@@ -26,6 +26,7 @@ export const kontraktInn = z.object({
   title: z.string().trim().min(1, "Tittel må fylles ut"),
   category: z.string().trim().nullish(),
   annualSum: z.number().int().min(0).nullish(),
+  account: z.number().int().min(1000, "Konto er firesifret").max(9999, "Konto er firesifret").nullish(),
   startDate: z.string().date().nullish(),
   endDate: z.string().date().nullish(),
   notes: z.string().nullish(),

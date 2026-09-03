@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Feil } from "@/components/felles";
 import { Avkryssing, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { leverandorer, type Kontrakt } from "@/lib/klient";
-import { KONTRAKT_KATEGORIER } from "@/lib/kontraktregler";
+import { KONTRAKT_KATEGORIER, kontoForKategori } from "@/lib/kontraktregler";
 
 /** Det skjemaet leverer fra seg — matcher `kontraktInn`/`kontraktEndring` i API-et. */
 export type KontraktFelter = {
@@ -12,6 +12,7 @@ export type KontraktFelter = {
   title: string;
   category: string | null;
   annualSum: number | null;
+  account: number | null;
   startDate: string | null;
   endDate: string | null;
   notes: string | null;
@@ -46,6 +47,7 @@ export default function KontraktModal({
   const [navn, setNavn] = useState(utgangspunkt?.title ?? "");
   const [kategori, setKategori] = useState(utgangspunkt?.category ?? "");
   const [aarssum, setAarssum] = useState(utgangspunkt?.annualSum?.toString() ?? "");
+  const [konto, setKonto] = useState(utgangspunkt?.account?.toString() ?? "");
   const [start, setStart] = useState(utgangspunkt?.startDate ?? "");
   const [slutt, setSlutt] = useState(utgangspunkt?.endDate ?? "");
   const [notat, setNotat] = useState(utgangspunkt?.notes ?? "");
@@ -85,6 +87,7 @@ export default function KontraktModal({
               title: navn.trim(),
               category: kategori || null,
               annualSum: aarssum.trim() === "" ? null : Number(aarssum),
+              account: konto.trim() === "" ? null : Number(konto),
               startDate: start || null,
               endDate: slutt || null,
               notes: notat.trim() || null,
@@ -106,15 +109,38 @@ export default function KontraktModal({
           valg={[{ verdi: "", etikett: "Velg leverandør …" }, ...firmaer.map((f) => ({ verdi: f.id, etikett: f.navn }))]}
         />
         <Tekstfelt etikett="Tittel *" verdi={navn} onEndre={setNavn} plassholder="F.eks. «Heisservice og døgnberedskap»" />
-        <Nedtrekk etikett="Kategori" verdi={kategori} onEndre={setKategori} valg={kategorier} />
-
-        <Tekstfelt
-          etikett="Årssum (kr)"
-          type="number"
-          verdi={aarssum}
-          onEndre={setAarssum}
-          notat="Grunnlaget for «Innkjøp per år». Senere prisendringer registreres på avtalen."
+        <Nedtrekk
+          etikett="Kategori"
+          verdi={kategori}
+          onEndre={(v) => {
+            // Kontoen følger kategorien til noen har satt den selv: tomt felt, eller feltet
+            // står på forrige kategoris forslag, byttes; en egen verdi røres ikke.
+            const forrige = kontoForKategori(kategori);
+            if (konto === "" || (forrige !== null && konto === String(forrige))) {
+              setKonto(kontoForKategori(v)?.toString() ?? "");
+            }
+            setKategori(v);
+          }}
+          valg={kategorier}
         />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <Tekstfelt
+            etikett="Årssum (kr)"
+            type="number"
+            verdi={aarssum}
+            onEndre={setAarssum}
+            notat="Grunnlaget for «Innkjøp per år» og for budsjettforslaget i Økonomi."
+          />
+          <Tekstfelt
+            etikett="Konto (NS 4102)"
+            type="number"
+            verdi={konto}
+            onEndre={setKonto}
+            plassholder="6620"
+            notat="Foreslås fra kategorien. Legger avtalen på riktig budsjettlinje."
+          />
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <Tekstfelt etikett="Startdato" type="date" verdi={start} onEndre={setStart} />
           <Tekstfelt etikett="Sluttdato" type="date" verdi={slutt} onEndre={setSlutt} notat="Tom = løpende avtale." />

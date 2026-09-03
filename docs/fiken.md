@@ -425,8 +425,17 @@ Det som er avgjort i koden og ikke i notatet over:
   03.09.2026). Brøken kan også settes i Innstillinger → Leiligheter, og dashbordet har en
   Økonomi-widget (til godkjenning, forfalt, felleskost per måned) pluss oppfølgingslinjer.
 
+- **Budsjettforslag fra avtalene (04.09.2026):** kontrakter har fått `account` (NS 4102,
+  foreslått fra kategorien via `kontoForKategori`). «Foreslå fra avtaler» på et
+  budsjettutkast legger hver avtale på linja hvis intervall dekker kontoen, forholdsmessig
+  etter måneder avtalen gjelder i året, pluss vedlikeholdsplanens tiltak for året på
+  vedlikeholdslinja, med prosentjustering og fjorårets budsjett/faktisk til sammenligning.
+  Skriver først når styret trykker «Bruk». Sirkelen er lukket: avtale → budsjett → faktura →
+  faktisk.
+
 Åpent etter steg 1: ingen varsler/e-post ved registrering eller forfall; søket finner ikke
-fakturaer og eiere; fordelingsnøkkelen er alltid sameiebrøk.
+fakturaer og eiere; fordelingsnøkkelen er alltid sameiebrøk; kontraktkortet viser ennå
+ikke avtalt mot faktisk per avtale.
 
 ## Utvikling og testing uten å røre prod
 

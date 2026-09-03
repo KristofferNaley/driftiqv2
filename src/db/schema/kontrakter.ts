@@ -24,6 +24,12 @@ export const contracts = pgTable("contracts", {
   /** Fri tekst, ikke enum — kategoriene endres oftere enn en Postgres-enum tåler. */
   category: varchar("category"),
   annualSum: integer("annual_sum"),
+  /**
+   * Kostnadskonto etter NS 4102 (6620 heis, 7500 forsikring …). Foreslås fra kategorien
+   * (`kontoForKategori`) og brukes av budsjettforslaget i Økonomi til å legge avtalen på
+   * riktig budsjettlinje. Nullbar — en avtale uten konto faller bare ut av forslaget.
+   */
+  account: integer("account"),
   startDate: date("start_date"),
   endDate: date("end_date"),
   notes: text("notes"),

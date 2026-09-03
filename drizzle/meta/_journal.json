@@ -358,6 +358,13 @@
       "when": 1788468752169,
       "tag": "0050_okonomi",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1788473194359,
+      "tag": "0051_kontrakt_konto",
+      "breakpoints": true
     }
   ]
 }

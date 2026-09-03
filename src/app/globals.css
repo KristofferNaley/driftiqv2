@@ -4318,6 +4318,20 @@ textarea.qr-input { resize: vertical; }
 }
 
 /* Satser. */
+/* Budsjettforslaget. */
+.ok-forslag { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.ok-forslag-hode, .ok-forslag-rad {
+  display: grid; grid-template-columns: minmax(180px, 2fr) 110px 170px 130px; gap: 12px; align-items: center;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.ok-forslag-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ok-forslag-hode .ok-belop-celle { font-size: var(--fs-label); }
+.ok-forslag-rad:last-child { border-bottom: none; }
+@media (max-width: 700px) {
+  .ok-forslag-hode, .ok-forslag-rad { grid-template-columns: minmax(140px, 2fr) 100px 130px; }
+  .ok-forslag-fjor { display: none; }
+}
+
 /* Siste kolonne har FAST bredde i alle tabellene her: med `auto` ble den bred i radene
    (knapper) og tom i overskriften, så overskriftene sto én kolonne forskjøvet. */
 .ok-sats-hode, .ok-sats-rad {

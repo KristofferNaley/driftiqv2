@@ -17,7 +17,9 @@ import {
   annullerKjoring,
   avvisFaktura,
   beregnSatser,
+  brukForslag,
   eksporterKjoring,
+  foreslaBudsjett,
   endreLinje,
   gjenapneFaktura,
   godkjennFaktura,
@@ -47,7 +49,9 @@ import {
   brokSum,
   brokStemmer,
   budsjettSummer,
+  juster,
   kroner,
+  maanederAvAaret,
   manederI,
   tilCsv,
   tilOre,
@@ -75,6 +79,8 @@ afterEach(async () => {
     await eier.query("DELETE FROM fee_runs WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM supplier_invoices WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM unit_fee_rates WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM building_elements WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM contracts WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM budget_lines WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM budgets WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM unit_owners WHERE org_id = $1", [id]);
@@ -351,6 +357,70 @@ describe("budsjett", () => {
     const { orgId } = await oppsett();
     const b = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2027 }));
     expect((await feilFra(() => i(orgId, (db) => beregnSatser(db, orgId, b.id, aktor)))).status).toBe(409);
+  });
+
+  it("regner måneder av året og justering", () => {
+    expect(maanederAvAaret(null, null, 2027)).toBe(12);
+    expect(maanederAvAaret("2027-03-01", null, 2027)).toBe(10);
+    expect(maanederAvAaret("2027-03-15", null, 2027)).toBe(9);
+    expect(maanederAvAaret(null, "2027-06-30", 2027)).toBe(6);
+    expect(maanederAvAaret("2020-01-01", "2026-12-31", 2027)).toBe(0);
+    expect(juster(100_000, 3)).toBe(103_000);
+    expect(juster(123_456, 0)).toBe(123_500);
+  });
+
+  it("foreslår kostnadslinjer fra avtaler etter konto og måneder, og fra vedlikeholdsplanen", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const b = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2027 }));
+    // Heisservice 38 000 kr på 6620 hele året; forsikring 63 000 på 7500 som utløper 30.6;
+    // én avtale uten konto som skal listes som «ikke med».
+    for (const [tittel, konto, sum, slutt] of [
+      ["Heisservice", 6620, 38_000, null],
+      ["Forsikring", 7500, 63_000, "2027-06-30"],
+      ["Renhold", null, 20_000, null],
+    ] as const) {
+      await eier.query(
+        "INSERT INTO contracts (id, org_id, vendor_id, title, account, annual_sum, end_date) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        [randomUUID(), orgId, vendorId, tittel, konto, sum, slutt],
+      );
+    }
+    await eier.query(
+      "INSERT INTO building_elements (id, org_id, name, next_action_year, estimated_cost) VALUES ($1,$2,'Tak',2027,150000)",
+      [randomUUID(), orgId],
+    );
+    await eier.query("INSERT INTO building_elements (id, org_id, name, next_action_year, estimated_cost) VALUES ($1,$2,'Fasade',2029,90000)", [randomUUID(), orgId]);
+
+    const f = await i(orgId, (db) => foreslaBudsjett(db, orgId, b.id, 3));
+    const linje = (navn: string) => f.linjer.find((l) => l.name === navn)!;
+    expect(linje("Vedlikehold bygning og anlegg").kilder).toEqual([
+      { slag: "avtale", navn: "Heisservice", belop: 3_800_000, maaneder: 12 },
+      { slag: "vedlikehold", navn: "Tak", belop: 15_000_000, maaneder: 12 },
+    ]);
+    expect(linje("Vedlikehold bygning og anlegg").forslag).toBe(juster(18_800_000, 3));
+    expect(linje("Forsikring").kilder[0]).toEqual({ slag: "avtale", navn: "Forsikring", belop: 3_150_000, maaneder: 6 });
+    expect(linje("Styrehonorar").forslag).toBeNull();
+    expect(f.utenom).toEqual([{ id: expect.any(String), title: "Renhold", grunn: "mangler konto" }]);
+
+    const etter = await i(orgId, (db) =>
+      brukForslag(db, orgId, b.id, aktor, { linjer: [{ lineId: linje("Forsikring").lineId, amount: 3_250_000 }] }),
+    );
+    expect(etter.linjer.find((l) => l.name === "Forsikring")!.amount).toBe(3_250_000);
+    expect(etter.summer.kostnader).toBe(3_250_000);
+  });
+
+  it("viser fjorårets budsjett og faktisk per kontointervall i forslaget", async () => {
+    const { orgId, vendorId } = await oppsett();
+    const fjor = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2026 }));
+    const fors = fjor.linjer.find((l) => l.name === "Forsikring")!;
+    await i(orgId, (db) => endreLinje(db, orgId, fjor.id, fors.id, { amount: 6_000_000 }));
+    const fakt = await i(orgId, (db) => registrerFaktura(db, orgId, aktor, { vendorId, invoiceDate: "2026-02-01", amount: 6_100_000, budgetLineId: fors.id }));
+    await i(orgId, (db) => godkjennFaktura(db, orgId, fakt.id, aktor, {}));
+
+    const b = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2027, kopierFraId: fjor.id }));
+    const f = await i(orgId, (db) => foreslaBudsjett(db, orgId, b.id, 0));
+    const l = f.linjer.find((x) => x.name === "Forsikring")!;
+    expect(l.fjoraretsBudsjett).toBe(6_000_000);
+    expect(l.fjoraretsFaktisk).toBe(6_100_000);
   });
 
   it("ser ikke en annen orgs budsjett", async () => {

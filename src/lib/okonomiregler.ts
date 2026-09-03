@@ -187,6 +187,34 @@ export function andelAvAaret(aar: number, naa: Date): number {
 export const forventetHittil = (amount: number, aar: number, naa: Date) =>
   Math.round(amount * andelAvAaret(aar, naa));
 
+/** Vedlikeholdsplanens tiltak legges på linja som dekker denne kontoen. */
+export const VEDLIKEHOLD_KONTO = 6600;
+
+/** Om en konto ligger i en budsjettlinjes intervall (`til` tom = én konto). */
+export function kontoIIntervall(konto: number | null | undefined, fra: number | null, til: number | null): boolean {
+  if (konto == null || fra == null) return false;
+  return konto >= fra && konto <= (til ?? fra);
+}
+
+/**
+ * Hvor mange av årets tolv måneder en avtale gjelder. En avtale som starter 1. mars og
+ * løper, gir 10; en som slutter 30. juni, gir 6; uten datoer, 12. Regnes i hele måneder på
+ * den dagen avtalen gjelder den 1. — samme tanke som felleskostnadene.
+ */
+export function maanederAvAaret(startDate: string | null, endDate: string | null, aar: number): number {
+  let n = 0;
+  for (let m = 1; m <= 12; m++) {
+    const forste = `${aar}-${String(m).padStart(2, "0")}-01`;
+    if (startDate && startDate > forste) continue;
+    if (endDate && endDate < forste) continue;
+    n++;
+  }
+  return n;
+}
+
+/** Justert beløp: grunnlag × (1 + prosent/100), rundet til hele kroner (øre). */
+export const juster = (ore: number, prosent: number) => Math.round((ore * (1 + prosent / 100)) / 100) * 100;
+
 /** Kontointervallet som tekst: «6600–6629», «3601» eller «—». */
 export function kontoTekst(fra: number | null, til: number | null): string {
   if (fra === null) return "—";

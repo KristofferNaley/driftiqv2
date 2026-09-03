@@ -30,7 +30,7 @@ import {
 import Dokumentviser from "@/components/Dokumentviser";
 import KontraktModal from "@/components/KontraktModal";
 import { kontrakter, leverandorer, type Kontrakt } from "@/lib/klient";
-import { KONTRAKT_KATEGORIER, kontraktKategoriEtikett, kontraktStatus } from "@/lib/kontraktregler";
+import { KONTRAKT_KATEGORIER, kontoForKategori, kontraktKategoriEtikett, kontraktStatus } from "@/lib/kontraktregler";
 
 type Fane = "om" | "kontakter" | "priser" | "dokument";
 
@@ -95,6 +95,7 @@ export default function KontraktDetaljModal({
   const [tittel, setTittel] = useState("");
   const [kategori, setKategori] = useState("");
   const [aarssum, setAarssum] = useState("");
+  const [konto, setKonto] = useState("");
   const [start, setStart] = useState("");
   const [slutt, setSlutt] = useState("");
   const [notat, setNotat] = useState("");
@@ -147,6 +148,7 @@ export default function KontraktDetaljModal({
     setTittel(data.title);
     setKategori(data.category ?? "");
     setAarssum(data.annualSum?.toString() ?? "");
+    setKonto(data.account?.toString() ?? "");
     setStart(data.startDate ?? "");
     setSlutt(data.endDate ?? "");
     setNotat(data.notes ?? "");
@@ -173,6 +175,7 @@ export default function KontraktDetaljModal({
         title: tittel.trim(),
         category: kategori || null,
         annualSum: aarssum.trim() === "" ? null : Number(aarssum),
+        account: konto.trim() === "" ? null : Number(konto),
         startDate: start || null,
         endDate: slutt || null,
         notes: notat.trim() || null,
@@ -362,14 +365,35 @@ export default function KontraktDetaljModal({
                   ]}
                 />
                 <Tekstfelt etikett="Tittel *" verdi={tittel} onEndre={setTittel} />
-                <Nedtrekk etikett="Kategori" verdi={kategori} onEndre={setKategori} valg={kategorivalg} />
-                <Tekstfelt
-                  etikett="Årssum (kr)"
-                  type="number"
-                  verdi={aarssum}
-                  onEndre={setAarssum}
-                  notat="Grunnlaget for «Innkjøp per år». Prisendringer registreres under Prisjusteringer."
+                <Nedtrekk
+                  etikett="Kategori"
+                  verdi={kategori}
+                  onEndre={(v) => {
+                    const forrige = kontoForKategori(kategori);
+                    if (konto === "" || (forrige !== null && konto === String(forrige))) {
+                      setKonto(kontoForKategori(v)?.toString() ?? "");
+                    }
+                    setKategori(v);
+                  }}
+                  valg={kategorivalg}
                 />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <Tekstfelt
+                    etikett="Årssum (kr)"
+                    type="number"
+                    verdi={aarssum}
+                    onEndre={setAarssum}
+                    notat="Grunnlaget for «Innkjøp per år». Prisendringer registreres under Prisjusteringer."
+                  />
+                  <Tekstfelt
+                    etikett="Konto (NS 4102)"
+                    type="number"
+                    verdi={konto}
+                    onEndre={setKonto}
+                    plassholder="6620"
+                    notat="Foreslås fra kategorien. Brukes av budsjettforslaget i Økonomi."
+                  />
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <Tekstfelt etikett="Startdato" type="date" verdi={start} onEndre={setStart} />
                   <Tekstfelt etikett="Sluttdato" type="date" verdi={slutt} onEndre={setSlutt} notat="Tom = løpende avtale." />
@@ -399,6 +423,7 @@ export default function KontraktDetaljModal({
                 <Rad tittel="Leverandør" hoyre={data.vendorName ?? "—"} />
                 <Rad tittel="Kategori" hoyre={kontraktKategoriEtikett(data.category) ?? "—"} />
                 <Rad tittel="Årssum" hoyre={kr(data.annualSum)} />
+                <Rad tittel="Konto" hoyre={data.account ?? "—"} />
                 <Rad
                   tittel="Periode"
                   hoyre={`${dato(data.startDate)} – ${data.endDate ? dato(data.endDate) : "løpende"}`}

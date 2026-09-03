@@ -283,7 +283,7 @@ export const avvik = {
 };
 
 export type Kontrakt = {
-  id: string; title: string; category: string | null; annualSum: number | null;
+  id: string; title: string; category: string | null; annualSum: number | null; account: number | null;
   startDate: string | null; endDate: string | null; vendorId: string; vendorName: string | null;
   fileName: string | null; fileOriginalName: string | null; aiReadable: boolean;
   archivedAt: string | null; archiveNote: string | null;
@@ -713,6 +713,23 @@ export type Faktura = {
   kontraktTittel: string | null; forfalt: boolean;
 };
 
+export type Budsjettforslag = {
+  prosent: number;
+  linjer: Array<{
+    lineId: string; name: string; kind: string; accountFrom: number | null; accountTo: number | null;
+    naavaerende: number;
+    /** Sum av kildene i øre, FØR justering. */
+    grunnlag: number;
+    /** Grunnlag × (1 + prosent/100), rundet til hele kroner. Null når linja ikke har kilder. */
+    forslag: number | null;
+    kilder: Array<{ slag: "avtale" | "vedlikehold"; navn: string; belop: number; maaneder: number }>;
+    fjoraretsBudsjett: number | null;
+    fjoraretsFaktisk: number | null;
+  }>;
+  /** Avtaler som ikke er med: mangler konto, pris, eller treffer ingen linje. */
+  utenom: Array<{ id: string; title: string; grunn: string }>;
+};
+
 export type Okonomioversikt = {
   aar: number;
   budsjett: {
@@ -756,6 +773,10 @@ export const okonomi = {
     api.send<{ beregnet: number; overstyrt: number; utenBrok: number; validFrom: string }>(
       org(o, `/okonomi/budsjett/${id}/satser`), {},
     ),
+  forslag: (o: string, id: string, prosent: number) =>
+    api.hent<Budsjettforslag>(org(o, `/okonomi/budsjett/${id}/forslag?prosent=${encodeURIComponent(prosent)}`)),
+  brukForslag: (o: string, id: string, linjer: Array<{ lineId: string; amount: number }>) =>
+    api.send<BudsjettDetalj>(org(o, `/okonomi/budsjett/${id}/forslag`), { linjer }),
   nyLinje: (o: string, id: string, d: unknown) => api.send<Budsjettlinje>(org(o, `/okonomi/budsjett/${id}/linjer`), d),
   endreLinje: (o: string, id: string, lid: string, d: unknown) =>
     api.endre<Budsjettlinje>(org(o, `/okonomi/budsjett/${id}/linjer/${lid}`), d),

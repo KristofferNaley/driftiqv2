@@ -33,6 +33,7 @@ import {
   unitOwners,
 } from "../db/schema/okonomi";
 import { units } from "../db/schema/units";
+import { buildingElements } from "../db/schema/vedlikehold";
 import { vendors } from "../db/schema/vendors";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
@@ -44,6 +45,7 @@ import {
   FAKTURA_STATUSER,
   LINJETYPER,
   STANDARD_LINJER,
+  VEDLIKEHOLD_KONTO,
   beregnSats,
   brokSum,
   budsjettSummer,
@@ -51,6 +53,9 @@ import {
   forfallsdato,
   harBrok,
   isoDato,
+  juster,
+  kontoIIntervall,
+  maanederAvAaret,
   manederI,
   ordreReferanse,
   periodeFor,
@@ -510,6 +515,122 @@ export async function slettLinje(db: Db, orgId: string, budgetId: string, lineId
   const b = await krevUtkast(db, orgId, budgetId);
   if (!b.linjer.some((l) => l.id === lineId)) throw ikkeFunnet("Budsjettlinje");
   await db.delete(budgetLines).where(and(eq(budgetLines.id, lineId), eq(budgetLines.orgId, orgId)));
+}
+
+// ---------------------------------------------------------------------------------------
+// Forslag fra avtalene
+// ---------------------------------------------------------------------------------------
+
+export const forslagInn = z.object({
+  linjer: z
+    .array(z.object({ lineId: z.string().min(1), amount: ore.min(0) }))
+    .min(1, "Ingen linjer å oppdatere"),
+});
+
+/**
+ * Forslag til beløp per budsjettlinje, regnet fra det som alt ligger i systemet:
+ *
+ * - **Avtaler** (kontrakter) med konto og årssum: legges på linja hvis intervall dekker
+ *   kontoen, forholdsmessig etter hvor mange av budsjettårets måneder avtalen gjelder.
+ *   Arkiverte avtaler er ikke med; en avtale som utløper i mars teller tre måneder.
+ * - **Vedlikeholdsplanen**: bygningsdeler med tiltak i budsjettåret og estimert kostnad,
+ *   på linja som dekker `VEDLIKEHOLD_KONTO`.
+ * - **Fjorårets budsjett og faktisk** for samme kontointervall, til sammenligning — ikke
+ *   som del av forslaget.
+ *
+ * `prosent` er justeringen styret velger (prisstigning). Forslaget ERSTATTER ingenting —
+ * `brukForslag` skriver først når styret har sett tallene. Kontrakter lagrer kroner,
+ * økonomi lagrer øre; konverteringen skjer her og bare her.
+ */
+export async function foreslaBudsjett(db: Db, orgId: string, budgetId: string, prosent = 0) {
+  const b = await hentBudsjett(db, orgId, budgetId);
+  const [avtaler, deler, fjor] = await Promise.all([
+    db
+      .select()
+      .from(contracts)
+      .where(and(eq(contracts.orgId, orgId), isNull(contracts.archivedAt)))
+      .orderBy(asc(contracts.title)),
+    db
+      .select()
+      .from(buildingElements)
+      .where(and(eq(buildingElements.orgId, orgId), eq(buildingElements.nextActionYear, b.year))),
+    db
+      .select({ id: budgets.id })
+      .from(budgets)
+      .where(and(eq(budgets.orgId, orgId), eq(budgets.year, b.year - 1)))
+      .limit(1),
+  ]);
+  const fjoraaret = fjor[0] ? await hentBudsjett(db, orgId, fjor[0].id) : null;
+
+  const brukt = new Set<string>();
+  const linjer = b.linjer.map((l) => {
+    const kilder: Array<{ slag: "avtale" | "vedlikehold"; navn: string; belop: number; maaneder: number }> = [];
+    if (l.kind === "kostnad" && l.accountFrom != null) {
+      for (const a of avtaler) {
+        if (!a.annualSum || !kontoIIntervall(a.account, l.accountFrom, l.accountTo)) continue;
+        const maaneder = maanederAvAaret(a.startDate, a.endDate, b.year);
+        if (maaneder === 0) continue;
+        brukt.add(a.id);
+        kilder.push({ slag: "avtale", navn: a.title, belop: Math.round((a.annualSum * 100 * maaneder) / 12), maaneder });
+      }
+      if (kontoIIntervall(VEDLIKEHOLD_KONTO, l.accountFrom, l.accountTo)) {
+        for (const d of deler) {
+          if (!d.estimatedCost) continue;
+          kilder.push({ slag: "vedlikehold", navn: d.name, belop: d.estimatedCost * 100, maaneder: 12 });
+        }
+      }
+    }
+    const grunnlag = kilder.reduce((s, k) => s + k.belop, 0);
+    const fjorLinje = fjoraaret?.linjer.find(
+      (f) => f.kind === l.kind && f.accountFrom === l.accountFrom && (f.accountTo ?? f.accountFrom) === (l.accountTo ?? l.accountFrom),
+    ) ?? null;
+    return {
+      lineId: l.id, name: l.name, kind: l.kind, accountFrom: l.accountFrom, accountTo: l.accountTo,
+      naavaerende: l.amount,
+      grunnlag,
+      forslag: kilder.length > 0 ? juster(grunnlag, prosent) : null,
+      kilder,
+      fjoraretsBudsjett: fjorLinje?.amount ?? null,
+      fjoraretsFaktisk: fjorLinje ? fjorLinje.faktisk : null,
+    };
+  });
+
+  const utenom = avtaler
+    .filter((a) => !brukt.has(a.id))
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      grunn: !a.annualSum
+        ? "mangler årssum"
+        : a.account == null
+          ? "mangler konto"
+          : maanederAvAaret(a.startDate, a.endDate, b.year) === 0
+            ? `gjelder ikke i ${b.year}`
+            : `konto ${a.account} treffer ingen budsjettlinje`,
+    }));
+
+  return { prosent, linjer, utenom };
+}
+
+/** Skriver de beløpene styret godtok. Bare utkast; logges som én hendelse. */
+export async function brukForslag(db: Db, orgId: string, budgetId: string, av: Aktor, data: z.infer<typeof forslagInn>) {
+  const b = await krevUtkast(db, orgId, budgetId);
+  let endret = 0;
+  for (const v of data.linjer) {
+    const linje = b.linjer.find((l) => l.id === v.lineId);
+    if (!linje) throw ikkeFunnet("Budsjettlinje");
+    if (linje.amount === v.amount) continue;
+    await db
+      .update(budgetLines)
+      .set({ amount: v.amount })
+      .where(and(eq(budgetLines.id, v.lineId), eq(budgetLines.orgId, orgId)));
+    endret++;
+  }
+  await loggHendelse(db, orgId, av, {
+    modul: MODUL, entitet: "budsjett", entitetId: budgetId,
+    hendelse: `Oppdaterte ${endret} ${endret === 1 ? "budsjettlinje" : "budsjettlinjer"} for ${b.year} fra forslaget basert på avtaler og vedlikeholdsplan`,
+  });
+  return hentBudsjett(db, orgId, budgetId);
 }
 
 // =======================================================================================

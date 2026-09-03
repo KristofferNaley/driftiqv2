@@ -36,6 +36,27 @@ export const KONTRAKT_KATEGORIER: KontraktKategori[] = [
   { verdi: "annet", etikett: "Annet" },
 ];
 
+/**
+ * Standardkonto (NS 4102) per kategori — forslaget skjemaet fyller inn når kategorien
+ * velges. Avtalens `account` er det budsjettforslaget i Økonomi matcher mot budsjettlinjenes
+ * kontointervall, så de fleste avtaler skal få riktig konto uten at noen tenker på
+ * kontoplanen. Nummerserien er den samme i Fiken, Tripletex og hos forretningsfører.
+ */
+export const KONTO_FOR_KATEGORI: Readonly<Record<string, number>> = {
+  renhold: 6790,
+  vaktmester: 6795,
+  forretningsforer: 6700,
+  brann: 6620,
+  heis: 6620,
+  uteanlegg: 6600,
+  forsikring: 7500,
+  tv_internett: 6900,
+  annet: 7700,
+};
+
+export const kontoForKategori = (verdi: string | null | undefined): number | null =>
+  verdi ? (KONTO_FOR_KATEGORI[verdi] ?? null) : null;
+
 export function kontraktKategoriEtikett(verdi: string | null | undefined): string | null {
   if (!verdi) return null;
   return KONTRAKT_KATEGORIER.find((k) => k.verdi === verdi)?.etikett ?? verdi;

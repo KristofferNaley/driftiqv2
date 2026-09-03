@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
-import { okonomi, type Budsjett as BudsjettType, type BudsjettDetalj, type Budsjettlinje } from "@/lib/klient";
+import { okonomi, type Budsjett as BudsjettType, type BudsjettDetalj, type Budsjettforslag, type Budsjettlinje } from "@/lib/klient";
 import {
   LINJETYPER,
   LINJETYPE_ETIKETT,
@@ -29,6 +29,7 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
   const [nytt, setNytt] = useState(false);
   const [vedta, setVedta] = useState(false);
   const [linje, setLinje] = useState<Budsjettlinje | "ny" | null>(null);
+  const [forslag, setForslag] = useState(false);
   const [melding, setMelding] = useState<string | null>(null);
 
   // Standardvalget er årets budsjett — eller det nyeste når året ikke finnes.
@@ -150,6 +151,11 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
                     }}
                   >
                     Balanser
+                  </button>
+                )}
+                {erAdmin && utkast && (
+                  <button className="btn btn-ghost" onClick={() => setForslag(true)} title="Fyller kostnadslinjene fra avtalene og vedlikeholdsplanen">
+                    Foreslå fra avtaler
                   </button>
                 )}
                 {erAdmin && utkast && (
@@ -295,6 +301,18 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
         />
       )}
 
+      {forslag && orgId && detalj && (
+        <ForslagModal
+          orgId={orgId}
+          budsjett={detalj}
+          onLukk={() => setForslag(false)}
+          onBrukt={async (antall) => {
+            setMelding(`Oppdaterte ${antall} ${antall === 1 ? "linje" : "linjer"} fra forslaget.`);
+            await oppdater();
+          }}
+        />
+      )}
+
       {linje && orgId && detalj && (
         <LinjeModal
           linje={linje === "ny" ? null : linje}
@@ -412,6 +430,144 @@ function LinjeRad({
         )}
       </span>
     </div>
+  );
+}
+
+/**
+ * Forslaget fra avtaler og vedlikeholdsplan. Styret ser grunnlaget per linje, velger
+ * prisjustering, retter enkeltbeløp, og skriver først når de trykker «Bruk». Linjer uten
+ * kilder står som de er — forslaget rører aldri noe det ikke har grunnlag for.
+ */
+function ForslagModal({
+  orgId,
+  budsjett,
+  onLukk,
+  onBrukt,
+}: {
+  orgId: string;
+  budsjett: BudsjettDetalj;
+  onLukk: () => void;
+  onBrukt: (antall: number) => Promise<void>;
+}) {
+  const [prosent, setProsent] = useState("3");
+  const [data, setData] = useState<Budsjettforslag | null>(null);
+  const [valgt, setValgt] = useState<Record<string, string>>({});
+  const [feil, setFeil] = useState<string | null>(null);
+  const { sender, send } = useSending(onLukk);
+
+  useEffect(() => {
+    const p = Number(prosent.replace(",", "."));
+    if (!Number.isFinite(p)) return;
+    let aktiv = true;
+    okonomi
+      .forslag(orgId, budsjett.id, p)
+      .then((f) => {
+        if (!aktiv) return;
+        setData(f);
+        setValgt(Object.fromEntries(f.linjer.filter((l) => l.forslag !== null).map((l) => [l.lineId, tilKronerTekst(l.forslag!)])));
+      })
+      .catch((e) => aktiv && setFeil(e instanceof Error ? e.message : "Kunne ikke hente forslaget"));
+    return () => {
+      aktiv = false;
+    };
+  }, [orgId, budsjett.id, prosent]);
+
+  const medKilder = data?.linjer.filter((l) => l.kilder.length > 0) ?? [];
+  const sumForslag = medKilder.reduce((s, l) => s + (tilOre(valgt[l.lineId] ?? "") ?? 0), 0);
+  const sumNaa = medKilder.reduce((s, l) => s + l.naavaerende, 0);
+
+  return (
+    <Modal tittel={`Forslag til budsjett ${budsjett.year}`} onLukk={onLukk} bredde={860}>
+      <Feil melding={feil} />
+      <div className="ok-handlinger" style={{ justifyContent: "space-between" }}>
+        <p className="ok-tekst" style={{ padding: 0, flex: 1 }}>
+          Kostnadslinjene fylles fra avtalene (etter konto og antall måneder avtalen gjelder i {budsjett.year}) og
+          vedlikeholdsplanens tiltak for året. Fjorårets tall står til sammenligning.
+        </p>
+        <label className="list-meta" style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          Justering
+          <input className="input ok-belop-inline" style={{ width: "70px" }} inputMode="decimal" value={prosent} onChange={(e) => setProsent(e.target.value)} aria-label="Justering i prosent" />
+          %
+        </label>
+      </div>
+
+      {!data ? (
+        <Tom tekst="Henter …" />
+      ) : medKilder.length === 0 ? (
+        <Tom tekst="Ingen avtaler eller vedlikeholdstiltak treffer budsjettlinjene. Sett konto på avtalene under Kontrakter, så dukker de opp her." />
+      ) : (
+        <div className="ok-forslag">
+          <div className="ok-forslag-hode" aria-hidden>
+            <span>Linje og grunnlag</span>
+            <span className="ok-belop-celle">Nå</span>
+            <span className="ok-belop-celle ok-forslag-fjor">I fjor / faktisk</span>
+            <span className="ok-belop-celle">Forslag</span>
+          </div>
+          {medKilder.map((l) => (
+            <div key={l.lineId} className="ok-forslag-rad">
+              <div style={{ minWidth: 0 }}>
+                <div className="list-tittel">{l.name}</div>
+                {l.kilder.map((k, i) => (
+                  <div key={i} className="list-meta">
+                    {k.slag === "vedlikehold" ? "Vedlikeholdsplan: " : ""}
+                    {k.navn} · {kroner(k.belop)}
+                    {k.maaneder < 12 ? ` (${k.maaneder} mnd)` : ""}
+                  </div>
+                ))}
+              </div>
+              <span className="ok-belop-celle list-meta">{kroner(l.naavaerende)}</span>
+              <span className="ok-belop-celle list-meta ok-forslag-fjor">
+                {l.fjoraretsBudsjett !== null ? `${kroner(l.fjoraretsBudsjett)} / ${kroner(l.fjoraretsFaktisk)}` : "—"}
+              </span>
+              <span className="ok-belop-celle">
+                <input
+                  className="input ok-belop-inline"
+                  inputMode="decimal"
+                  aria-label={`Forslag for ${l.name}`}
+                  value={valgt[l.lineId] ?? ""}
+                  onChange={(e) => setValgt((v) => ({ ...v, [l.lineId]: e.target.value }))}
+                />
+              </span>
+            </div>
+          ))}
+          <div className="ok-forslag-rad ok-linje-sum">
+            <span className="list-tittel">Sum linjer med grunnlag</span>
+            <span className="ok-belop-celle">{kroner(sumNaa)}</span>
+            <span className="ok-forslag-fjor" />
+            <span className="ok-belop-celle">{kroner(sumForslag)}</span>
+          </div>
+        </div>
+      )}
+
+      {data && data.utenom.length > 0 && (
+        <div>
+          <div className="field-label">Ikke med i forslaget</div>
+          {data.utenom.map((a) => (
+            <div key={a.id} className="list-meta">
+              {a.title} — {a.grunn}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Knapperad
+        onAvbryt={onLukk}
+        sender={sender}
+        deaktivert={medKilder.length === 0}
+        sendEtikett="Bruk forslagene"
+        onSend={() =>
+          void send(async () => {
+            const linjer = medKilder.map((l) => {
+              const ore = tilOre(valgt[l.lineId] ?? "");
+              if (ore === null || ore < 0) throw new Error(`Ugyldig beløp for «${l.name}»`);
+              return { lineId: l.lineId, amount: ore };
+            });
+            await okonomi.brukForslag(orgId, budsjett.id, linjer);
+            await onBrukt(linjer.filter((l) => l.amount !== medKilder.find((m) => m.lineId === l.lineId)!.naavaerende).length);
+          })
+        }
+      />
+    </Modal>
   );
 }
 
