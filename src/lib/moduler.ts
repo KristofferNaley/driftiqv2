@@ -28,6 +28,7 @@ export const ALLE_MODULER = [
   "rutiner",
   "leverandorer",
   "brukere",
+  "okonomi",
 ] as const;
 
 export type ModulNokkel = (typeof ALLE_MODULER)[number];
@@ -35,6 +36,11 @@ export type ModulNokkel = (typeof ALLE_MODULER)[number];
 /**
  * Moduler som IKKE skal dukke opp automatisk hos eksisterende kunder — de uten en egen
  * lagret modulliste. Tilsvarer `defaultOff: true` i v1s register.
+ *
+ * `okonomi` står med vilje IKKE her: den er grunnpakke (avklart 03.09.2026, se
+ * docs/fiken.md «Posisjonering») og skal være på for alle som ikke har valgt den bort.
+ * Kunder med en eksplisitt lagret modulliste får den ikke automatisk — de må få den lagt
+ * til i plattformpanelet.
  */
 export const AV_SOM_STANDARD: ReadonlySet<ModulNokkel> = new Set([
   "internkontroll",
@@ -113,6 +119,7 @@ export const MENY: Readonly<Partial<Record<ModulNokkel, Menypunkt>>> = {
   dokumentarkiv: { sti: "/dokumentarkiv", etikett: "Dokumentarkiv", gruppe: "Arkiv og avtaler", ikon: "FolderOpen" },
   parkering: { sti: "/parkering", etikett: "Parkering", gruppe: "Arkiv og avtaler", ikon: "SquareParking" },
 
+  okonomi: { sti: "/okonomi", etikett: "Økonomi", gruppe: "Administrasjon", ikon: "Coins" },
   leverandorer: { sti: "/leverandorer", etikett: "Leverandører", gruppe: "Administrasjon", ikon: "Truck" },
   brukere: { sti: "/brukere", etikett: "Brukere", gruppe: "Administrasjon", ikon: "Users" },
 };

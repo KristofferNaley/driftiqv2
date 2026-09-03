@@ -56,6 +56,12 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Kundens webhooks (v2-tillegg). URL-ene kan avsløre interne kanalnavn og gir
   // skrivetilgang til kundens chat — en annen kunde skal aldri kunne lese eller endre dem.
   "org_webhooks",
+  // Økonomimodulen (v2-tillegg, se docs/fiken.md). Alle har egen org_id — også
+  // barnetabellene (budsjettlinjer, kjøringslinjer) fikk den med vilje, så isolasjonen
+  // ikke avhenger av en EXISTS mot forelderen: eierregisteret er personopplysninger og
+  // fakturaene er regnskap, begge mer sensitive enn resten av appen.
+  "unit_owners", "budgets", "budget_lines", "unit_fee_rates",
+  "fee_runs", "fee_run_lines", "supplier_invoices",
 ];
 
 /**

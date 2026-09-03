@@ -88,6 +88,8 @@ export const FILTABELLER: readonly string[] = [
   "unit_work_documents",
   "completion_photos",
   "deviation_attachments",
+  // Vedlegget på leverandørfakturaen (økonomimodulen).
+  "supplier_invoices",
 ];
 
 // ---------------------------------------------------------------------------------------

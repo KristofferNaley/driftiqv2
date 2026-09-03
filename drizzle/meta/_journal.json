@@ -351,6 +351,13 @@
       "when": 1787414033491,
       "tag": "0049_watery_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788468752169,
+      "tag": "0050_okonomi",
+      "breakpoints": true
     }
   ]
 }

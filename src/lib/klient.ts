@@ -633,6 +633,167 @@ export const enheter = {
     api.send<{ opprettet: number; hoppetOver: number }>(org(o, "/units/import"), { rader }),
 };
 
+// ---------------------------------------------------------------------------------------
+// Økonomi. Alle beløp er ØRE (heltall) — se lib/okonomiregler.ts for konverteringen.
+// ---------------------------------------------------------------------------------------
+
+export type Eier = {
+  id: string; unitId: string; name: string; email: string | null; phone: string | null;
+  invoiceAddress: string | null; ownerFrom: string; ownerTo: string | null; note: string | null;
+};
+
+export type Seksjon = {
+  unitId: string; navn: string; andelsnr: string | null; leilighetsnr: string | null;
+  oppgang: string | null; arealM2: string | null; brokTeller: number | null; brokNevner: number | null;
+  eier: Eier | null; antallTidligere: number;
+  /** Gjeldende sats per måned i øre, eller null. */
+  satsMnd: number | null;
+};
+
+export type Eierregister = {
+  seksjoner: Seksjon[]; brokSum: number; utenBrok: number; utenEier: number; satsSumMnd: number;
+};
+
+export type Budsjettsummer = { felleskost: number; inntekter: number; kostnader: number; resultat: number };
+
+export type Budsjett = {
+  id: string; year: number; status: string; adoptedDate: string | null; note: string | null;
+  createdAt: string; summer: Budsjettsummer; antallLinjer: number;
+};
+
+export type Budsjettlinje = {
+  id: string; budgetId: string; kind: string; name: string; accountFrom: number | null;
+  accountTo: number | null; amount: number; note: string | null; sortOrder: number;
+  /** Godkjente og betalte fakturaer knyttet til linja, i øre. */
+  faktisk: number;
+};
+
+export type BudsjettDetalj = Omit<Budsjett, "antallLinjer"> & {
+  linjer: Budsjettlinje[]; faktiskKostnader: number;
+};
+
+export type Sats = {
+  id: string; unitId: string; budgetId: string | null; monthlyAmount: number;
+  validFrom: string; source: string; note: string | null;
+};
+
+export type Satsoversikt = {
+  dato: string;
+  rader: Array<{
+    unitId: string; navn: string; brokTeller: number | null; brokNevner: number | null;
+    eierNavn: string | null; sats: Sats | null; alle: Sats[];
+  }>;
+  maanedligSum: number; utenSats: number;
+};
+
+export type Kjoring = {
+  id: string; periodStart: string; periodEnd: string; status: string; dueDay: number;
+  totalAmount: number; lineCount: number; missingOwners: number; createdBy: string;
+  note: string | null; createdAt: string;
+};
+
+export type KjoringDetalj = Kjoring & {
+  linjer: Array<{
+    id: string; unitId: string; ownerId: string | null; ownerName: string | null; month: string;
+    dueDate: string; amount: number; orderReference: string; externalRef: string | null;
+    enhetNavn: string; andelsnr: string | null;
+  }>;
+};
+
+export type Faktura = {
+  id: string; vendorId: string | null; supplierName: string | null; contractId: string | null;
+  budgetLineId: string | null; invoiceNumber: string | null; invoiceDate: string;
+  dueDate: string | null; amount: number; kid: string | null; description: string | null;
+  note: string | null; status: string; registeredBy: string; decidedBy: string | null;
+  decidedAt: string | null; decisionNote: string | null; paidDate: string | null;
+  fileName: string | null; fileOriginalName: string | null; fileSize: number | null;
+  createdAt: string;
+  leverandorNavn: string; budsjettlinjeNavn: string | null; budsjettAar: number | null;
+  kontraktTittel: string | null; forfalt: boolean;
+};
+
+export type Okonomioversikt = {
+  aar: number;
+  budsjett: {
+    id: string; year: number; status: string; adoptedDate: string | null;
+    summer: Budsjettsummer; faktiskKostnader: number;
+    linjer: Array<{ id: string; name: string; amount: number; faktisk: number }>;
+  } | null;
+  nesteBudsjett: Budsjett | null;
+  fakturaer: {
+    tilGodkjenning: { antall: number; sum: number };
+    forfalte: { antall: number; sum: number };
+    godkjentIkkeBetalt: { antall: number; sum: number };
+    betaltIAar: { antall: number; sum: number };
+    nyeste: Faktura[];
+  };
+  eiere: { seksjoner: number; utenEier: number; utenBrok: number; brokSum: number };
+  satser: { maanedligSum: number; utenSats: number; aarligSum: number };
+  sisteKjoring: Kjoring | null;
+};
+
+export const okonomi = {
+  oversikt: (o: string) => api.hent<Okonomioversikt>(org(o, "/okonomi/oversikt")),
+
+  eiere: (o: string) => api.hent<Eierregister>(org(o, "/okonomi/eiere")),
+  eierhistorikk: (o: string, unitId: string) => api.hent<Eier[]>(org(o, `/okonomi/enheter/${unitId}`)),
+  registrerEier: (o: string, d: unknown) => api.send<Eier>(org(o, "/okonomi/eiere"), d),
+  endreEier: (o: string, id: string, d: unknown) => api.endre<Eier>(org(o, `/okonomi/eiere/${id}`), d),
+  slettEier: (o: string, id: string) => api.slett(org(o, `/okonomi/eiere/${id}`)),
+  settBrok: (o: string, unitId: string, d: { teller: number | null; nevner: number | null }) =>
+    api.endre(org(o, `/okonomi/enheter/${unitId}`), d),
+
+  budsjetter: (o: string) => api.hent<Budsjett[]>(org(o, "/okonomi/budsjett")),
+  budsjett: (o: string, id: string) => api.hent<BudsjettDetalj>(org(o, `/okonomi/budsjett/${id}`)),
+  nyttBudsjett: (o: string, d: unknown) => api.send<BudsjettDetalj>(org(o, "/okonomi/budsjett"), d),
+  endreBudsjett: (o: string, id: string, d: unknown) => api.endre<BudsjettDetalj>(org(o, `/okonomi/budsjett/${id}`), d),
+  slettBudsjett: (o: string, id: string) => api.slett(org(o, `/okonomi/budsjett/${id}`)),
+  vedta: (o: string, id: string, d: { adoptedDate: string }) =>
+    api.send<BudsjettDetalj>(org(o, `/okonomi/budsjett/${id}/vedtak`), d),
+  gjenapne: (o: string, id: string) => api.slett(org(o, `/okonomi/budsjett/${id}/vedtak`)),
+  beregnSatser: (o: string, id: string) =>
+    api.send<{ beregnet: number; overstyrt: number; utenBrok: number; validFrom: string }>(
+      org(o, `/okonomi/budsjett/${id}/satser`), {},
+    ),
+  nyLinje: (o: string, id: string, d: unknown) => api.send<Budsjettlinje>(org(o, `/okonomi/budsjett/${id}/linjer`), d),
+  endreLinje: (o: string, id: string, lid: string, d: unknown) =>
+    api.endre<Budsjettlinje>(org(o, `/okonomi/budsjett/${id}/linjer/${lid}`), d),
+  slettLinje: (o: string, id: string, lid: string) => api.slett(org(o, `/okonomi/budsjett/${id}/linjer/${lid}`)),
+
+  satser: (o: string, dato?: string) =>
+    api.hent<Satsoversikt>(org(o, `/okonomi/satser${dato ? `?dato=${dato}` : ""}`)),
+  settSats: (o: string, unitId: string, d: unknown) => api.endre<Sats>(org(o, `/okonomi/satser/${unitId}`), d),
+  slettSats: (o: string, rateId: string) => api.slett(org(o, `/okonomi/satser/rad/${rateId}`)),
+
+  kjoringer: (o: string) => api.hent<Kjoring[]>(org(o, "/okonomi/kjoringer")),
+  kjoring: (o: string, id: string) => api.hent<KjoringDetalj>(org(o, `/okonomi/kjoringer/${id}`)),
+  nyKjoring: (o: string, d: unknown) => api.send<KjoringDetalj>(org(o, "/okonomi/kjoringer"), d),
+  annullerKjoring: (o: string, id: string) => api.slett(org(o, `/okonomi/kjoringer/${id}`)),
+  /** CSV-en lenkes direkte (`<a href>`) — ruta svarer med fil, ikke JSON. */
+  eksportUrl: (o: string, id: string) => `/api${org(o, `/okonomi/kjoringer/${id}/eksport`)}`,
+
+  fakturaer: (o: string, filter: { status?: string; aar?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (filter.status) q.set("status", filter.status);
+    if (filter.aar) q.set("aar", String(filter.aar));
+    const s = q.toString();
+    return api.hent<Faktura[]>(org(o, `/okonomi/fakturaer${s ? `?${s}` : ""}`));
+  },
+  faktura: (o: string, id: string) => api.hent<Faktura>(org(o, `/okonomi/fakturaer/${id}`)),
+  nyFaktura: (o: string, d: unknown) => api.send<Faktura>(org(o, "/okonomi/fakturaer"), d),
+  endreFaktura: (o: string, id: string, d: unknown) => api.endre<Faktura>(org(o, `/okonomi/fakturaer/${id}`), d),
+  slettFaktura: (o: string, id: string) => api.slett(org(o, `/okonomi/fakturaer/${id}`)),
+  godkjenn: (o: string, id: string, d: { note?: string | null }) =>
+    api.send<Faktura>(org(o, `/okonomi/fakturaer/${id}/godkjenn`), d),
+  gjenapneFaktura: (o: string, id: string) => api.slett(org(o, `/okonomi/fakturaer/${id}/godkjenn`)),
+  avvis: (o: string, id: string, d: { note: string }) => api.send<Faktura>(org(o, `/okonomi/fakturaer/${id}/avvis`), d),
+  betalt: (o: string, id: string, d: { paidDate: string }) =>
+    api.send<Faktura>(org(o, `/okonomi/fakturaer/${id}/betalt`), d),
+  lastOppFakturafil: (o: string, id: string, f: FormData) =>
+    api.lastOpp<Faktura>(org(o, `/okonomi/fakturaer/${id}/fil`), f),
+  slettFakturafil: (o: string, id: string) => api.slett(org(o, `/okonomi/fakturaer/${id}/fil`)),
+};
+
 export type Dashbord = {
   banner: boolean;
   moduler: Record<string, boolean>;

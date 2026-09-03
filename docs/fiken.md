@@ -375,14 +375,52 @@ Følger mønstrene i CLAUDE.md; det som er spesielt for Fiken står i kursiv.
 
 ## Foreslått rekkefølge (revidert 03.09.2026)
 
-1. **Økonomi uten Fiken**: brøk og eier på seksjon, budsjett med kontointervall, sats
-   per seksjon, eksport av fakturagrunnlag. Ingen ekstern avhengighet, selgbart alene.
+1. **Økonomi uten Fiken** — **bygget 03.09.2026** (se «Steg 1 slik det ble» under): brøk
+   og eier på seksjon, budsjett med kontointervall, sats per seksjon, eksport av
+   fakturagrunnlag, pluss fakturagodkjenning. Ingen ekstern avhengighet, selgbart alene.
 2. **Fiken-kobling, lesing**: OAuth, tokenlagring, synk av `purchases` → «faktisk» mot
    budsjettlinjene, og leverandørkortet. Beviser kobling og synk med lav risiko.
 3. **Felleskostnader via Fiken**: halvårskjøringen oppretter og sender fakturaer,
    betalingsstatus tilbake. Krever kantene over. Søknad om produksjonsstatus hos Fiken
    sendes når dette er klikkbart i test.
 4. **Innboks fra leverandørportalen** når portalen finnes.
+
+## Steg 1 slik det ble (03.09.2026)
+
+Modulen `okonomi` (`/okonomi`, gruppe «Administrasjon», PÅ som standard) med seks faner —
+rekkefølgen og layoutintensjonen er fra mockupen «DriftIQ Økonomi» samme dag, minus alt
+som krever regnskapskobling (bankinnskudd, innbetalinger, purring, synklogg):
+
+| Fane | Hva | Nivå for skriving |
+|---|---|---|
+| Oversikt | Nøkkeltall, budsjett mot faktisk med forventet-merke, «trenger oppfølging», fakturaer til godkjenning | — |
+| Seksjoner og eiere | `unit_owners` med historikk; eierskifte som handling (forrige får `owner_to`); brøk (`units.brok_teller/nevner`) rett i raden; BRA og gjeldende sats | `admin` (personopplysninger) |
+| Budsjett | `budgets`/`budget_lines` per år, NS 4102-intervaller, standardlinjer eller kopi av i fjor, vedtak låser, «Balanser» setter felleskost = kostnader − andre inntekter, «Beregn satser» | `admin` |
+| Felleskostnader | `unit_fee_rates` (beregnet/overstyrt, gyldig-fra), halvårskjøringer `fee_runs`/`fee_run_lines` med eier per måned, `orderReference = <unitId>:<ÅÅÅÅ-MM>`, CSV-eksport | `admin` |
+| Fakturaer | `supplier_invoices`: mottatt → godkjent/avvist → betalt, vedlegg (kvote via `FILTABELLER`), kobling til budsjettlinje = «faktisk» | registrere/betalt `redigering`, beslutning `admin` |
+| Integrasjon | `Kommer`-paneler for Fiken og Tripletex, og hva som virker uten kobling | — |
+
+Det som er avgjort i koden og ikke i notatet over:
+
+- **Alle beløp i modulen er heltall i øre** (`amount`, `monthly_amount`), i motsetning til
+  resten av appen (hele kroner). `lib/okonomiregler.ts` eier konverteringen (`tilOre`,
+  `kroner`) og satsregelen (`beregnSats` = felleskost × brøk / 12, rundet til hele kroner).
+- Budsjettlinjer har `kind` = `felleskost` | `inntekt` | `kostnad`. Felleskost-linja er
+  beløpet som fordeles etter brøk; konto 3601 ligger som standard, mva finnes ikke.
+- «Faktisk» kommer fra godkjente/betalte leverandørfakturaer knyttet til en budsjettlinje —
+  ikke fra kontointervallet. Intervallet er der for adapteret (kjøp fra Fiken/Tripletex
+  matches på konto når koblingen kommer).
+- En kjøring feiler høyt hvis en seksjon mangler sats; seksjoner uten eier får linje uten
+  mottaker og telles (`missing_owners`). Én aktiv kjøring per halvår; annullert kan kjøres om.
+- Ingen Fiken-felt i tabellene; `fee_run_lines.external_ref` er plassen adapteret skriver
+  fakturaens id tilbake i, uansett system.
+- Alt med revisjonsverdi (eierskifte, vedtak, satsberegning, kjøring, eksport, godkjenning,
+  avvisning, betalt) logges i hendelsesloggen med `module = "okonomi"`.
+- Tester: `tests/okonomi.test.ts` (regler, eierskifte, låsing, overstyrt sats, kjøring,
+  CSV, statusoverganger, krysstest mellom orger). RLS-dekning via registeret.
+
+Åpent etter steg 1: enhetsregisteret under Innstillinger viser ikke brøken (den redigeres
+bare i økonomifanen); ingen dashbord-widget; ingen kundevendt e-post ved godkjenning.
 
 ## Utvikling og testing uten å røre prod
 

@@ -1,4 +1,4 @@
-import { numeric, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, numeric, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 /**
@@ -10,6 +10,11 @@ import { organizations } from "./organizations";
  * konkurrerer med forretningsførerens andelsregister, ikke må holdes à jour ved eierskifte,
  * og ikke tilfører personopplysninger som ville truffet vedlegg A i databehandleravtalen.
  * Legges eiernavn inn, faller alle tre bort samtidig.
+ *
+ * **Avklart 03.09.2026 (økonomimodulen):** eiere finnes nå likevel — men i EGEN tabell,
+ * `unit_owners` (`schema/okonomi.ts`), med historikk og databehandleravtale, ikke som
+ * kolonner her. Denne tabellen er fortsatt bare fysiske fakta pluss sameiebrøken, som er
+ * en egenskap ved seksjonen (tinglyst), ikke ved eieren.
  *
  * `andelsnr` er tekst og ikke heltall: sameier bruker seksjonsnummer, og noen har
  * bokstavsuffiks. Nullbar fordi sameier uten andelsnummer identifiserer enheten med
@@ -39,6 +44,13 @@ export const units = pgTable("units", {
   oppgang: varchar("oppgang"),
   etasje: varchar("etasje"),
   arealM2: numeric("areal_m2", { precision: 10, scale: 2 }),
+  /**
+   * Sameiebrøken, teller/nevner (f.eks. 125/1000). Grunnlaget for fordeling av
+   * felleskostnader — se `lib/okonomiregler.ts`. Begge NULL når brøken ikke er registrert;
+   * en seksjon uten brøk får ingen beregnet sats, og det vises som en mangel, ikke som 0.
+   */
+  brokTeller: integer("brok_teller"),
+  brokNevner: integer("brok_nevner"),
   /**
    * Bløt sletting. En enhet med avvikshistorikk skal aldri kunne forsvinne med kaskade — da
    * mistes nettopp det som gjør registeret verdt å ha: at gjentakende fukt i samme leilighet

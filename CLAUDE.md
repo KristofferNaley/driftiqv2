@@ -364,6 +364,10 @@ komponenter — endres logikken, må begge med.
 - **En ny env-variabel må kobles gjennom `docker-compose.yaml`.** AI-rådgiveren feilet
   med 503 fordi `ANTHROPIC_API_KEY` sto i `.env` men ikke i compose — variabelen fantes
   ikke i containermiljøet uansett.
+- **Økonomimodulen lagrer beløp i ØRE** (`budget_lines.amount`, `supplier_invoices.amount`,
+  `unit_fee_rates.monthly_amount`); resten av appen bruker hele kroner (`contracts.annualSum`,
+  `parking_leases.pricePerMonth`). Konverteringen bor i `lib/okonomiregler.ts` (`tilOre`/
+  `kroner`) — gang aldri med 100 andre steder. Se `docs/fiken.md` «Steg 1 slik det ble».
 - `timestamp` uten sone leses av node-postgres som lokaltid — auth-tabellene er lagt om
   til `timestamptz`; bruk det på nye tidskolonner.
 - **Liste og detalj skal ha like joins.** `hentOppgaver` joinet leverandør, `hentOppgave`
