@@ -50,7 +50,7 @@ fortsatt ulest fra ekte svar (krever en faktisk EHF-mottaker).
 
 | Funn | Konsekvens |
 |---|---|
-| **`uuid` på faktura er IKKE idempotent.** Samme uuid sendt to ganger ga to fakturaer (10022/10023, kreditert). Utkast med samme `uuid` stoppes (ett utkast), men med **500 «duplikatfeil»**, ikke 409 — brukbart som siste skanse, ikke som design. | Idempotensen må ligge i DriftIQ: sett `orderReference = <units.id>:<ÅÅÅÅ-MM>` på hver faktura, slå opp `GET /invoices?orderReference=` før oppretting, og lagre Fiken-id-en lokalt i samme transaksjon. |
+| **`uuid` på faktura er IKKE idempotent.** Samme uuid sendt to ganger ga to fakturaer (10021/10022, kreditert). Utkast med samme `uuid` stoppes (ett utkast), men med **500 «duplikatfeil»**, ikke 409 — brukbart som siste skanse, ikke som design. | Idempotensen må ligge i DriftIQ: sett `orderReference = <units.id>:<ÅÅÅÅ-MM>` på hver faktura, slå opp `GET /invoices?orderReference=` før oppretting, og lagre Fiken-id-en lokalt i samme transaksjon. |
 | **Regnskapsår må finnes i Fiken.** Faktura datert 2027 ga 400 «Fiscal year 2027 is invalid», og API-et har ingen rute for å opprette regnskapsår. | Halvårskjøringen 1.1 forutsetter at styret har åpnet nytt år i Fiken. DriftIQ må fange denne 400-en og si det i klartekst, før noe er sendt. |
 | **Tellere må initialiseres**: både `invoices/counter` og `creditNotes/counter` gir 409 i et foretak som aldri har fakturert/kreditert. | Fang 409, kall counter, prøv igjen. Ekte sameier har som regel fakturert før, men ikke nødvendigvis kreditert. |
 | **Kreditnota kan ikke dateres før fakturaen**, men fremtidig dato er OK (kreditnota datert 01.12 på faktura datert 01.12 gikk). Fakturaen får `associatedCreditNotes`, `sale.settled = true`, `outstandingBalance = 0`. | Eierskifte midt i halvåret: krediter resterende fakturaer med `issueDate` = fakturaens `issueDate`. |
@@ -279,6 +279,65 @@ selvadministrerte. Segmentproblemet (én selvadministrert kunde i dag) blir da m
   Fikens `uuid` hjelper ikke (testet — se funnene), så nøkkelen er `orderReference` per
   seksjon+måned med oppslag før oppretting, og lokal lagring av Fiken-id i samme
   transaksjon.
+
+## Del 2: DriftIQ fakturerer sine egne kunder fra plattformpanelet
+
+*Lagt til 03.09.2026.* Et annet forhold til Fiken enn resten av notatet: her er DriftIQ
+(selskapet) Fiken-kunden, og kundene i plattformpanelet er kontaktene. Målet er at
+kundedata og kontrakt flyter fra panelet til Fiken automatisk, at faktura kan sendes
+fra panelet, og at ingenting kopieres for hånd — mens panelet forblir stedet kontrollen
+ligger.
+
+**Auth er enklere her:** ett foretak (DriftIQs eget), én personlig API-nøkkel er innenfor
+Fikens vilkår («Fiken customers that wish to integrate their own solutions»). Ingen
+OAuth, ingen tokenlagring per org — nøkkelen er en plattform-env (`FIKEN_PLATTFORM_NOKKEL`,
+`FIKEN_PLATTFORM_SLUG`), koblet gjennom `docker-compose.yaml`. Merk: DriftIQ AS finnes
+ikke ennå (Trodlaskar Holding AS → DriftIQ AS); foretaket i Fiken må være det som
+faktisk fakturerer.
+
+**Datamodell:** `organizations` er allerede master (navn, `orgNr`, `contactEmail`,
+`unitCount`), og `platform_contracts` har alt en faktura trenger (`baseFee`, `modules` med
+pris, `discountPercent`, start/slutt). Nytt: `fiken_contact_id` og `fiken_synced_at` på
+organisasjonen (UNNTATT-tabell, plattformlaget), og en `platform_invoices`-tabell
+(org, kontrakt, periode, Fiken-`invoiceId`/-nummer, beløp, `orderReference`, status lest
+tilbake). Alt i `withoutRls("plattformpanel")` via `plattformRute` — ingen org-kontekst,
+og det er riktig her fordi tabellene er plattformens egne.
+
+**Flyt:**
+
+1. Kunde opprettes/endres i panelet → `etterCommit`: opprett eller oppdater Fiken-kontakt
+   (`customer: true`, `organizationNumber` = orgnr, `memberNumberString` = `organizations.id`,
+   `daysUntilInvoicingDueDate` = 30). Oppslag på `memberNumberString` før oppretting, så
+   kontakten aldri dobles.
+2. «Send faktura» på kundekortet: linjer bygges av kontrakten — grunnpakke som én linje
+   (`grunnpakkeSpesifisert` kan gi trinnene som beskrivelse), én linje per tilleggsmodul,
+   `discount` = `discountPercent` per linje. `orderReference = <orgId>:<periode>`,
+   oppslag først (idempotens, se funnene). Sendes med `POST /invoices/send`
+   (`method: auto` — EHF til de som kan ta imot, ellers e-post). Fakturaen lagres i
+   `platform_invoices` og hendelsesloggen.
+3. Bakgrunnsjobb daglig: `GET /invoices?settled=false` mot foretaket, oppdater status —
+   panelet viser betalt/forfalt per kunde uten at noen logger inn i Fiken.
+
+**Testet 03.09.2026** i et eget demoforetak som spiller DriftIQ («Fiken-demo - Alvorlig
+lys AS», mva-registrert): «DEMO - Sammen Sameie» opprettet som kunde med
+`memberNumberString` = org-id (oppslag på id virker), faktura 1002 på grunnpakken alene
+(8 000 + 25 % mva = 10 000 kr, konto 3000, `orderReference = <orgId>:2026`), sendt på
+e-post. Tre funn underveis:
+
+- **Faktura med 100 % rabatt avvises** («total gross amount must be positive»). Begge
+  demoavtalene i panelet har 100 % rabatt — gratisavtaler må hoppes over, ikke faktureres.
+- **`orderReference`-oppslaget må se bort fra krediterte fakturaer** (de har
+  `associatedCreditNotes`), ellers stopper en ny faktura for samme periode etter en
+  kreditering. Første forsøk (1001, alle moduler) ble kreditert og erstattet nettopp slik.
+- Teller for faktura *og* kreditnota måtte initialiseres også her.
+
+Det første forsøket havnet i sameiets foretak (Venstre sky) og er kreditert der og
+kontakten deaktivert — en påminnelse om at Del 1 og Del 2 aldri skal dele foretak.
+
+**Det som skiller Del 2 fra sameie-siden:** mva. DriftIQ AS er (blir) mva-registrert, så
+linjene skal ha `vatType: HIGH` og inntektskonto 3000; demoforetaket er nå
+uregistrert, så testen brukte `NONE`/3900. Konto og mva-type hører hjemme i
+prismodellen (`pricing_config`), ikke hardkodet.
 
 ## Hvordan det må bygges i v2
 
