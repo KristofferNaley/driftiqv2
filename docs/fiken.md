@@ -343,10 +343,10 @@ prismodellen (`pricing_config`), ikke hardkodet.
 
 Følger mønstrene i CLAUDE.md; det som er spesielt for Fiken står i kursiv.
 
-- **Modul** `okonomi` i `ALLE_MODULER` + `MENY`, **PÅ som standard** (ikke i
-  `AV_SOM_STANDARD`; grunnpakke, se posisjonering) — merk kommentaren i `moduler.ts` om at
-  «av som standard» og «tilleggsmodul» i dag er samme sett, så det er første modul som
-  skiller dem. `modul: "okonomi"` på alle ruter uansett, så en org kan slå den av.
+- **Modul** `okonomi` i `ALLE_MODULER` + `MENY`. **Av som standard** (besluttet
+  03.09.2026 etter at den først var på): den slås på per kunde i plattformpanelet, men er
+  grunnpakke uten egen pris — `GRATIS_MEN_AV` i `moduler.ts` holder den utenfor
+  `TILLEGGSMODULER`. `modul: "okonomi"` på alle ruter.
 - **Tabeller**: `fiken_connections` (org-eid, `DIREKTE_TABELLER`): `companySlug`,
   `companyName`, kryptert `accessToken`/`refreshToken`, `tokenExpiresAt`, `scope`
   (lese/skrive), `connectedBy`, `lastSyncAt`, `lastSyncError`. Én rad per org — *aldri
@@ -387,7 +387,8 @@ Følger mønstrene i CLAUDE.md; det som er spesielt for Fiken står i kursiv.
 
 ## Steg 1 slik det ble (03.09.2026)
 
-Modulen `okonomi` (`/okonomi`, gruppe «Administrasjon», PÅ som standard) med seks faner —
+Modulen `okonomi` (`/okonomi`, gruppe «Administrasjon», av som standard, slås på i
+panelet) med seks faner —
 rekkefølgen og layoutintensjonen er fra mockupen «DriftIQ Økonomi» samme dag, minus alt
 som krever regnskapskobling (bankinnskudd, innbetalinger, purring, synklogg):
 

@@ -37,10 +37,9 @@ export type ModulNokkel = (typeof ALLE_MODULER)[number];
  * Moduler som IKKE skal dukke opp automatisk hos eksisterende kunder — de uten en egen
  * lagret modulliste. Tilsvarer `defaultOff: true` i v1s register.
  *
- * `okonomi` står med vilje IKKE her: den er grunnpakke (avklart 03.09.2026, se
- * docs/fiken.md «Posisjonering») og skal være på for alle som ikke har valgt den bort.
- * Kunder med en eksplisitt lagret modulliste får den ikke automatisk — de må få den lagt
- * til i plattformpanelet.
+ * `okonomi` står her (besluttet 03.09.2026): modulen slås på per kunde i plattformpanelet,
+ * så ingen får eierregister og fakturagodkjenning i menyen uten at noen har valgt det. Den
+ * er likevel GRUNNPAKKE (docs/fiken.md «Posisjonering») — se `GRATIS_MEN_AV` under.
  */
 export const AV_SOM_STANDARD: ReadonlySet<ModulNokkel> = new Set([
   "internkontroll",
@@ -51,7 +50,15 @@ export const AV_SOM_STANDARD: ReadonlySet<ModulNokkel> = new Set([
   "vedlikehold",
   "ai_radgiver",
   "rutiner",
+  "okonomi",
 ]);
+
+/**
+ * Av som standard, men uten egen pris: en del av grunnpakken som aktiveres når kunden vil.
+ * Det er skillet kommentaren på `TILLEGGSMODULER` varslet om — «av som standard» og
+ * «tilleggsmodul» er ikke lenger samme sett.
+ */
+export const GRATIS_MEN_AV: ReadonlySet<ModulNokkel> = new Set(["okonomi"]);
 
 export const PA_SOM_STANDARD: readonly ModulNokkel[] = ALLE_MODULER.filter(
   (k) => !AV_SOM_STANDARD.has(k),
@@ -60,13 +67,13 @@ export const PA_SOM_STANDARD: readonly ModulNokkel[] = ALLE_MODULER.filter(
 /**
  * Modulene som prises og selges hver for seg — grunnpakken dekker resten.
  *
- * Utledet av `AV_SOM_STANDARD` fordi de to i dag er samme sett, men navnet er ikke det
- * samme spørsmålet: «av som standard» handler om hva en eksisterende kunde får uten å be om
- * det, «tilleggsmodul» om hva som står på fakturaen. Skulle en modul bli standard uten å bli
- * gratis, er det HER lista må skilles ut.
+ * Utledet av `AV_SOM_STANDARD` minus `GRATIS_MEN_AV`. Navnene er ikke samme spørsmål: «av
+ * som standard» handler om hva en eksisterende kunde får uten å be om det, «tilleggsmodul»
+ * om hva som står på fakturaen. Økonomi er det første som skiller dem: av til noen slår
+ * den på, men uten egen linje i prismodellen.
  */
-export const TILLEGGSMODULER: readonly ModulNokkel[] = ALLE_MODULER.filter((k) =>
-  AV_SOM_STANDARD.has(k),
+export const TILLEGGSMODULER: readonly ModulNokkel[] = ALLE_MODULER.filter(
+  (k) => AV_SOM_STANDARD.has(k) && !GRATIS_MEN_AV.has(k),
 );
 
 /**
