@@ -46,6 +46,22 @@ hovedstoppekran 10 188 kr, konto 6600). Dermed finnes ekte
 `netPrice`/`vat`/`account`, og betalingsstatus ligger i `paid` + `settled`. Kun `ehf` er
 fortsatt ulest fra ekte svar (krever en faktisk EHF-mottaker).
 
+### Funn fra testrunden 03.09.2026 (det som ikke står i spesifikasjonen)
+
+| Funn | Konsekvens |
+|---|---|
+| **`uuid` på faktura er IKKE idempotent.** Samme uuid sendt to ganger ga to fakturaer (10022/10023, kreditert). Utkast med samme `uuid` stoppes (ett utkast), men med **500 «duplikatfeil»**, ikke 409 — brukbart som siste skanse, ikke som design. | Idempotensen må ligge i DriftIQ: sett `orderReference = <units.id>:<ÅÅÅÅ-MM>` på hver faktura, slå opp `GET /invoices?orderReference=` før oppretting, og lagre Fiken-id-en lokalt i samme transaksjon. |
+| **Regnskapsår må finnes i Fiken.** Faktura datert 2027 ga 400 «Fiscal year 2027 is invalid», og API-et har ingen rute for å opprette regnskapsår. | Halvårskjøringen 1.1 forutsetter at styret har åpnet nytt år i Fiken. DriftIQ må fange denne 400-en og si det i klartekst, før noe er sendt. |
+| **Tellere må initialiseres**: både `invoices/counter` og `creditNotes/counter` gir 409 i et foretak som aldri har fakturert/kreditert. | Fang 409, kall counter, prøv igjen. Ekte sameier har som regel fakturert før, men ikke nødvendigvis kreditert. |
+| **Kreditnota kan ikke dateres før fakturaen**, men fremtidig dato er OK (kreditnota datert 01.12 på faktura datert 01.12 gikk). Fakturaen får `associatedCreditNotes`, `sale.settled = true`, `outstandingBalance = 0`. | Eierskifte midt i halvåret: krediter resterende fakturaer med `issueDate` = fakturaens `issueDate`. |
+| **Betaling registreres på salget**, ikke fakturaen: `POST /sales/{saleId}/payments` (`date`, `account` = bankkonto, `amount`). Etterpå `sale.settled = true`, `outstandingBalance = 0`; feltet `sale.paid` er alltid `null`. | Bruk `settled` og `outstandingBalance`, aldri `paid`. Normalt registrerer Fiken betalingen selv fra bankavstemming; DriftIQ skal ikke skrive betalinger. |
+| **Utestående per eier** finnes to veier: `GET /invoices?customerId=&settled=false` (gir liste + `outstandingBalance` per faktura) og `GET /accountBalances/1500:<kundenr>` (én sum). Forfalt: `settled=false&dueDateLt=<i dag>`. | «Hvem har ikke betalt» er to kall, ingen speiling nødvendig for øyeblikksbildet. |
+| **`accountBalances/{konto}?date=`** virker per konto og underkonto (3601 viste −70 000, 6320 45 200, 1920:10001 3 500). `bankBalances` var tom — den kommer fra bankintegrasjonen, ikke bokføringen. | Budsjett mot faktisk kan hentes som saldo per konto uten å speile kjøp — enklere enn synk for søyle 3. Speiling trengs bare for detaljene (per leverandør, per faktura). |
+| **`lastModifiedGe` er en dato, ikke et tidspunkt** (17 treff i dag, 0 i morgen). | Inkrementell synk henter «siden i går» og dedupliserer på id. |
+| **Rate limit:** 25 kall i burst tok 9,4 s, alle 200 — Fiken bremser, avviser ikke. | Sekvensielle kall holder; ingen 429-håndtering observert nødvendig, men behold en enkel kø. |
+| PDF-nedlasting med bearer virker (`invoicePdf.downloadUrl`, 19 kB). `POST /inbox` med PDF gir 201. `PUT /contacts/{id}` virker for e-postendring. `dispatches` på fakturaen viser sendingene (`{date, dispatchType}`); `kid` var `null` på demoforetaket (KID krever avtale med banken). | Alt fase 3 og 4 trenger av skriving er bekreftet. KID/AvtaleGiro er fortsatt åpent. |
+| **Ingen webhooks i API-et.** | All tilbakeføring er polling — bakgrunnsjobben er eneste vei. |
+
 ## Fakta om API-et som styrer designet
 
 | Emne | Fakta | Konsekvens for v2 |
@@ -260,8 +276,9 @@ selvadministrerte. Segmentproblemet (én selvadministrert kunde i dag) blir da m
 - **KID/AvtaleGiro:** Fiken setter KID; om AvtaleGiro-trekk kan startes via API er
   uavklart. Mange eiere betaler felleskostnader med AvtaleGiro — sjekk før fase 3.
 - **Idempotens:** kjøringen må kunne kjøres om igjen etter avbrudd uten dobbeltfakturaer.
-  Faktura-`uuid` i `invoiceRequest` er nøkkelen: DriftIQ genererer den per
-  seksjon+måned og lagrer den før kallet.
+  Fikens `uuid` hjelper ikke (testet — se funnene), så nøkkelen er `orderReference` per
+  seksjon+måned med oppslag før oppretting, og lokal lagring av Fiken-id i samme
+  transaksjon.
 
 ## Hvordan det må bygges i v2
 
