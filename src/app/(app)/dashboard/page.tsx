@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Coins,
   AlertTriangle,
   Archive,
   CalendarDays,
@@ -305,6 +306,8 @@ function Widgetinnhold({ nokkel, d, orgNavn }: { nokkel: string; d: Dashbord; or
       return d.aktivitet ? <Aktivitet rader={d.aktivitet} /> : null;
     case "smatall":
       return <Smatall d={d} orgNavn={orgNavn} />;
+    case "okonomi":
+      return d.okonomi ? <Okonomi o={d.okonomi} /> : null;
     default:
       return null;
   }
@@ -557,6 +560,43 @@ function Aktivitet({ rader }: { rader: NonNullable<Dashbord["aktivitet"]> }) {
           </div>
         ))
       )}
+    </Widget>
+  );
+}
+
+/** Økonomi i tre linjer: det styret må gjøre (godkjenne), det som haster (forfalt), og grunnlaget. */
+function Okonomi({ o }: { o: NonNullable<Dashbord["okonomi"]> }) {
+  const router = useRouter();
+  const kr = (ore: number) => `${(ore / 100).toLocaleString("nb-NO", { maximumFractionDigits: 0 })} kr`;
+  const rader: Array<{ tittel: string; sub: string; sti: string; varsel?: boolean }> = [
+    {
+      tittel: o.tilGodkjenning.antall === 0 ? "Ingen fakturaer til godkjenning" : `${o.tilGodkjenning.antall} til godkjenning`,
+      sub: o.tilGodkjenning.antall === 0 ? "Alt er behandlet" : kr(o.tilGodkjenning.sum),
+      sti: "/okonomi?fane=fakturaer",
+    },
+    {
+      tittel: o.forfalte.antall === 0 ? "Ingen forfalte" : `${o.forfalte.antall} forfalt`,
+      sub: o.forfalte.antall === 0 ? "Ingen fakturaer over forfall" : kr(o.forfalte.sum),
+      sti: "/okonomi?fane=fakturaer",
+      varsel: o.forfalte.antall > 0,
+    },
+    {
+      tittel: `${kr(o.felleskostMnd)} felleskostnader per måned`,
+      sub: o.utenSats > 0 ? `${o.utenSats} av ${o.seksjoner} seksjoner mangler sats` : `${o.seksjoner} seksjoner`,
+      sti: "/okonomi?fane=felleskostnader",
+      varsel: o.utenSats > 0,
+    },
+  ];
+  return (
+    <Widget tittel="Økonomi" ikon={Coins} lenke={{ sti: "/okonomi", tekst: "Åpne →" }}>
+      {rader.map((r) => (
+        <div className="list-item" key={r.tittel} style={{ cursor: "pointer" }} onClick={() => router.push(r.sti)}>
+          <div style={{ minWidth: 0 }}>
+            <div className="list-tittel" style={r.varsel ? { color: "var(--danger)" } : undefined}>{r.tittel}</div>
+            <div className="list-meta">{r.sub}</div>
+          </div>
+        </div>
+      ))}
     </Widget>
   );
 }

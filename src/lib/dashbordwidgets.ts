@@ -43,6 +43,7 @@ export const WIDGETDEFS: readonly Widgetdef[] = [
   { nokkel: "parkering", navn: "Parkering", gruppe: "Parkering", beskrivelse: "Ledige og utleide plasser.", storrelse: "s", modul: "parkering" },
   { nokkel: "rutiner", navn: "Rutiner å revidere", gruppe: "Rutiner", beskrivelse: "Rutiner som ikke er gjennomgått på lenge.", storrelse: "s", modul: "rutiner" },
   { nokkel: "aktivitet", navn: "Siste aktivitet", gruppe: "Driftslogg", beskrivelse: "De siste innførslene i driftsloggen.", storrelse: "s", modul: "driftslogg" },
+  { nokkel: "okonomi", navn: "Økonomi", gruppe: "Økonomi", beskrivelse: "Fakturaer til godkjenning, forfalte og felleskostnader per måned.", storrelse: "s", modul: "okonomi" },
   { nokkel: "smatall", navn: "Småtall", gruppe: "Verktøy", beskrivelse: "Dokumenter og leverandører i korte tall.", storrelse: "s" },
 ];
 
@@ -63,6 +64,7 @@ export const STANDARDOPPSETT: readonly Widgetvalg[] = [
   { nokkel: "oppgaver", storrelse: "m" },
   { nokkel: "avvik", storrelse: "s" },
   { nokkel: "kontrakter", storrelse: "s" },
+  { nokkel: "okonomi", storrelse: "s" },
   { nokkel: "aktivitet", storrelse: "s" },
 ];
 

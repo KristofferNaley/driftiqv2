@@ -15,7 +15,7 @@
  * Avvik sett «0 åpne avvik» i stedet for ingenting.
  */
 
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { deviations } from "../db/schema/avvik";
 import { documents } from "../db/schema/dokumenter";
@@ -23,12 +23,15 @@ import { annualEvents } from "../db/schema/arshjul";
 import { hmsGoals } from "../db/schema/internkontroll";
 import { contracts } from "../db/schema/kontrakter";
 import { logEntries } from "../db/schema/driftslogg";
+import { supplierInvoices } from "../db/schema/okonomi";
 import { organizations } from "../db/schema/organizations";
 import { parkingSpots } from "../db/schema/parking";
 import { routines } from "../db/schema/rutiner";
 import { buildingElements } from "../db/schema/vedlikehold";
 import { vendors } from "../db/schema/vendors";
 import { modulErAktivert, type ModulNokkel } from "./moduler";
+import { hentSatser } from "./okonomi";
+import { erForfalt } from "./okonomiregler";
 import { hentOppgaver } from "./oppgaver";
 import { effektivStatus } from "./rutiner";
 
@@ -58,7 +61,7 @@ export async function hentDashbord(db: Db, orgId: string) {
   const pa = (n: ModulNokkel) => modulErAktivert(lagret, n);
 
   // Bare det org-en faktisk har, hentes. En avslått modul koster ingen spørring.
-  const [oppgaver, avvik, kontrakter, hendelser, mal, rutinerRader, bygningsdeler, plasser, logg, dok, lev] =
+  const [oppgaver, avvik, kontrakter, hendelser, mal, rutinerRader, bygningsdeler, plasser, logg, dok, lev, fakturaer, satser] =
     await Promise.all([
       pa("tasks") ? hentOppgaver(db, orgId) : null,
       pa("avvik")
@@ -98,6 +101,14 @@ export async function hentDashbord(db: Db, orgId: string) {
       pa("leverandorer")
         ? db.select({ aktiv: vendors.active, n: count() }).from(vendors).where(eq(vendors.orgId, orgId)).groupBy(vendors.active)
         : null,
+      // Bare de ubetalte — betalte og avviste er historikk, ikke noe forsiden skal telle.
+      pa("okonomi")
+        ? db
+            .select({ status: supplierInvoices.status, dueDate: supplierInvoices.dueDate, amount: supplierInvoices.amount })
+            .from(supplierInvoices)
+            .where(and(eq(supplierInvoices.orgId, orgId), inArray(supplierInvoices.status, ["mottatt", "godkjent"])))
+        : null,
+      pa("okonomi") ? hentSatser(db, orgId) : null,
     ]);
 
   const forsinkede = oppgaver?.filter((t) => t.forsinket) ?? [];
@@ -108,6 +119,10 @@ export async function hentDashbord(db: Db, orgId: string) {
 
   const aar = new Date().getFullYear();
   const aaretsMal = mal?.find((m) => m.year === aar) ?? null;
+
+  const tilGodkjenning = fakturaer?.filter((f) => f.status === "mottatt") ?? [];
+  const forfalte = fakturaer?.filter((f) => erForfalt(f.dueDate, f.status, iDag())) ?? [];
+  const sumAv = (liste: Array<{ amount: number }>) => liste.reduce((s, f) => s + f.amount, 0);
 
   return {
     /** Dashbordbanneret settes i Innstillinger → Generelt; forsiden viser det øverst. */
@@ -124,6 +139,7 @@ export async function hentDashbord(db: Db, orgId: string) {
       driftslogg: pa("driftslogg"),
       dokumentarkiv: pa("dokumentarkiv"),
       leverandorer: pa("leverandorer"),
+      okonomi: pa("okonomi"),
     },
 
     kpi: {
@@ -138,6 +154,15 @@ export async function hentDashbord(db: Db, orgId: string) {
      * avvik ingen har sett på haster mer enn en kontrakt som utløper om et halvår.
      */
     oppfolging: [
+      ...(pa("okonomi") && forfalte.length
+        ? [{
+            slag: "okonomi" as const,
+            alvor: "hoy" as const,
+            tekst: `${forfalte.length} ${forfalte.length === 1 ? "leverandørfaktura er forfalt" : "leverandørfakturaer er forfalt"}`,
+            detalj: `${(sumAv(forfalte) / 100).toLocaleString("nb-NO")} kr — ikke godkjent eller ikke registrert betalt`,
+            sti: "/okonomi?fane=fakturaer",
+          }]
+        : []),
       ...(pa("avvik") && nyeAvvik.length
         ? [{
             slag: "avvik" as const,
@@ -145,6 +170,15 @@ export async function hentDashbord(db: Db, orgId: string) {
             tekst: `${nyeAvvik.length} ${nyeAvvik.length === 1 ? "nytt avvik venter" : "nye avvik venter"} på behandling`,
             detalj: nyeAvvik.slice(0, 2).map((a) => `«${a.title}»`).join(", "),
             sti: "/avvik",
+          }]
+        : []),
+      ...(pa("okonomi") && tilGodkjenning.length
+        ? [{
+            slag: "okonomi" as const,
+            alvor: "middels" as const,
+            tekst: `${tilGodkjenning.length} ${tilGodkjenning.length === 1 ? "faktura venter" : "fakturaer venter"} på godkjenning`,
+            detalj: `${(sumAv(tilGodkjenning) / 100).toLocaleString("nb-NO")} kr`,
+            sti: "/okonomi?fane=fakturaer",
           }]
         : []),
       ...(pa("tasks") && forsinkede.length
@@ -268,6 +302,18 @@ export async function hentDashbord(db: Db, orgId: string) {
           inaktive: lev.find((r) => !r.aktiv)?.n ?? 0,
         }
       : null,
+
+    /** Økonomiwidgeten. Beløp i øre, som resten av modulen. */
+    okonomi:
+      fakturaer && satser
+        ? {
+            tilGodkjenning: { antall: tilGodkjenning.length, sum: sumAv(tilGodkjenning) },
+            forfalte: { antall: forfalte.length, sum: sumAv(forfalte) },
+            felleskostMnd: satser.maanedligSum,
+            utenSats: satser.utenSats,
+            seksjoner: satser.rader.length,
+          }
+        : null,
   };
 }
 

@@ -51,9 +51,22 @@ export const enhetInn = z.object({
     // `.optional()` etter transformen: uten den blir nøkkelen PÅKREVD i utdatatypen selv om
     // verdien kan være undefined, og hvert kallsted må sende `arealM2: undefined`.
     .optional(),
+  /**
+   * Sameiebrøken (teller/nevner). Grunnlaget økonomimodulen fordeler felleskostnader etter —
+   * redigeres både her og i Økonomi → Seksjoner og eiere, via samme kolonner på `units`.
+   * Begge eller ingen: `validerBrok` håndhever paret etter sammenslåing med raden.
+   */
+  brokTeller: z.number().int().min(0, "Teller kan ikke være negativ").nullish(),
+  brokNevner: z.number().int().min(1, "Nevner må være minst 1").nullish(),
 });
 
 export const enhetEndring = enhetInn.partial();
+
+function validerBrok(f: { brokTeller?: number | null; brokNevner?: number | null }): void {
+  if ((f.brokTeller == null) !== (f.brokNevner == null)) {
+    throw ugyldig("Brøken må ha både teller og nevner — eller ingen av delene.");
+  }
+}
 
 type Felter = z.infer<typeof enhetEndring>;
 
@@ -122,6 +135,7 @@ export async function hentEnhet(db: Db, orgId: string, unitId: string) {
 
 export async function opprettEnhet(db: Db, orgId: string, data: z.infer<typeof enhetInn>) {
   validerIdentitet(data);
+  validerBrok(data);
   if (data.andelsnr && (await andelsnrErTatt(db, orgId, data.andelsnr))) {
     throw ugyldig(`Andelsnummer ${data.andelsnr} finnes allerede.`);
   }
@@ -140,6 +154,7 @@ export async function endreEnhet(
 ) {
   const enhet = await hentEnhet(db, orgId, unitId);
   validerIdentitet({ ...enhet, ...data } as Felter);
+  validerBrok({ ...enhet, ...data });
 
   if (data.andelsnr && data.andelsnr !== enhet.andelsnr) {
     if (await andelsnrErTatt(db, orgId, data.andelsnr, unitId)) {

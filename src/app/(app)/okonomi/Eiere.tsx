@@ -77,7 +77,8 @@ export default function Eiere({ erAdmin }: { erAdmin: boolean }) {
           <>
             <p className="ok-tekst">
               Eieropplysningene behandles etter databehandleravtalen med sameiet. Ved eierskifte arkiveres den forrige
-              eieren med sluttdato — fakturagrunnlag fra før skiftet peker fortsatt på hen.
+              eieren med sluttdato. Hele overtakelsesmåneden faktureres den som eide seksjonen den 1. — kjøper og
+              selger gjør opp seg imellom.
             </p>
             <div className="ok-eier-hode" aria-hidden>
               <span>Seksjon</span>
@@ -263,7 +264,8 @@ function EierModal({
         {seksjon.eier && (
           <p className="ok-tekst">
             {seksjon.eier.name} står som eier fra {dato(seksjon.eier.ownerFrom)} og får sluttdato dagen før den nye
-            overtar. Fakturalinjer som alt er laget for hen, blir stående.
+            overtar. Overtakelsesmåneden faktureres i sin helhet den som eier seksjonen den 1. i måneden; linjer som
+            alt er laget, blir stående.
           </p>
         )}
         <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} />

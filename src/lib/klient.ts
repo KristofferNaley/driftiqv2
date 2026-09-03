@@ -613,6 +613,7 @@ export type Enhet = {
   id: string; type: string; navn: string | null; andelsnr: string | null;
   leilighetsnr: string | null; oppgang: string | null; etasje: string | null;
   arealM2: string | null; archivedAt: string | null; apneAvvik: number; antallAvvik: number;
+  brokTeller: number | null; brokNevner: number | null;
 };
 
 export type Adressetreff = {
@@ -809,6 +810,14 @@ export type Dashbord = {
   aktivitet: Array<{ id: string; title: string; entryDate: string; createdBy: string }> | null;
   antallDokumenter: number | null;
   leverandorer: { aktive: number; inaktive: number } | null;
+  /** Økonomiwidgeten. Beløp i øre. */
+  okonomi: {
+    tilGodkjenning: { antall: number; sum: number };
+    forfalte: { antall: number; sum: number };
+    felleskostMnd: number;
+    utenSats: number;
+    seksjoner: number;
+  } | null;
 };
 
 export const dashbord = {

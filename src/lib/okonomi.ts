@@ -708,6 +708,11 @@ export async function hentKjoring(db: Db, orgId: string, runId: string) {
  * Lager grunnlaget: én linje per seksjon per måned i halvåret, med satsen og eieren som
  * gjelder den måneden. Feiler høyt hvis noen seksjon mangler sats — et grunnlag med hull
  * er verre enn ingen. Seksjoner uten eier får linje uten mottaker og telles.
+ *
+ * **Eierskifte midt i måneden:** hele måneden faktureres den som eide seksjonen den 1.
+ * (avklart 03.09.2026). Kjøper og selger gjør opp seg imellom, som ved overtakelse ellers;
+ * DriftIQ deler aldri en måned i dager. Regelen ligger i at `eierPaaDato` slås opp på
+ * månedens første dag, ikke på overtakelsesdatoen.
  */
 export async function opprettKjoring(db: Db, orgId: string, av: Aktor, data: z.infer<typeof kjoringInn>) {
   const periode = periodeFor(data.periodStart);

@@ -377,6 +377,20 @@ describe("halvårskjøring", () => {
     expect(forste[0]!.orderReference).toBe(`${enheter[0]}:2027-01`);
   });
 
+  it("fakturerer hele overtakelsesmåneden til den som eide seksjonen den 1.", async () => {
+    // Avklart 03.09.2026: ingen dagsfordeling — kjøper og selger gjør opp seg imellom.
+    const { orgId, enheter } = await oppsett();
+    for (const u of enheter) {
+      await i(orgId, (db) => settSats(db, orgId, u, aktor, { monthlyAmount: 100_000, validFrom: "2027-01-01" }));
+    }
+    await i(orgId, (db) => registrerEier(db, orgId, aktor, { unitId: enheter[0]!, name: "Selger", ownerFrom: "2020-01-01" }));
+    await i(orgId, (db) => registrerEier(db, orgId, aktor, { unitId: enheter[0]!, name: "Kjøper", ownerFrom: "2027-03-15" }));
+
+    const k = await i(orgId, (db) => opprettKjoring(db, orgId, aktor, { periodStart: "2027-01-01", dueDay: 15 }));
+    const linjer = k.linjer.filter((l) => l.unitId === enheter[0]).map((l) => `${l.month.slice(5, 7)}:${l.ownerName}`);
+    expect(linjer).toEqual(["01:Selger", "02:Selger", "03:Selger", "04:Kjøper", "05:Kjøper", "06:Kjøper"]);
+  });
+
   it("nekter kjøring når en seksjon mangler sats, og når perioden alt er kjørt", async () => {
     const { orgId, enheter } = await oppsett();
     const utenSats = await feilFra(() => i(orgId, (db) => opprettKjoring(db, orgId, aktor, { periodStart: "2027-07-01", dueDay: 15 })));

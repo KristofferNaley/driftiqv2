@@ -419,8 +419,13 @@ Det som er avgjort i koden og ikke i notatet over:
 - Tester: `tests/okonomi.test.ts` (regler, eierskifte, låsing, overstyrt sats, kjøring,
   CSV, statusoverganger, krysstest mellom orger). RLS-dekning via registeret.
 
-Åpent etter steg 1: enhetsregisteret under Innstillinger viser ikke brøken (den redigeres
-bare i økonomifanen); ingen dashbord-widget; ingen kundevendt e-post ved godkjenning.
+- **Eierskifte midt i måneden:** hele overtakelsesmåneden faktureres den som eide
+  seksjonen den 1. — ingen dagsfordeling, kjøper og selger gjør opp seg imellom (avklart
+  03.09.2026). Brøken kan også settes i Innstillinger → Leiligheter, og dashbordet har en
+  Økonomi-widget (til godkjenning, forfalt, felleskost per måned) pluss oppfølgingslinjer.
+
+Åpent etter steg 1: ingen varsler/e-post ved registrering eller forfall; søket finner ikke
+fakturaer og eiere; fordelingsnøkkelen er alltid sameiebrøk.
 
 ## Utvikling og testing uten å røre prod
 

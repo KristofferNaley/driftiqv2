@@ -467,7 +467,13 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
                   <div className="list-tittel">{e.navn ?? e.leilighetsnr ?? `Andel ${e.andelsnr ?? "?"}`}</div>
                   {/* Kvadratmeterne står i basen, men ikke her — de svarer ikke på noe man
                       leter etter i denne lista. */}
-                  {e.andelsnr && <div className="list-meta">andel {e.andelsnr}</div>}
+                  {(e.andelsnr || e.brokTeller !== null) && (
+                    <div className="list-meta">
+                      {[e.andelsnr && `andel ${e.andelsnr}`, e.brokTeller !== null && `brøk ${e.brokTeller}/${e.brokNevner}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
                 </div>
                 <span className="enhet-celle enhet-oppgang">{e.oppgang ?? "—"}</span>
                 <span className="enhet-celle enhet-etasje">{e.etasje ?? "—"}</span>
@@ -496,10 +502,9 @@ function Enheter({ visning }: { visning: "bolig" | "fellesareal" }) {
       </Kort>
 
       <div className="field-note">
-        Registeret inneholder bare fysiske fakta — ingen eiere, beboere eller
-        kontaktopplysninger. Det er en forutsetning, ikke en mangel: uten personopplysninger
-        må registeret verken holdes à jour ved eierskifte eller inn i databehandleravtalen.
-        Enheter arkiveres, aldri slettes — avvikshistorikken skal overleve.
+        Registeret inneholder bare fysiske fakta og sameiebrøken — ingen eiere, beboere eller
+        kontaktopplysninger. Eierne ligger i Økonomi → Seksjoner og eiere, med egen
+        databehandleravtale. Enheter arkiveres, aldri slettes — avvikshistorikken skal overleve.
       </div>
 
       {nyEnhet && (
@@ -1011,6 +1016,8 @@ function EnhetSkjema({
   const [leilighetsnr, setLeilighetsnr] = useState(utgangspunkt?.leilighetsnr ?? "");
   const [oppgang, setOppgang] = useState(utgangspunkt?.oppgang ?? "");
   const [etasje, setEtasje] = useState(utgangspunkt?.etasje ?? "");
+  const [brokTeller, setBrokTeller] = useState(utgangspunkt?.brokTeller?.toString() ?? "");
+  const [brokNevner, setBrokNevner] = useState(utgangspunkt?.brokNevner?.toString() ?? "");
   const { sender, feil, send } = useSending(async () => {
     await onLagret();
     onLukk();
@@ -1035,6 +1042,12 @@ function EnhetSkjema({
             leilighetsnr: leilighetsnr || null,
             oppgang: oppgang || null,
             etasje: etasje || null,
+            ...(fellesareal
+              ? {}
+              : {
+                  brokTeller: brokTeller.trim() === "" ? null : Number(brokTeller),
+                  brokNevner: brokNevner.trim() === "" ? null : Number(brokNevner),
+                }),
           };
           void send(() =>
             utgangspunkt ? enheter.endre(orgId, utgangspunkt.id, felter) : enheter.ny(orgId, felter),
@@ -1074,10 +1087,23 @@ function EnhetSkjema({
           <Tekstfelt etikett="Etasje" verdi={etasje} onEndre={setEtasje} />
         </div>
         {!fellesareal && (
-          <div className="field-note">
-            Minst ett av andelsnummer, leilighetsnummer eller oppgang må fylles ut — sameier
-            uten andelsnummer bruker oppgang og leilighetsnummer.
-          </div>
+          <>
+            <div className="field-note">
+              Minst ett av andelsnummer, leilighetsnummer eller oppgang må fylles ut — sameier
+              uten andelsnummer bruker oppgang og leilighetsnummer.
+            </div>
+            <div className="field-row">
+              <Tekstfelt
+                etikett="Sameiebrøk, teller"
+                verdi={brokTeller}
+                onEndre={setBrokTeller}
+                type="number"
+                plassholder="125"
+                notat="Tinglyst brøk. Grunnlaget for felleskostnadene i Økonomi."
+              />
+              <Tekstfelt etikett="Nevner" verdi={brokNevner} onEndre={setBrokNevner} type="number" plassholder="1000" />
+            </div>
+          </>
         )}
         <Knapperad onAvbryt={onLukk} sender={sender} />
       </form>
