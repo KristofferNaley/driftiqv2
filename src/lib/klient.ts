@@ -681,7 +681,7 @@ export type Sats = {
 export type Satsoversikt = {
   dato: string;
   rader: Array<{
-    unitId: string; navn: string; brokTeller: number | null; brokNevner: number | null;
+    unitId: string; navn: string; oppgang: string | null; brokTeller: number | null; brokNevner: number | null;
     eierNavn: string | null; sats: Sats | null; alle: Sats[];
   }>;
   maanedligSum: number; utenSats: number;
@@ -697,7 +697,7 @@ export type KjoringDetalj = Kjoring & {
   linjer: Array<{
     id: string; unitId: string; ownerId: string | null; ownerName: string | null; month: string;
     dueDate: string; amount: number; orderReference: string; externalRef: string | null;
-    enhetNavn: string; andelsnr: string | null;
+    enhetNavn: string; oppgang: string | null; andelsnr: string | null;
   }>;
 };
 

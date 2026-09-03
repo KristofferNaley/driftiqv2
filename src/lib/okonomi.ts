@@ -36,7 +36,7 @@ import { units } from "../db/schema/units";
 import { vendors } from "../db/schema/vendors";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
-import { enhetNavn } from "./enhetnavn";
+import { enhetKortnavn, enhetNavn } from "./enhetnavn";
 import { loggHendelse } from "./hendelser";
 import { lagreFil, slettFil } from "./lagring";
 import {
@@ -147,7 +147,8 @@ export async function hentEiere(db: Db, orgId: string) {
     const naa = eiere.find((e) => e.unitId === u.id && e.ownerTo === null) ?? eierPaaDato(eiere, u.id, iDag);
     return {
       unitId: u.id,
-      navn: enhetNavn(u),
+      /** Kortformen — oppgangen ligger i egen kolonne. */
+      navn: enhetKortnavn(u),
       andelsnr: u.andelsnr,
       leilighetsnr: u.leilighetsnr,
       oppgang: u.oppgang,
@@ -551,7 +552,8 @@ export async function hentSatser(db: Db, orgId: string, dato = isoDato(new Date(
     const eier = eierPaaDato(eiere, u.id, dato);
     return {
       unitId: u.id,
-      navn: enhetNavn(u),
+      navn: enhetKortnavn(u),
+      oppgang: u.oppgang,
       brokTeller: u.brokTeller,
       brokNevner: u.brokNevner,
       eierNavn: eier?.name ?? null,
@@ -700,7 +702,9 @@ export async function hentKjoring(db: Db, orgId: string, runId: string) {
 
   return {
     ...r[0],
-    linjer: linjer.map((l) => ({ ...l.linje, enhetNavn: enhetNavn(l.enhet), andelsnr: l.enhet.andelsnr })),
+    linjer: linjer.map((l) => ({
+      ...l.linje, enhetNavn: enhetKortnavn(l.enhet), oppgang: l.enhet.oppgang, andelsnr: l.enhet.andelsnr,
+    })),
   };
 }
 
@@ -795,12 +799,12 @@ export async function eksporterKjoring(db: Db, orgId: string, runId: string, av:
   const k = await hentKjoring(db, orgId, runId);
   const eiere = await db.select().from(unitOwners).where(eq(unitOwners.orgId, orgId));
   const rader: Array<Array<string | number | null>> = [
-    ["Seksjon", "Andelsnr", "Eier", "E-post", "Fakturaadresse", "Måned", "Forfall", "Beløp", "Referanse"],
+    ["Seksjon", "Oppgang", "Andelsnr", "Eier", "E-post", "Fakturaadresse", "Måned", "Forfall", "Beløp", "Referanse"],
   ];
   for (const l of k.linjer) {
     const eier = l.ownerId ? eiere.find((e) => e.id === l.ownerId) : null;
     rader.push([
-      l.enhetNavn, l.andelsnr, l.ownerName, eier?.email ?? null, eier?.invoiceAddress ?? null,
+      l.enhetNavn, l.oppgang, l.andelsnr, l.ownerName, eier?.email ?? null, eier?.invoiceAddress ?? null,
       l.month.slice(0, 7), l.dueDate, tilKronerTekst(l.amount), l.orderReference,
     ]);
   }

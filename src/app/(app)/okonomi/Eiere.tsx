@@ -93,7 +93,11 @@ export default function Eiere({ erAdmin }: { erAdmin: boolean }) {
               <div key={s.unitId} className="ok-eier-rad">
                 <div style={{ minWidth: 0 }}>
                   <div className="list-tittel">{s.navn}</div>
-                  {s.andelsnr && <div className="list-meta">seksjon {s.andelsnr}</div>}
+                  {(s.oppgang || s.andelsnr) && (
+                    <div className="list-meta">
+                      {[s.oppgang && `oppg. ${s.oppgang}`, s.andelsnr && `seksjon ${s.andelsnr}`].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   {s.eier ? (

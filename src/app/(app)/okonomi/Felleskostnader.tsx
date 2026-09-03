@@ -107,7 +107,9 @@ export default function Felleskostnader({ erAdmin }: { erAdmin: boolean }) {
               <div key={r.unitId} className="ok-sats-rad">
                 <div style={{ minWidth: 0 }}>
                   <div className="list-tittel">{r.navn}</div>
-                  {r.sats?.note && <div className="list-meta">{r.sats.note}</div>}
+                  {(r.sats?.note || r.oppgang) && (
+                    <div className="list-meta">{[r.oppgang && `oppg. ${r.oppgang}`, r.sats?.note].filter(Boolean).join(" · ")}</div>
+                  )}
                 </div>
                 <span className="ok-sats-eier list-meta">{r.eierNavn ?? "—"}</span>
                 <span className="ok-sats-brok list-meta">{brokTekst({ teller: r.brokTeller, nevner: r.brokNevner })}</span>

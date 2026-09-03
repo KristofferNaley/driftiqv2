@@ -4318,15 +4318,17 @@ textarea.qr-input { resize: vertical; }
 }
 
 /* Satser. */
+/* Siste kolonne har FAST bredde i alle tabellene her: med `auto` ble den bred i radene
+   (knapper) og tom i overskriften, så overskriftene sto én kolonne forskjøvet. */
 .ok-sats-hode, .ok-sats-rad {
-  display: grid; grid-template-columns: minmax(140px, 1.6fr) minmax(120px, 1.4fr) 90px 120px 120px auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(140px, 1.6fr) minmax(120px, 1.4fr) 90px 120px 120px 100px; gap: 12px; align-items: center;
   padding: 9px 14px; border-bottom: 1px solid var(--border);
 }
 .ok-sats-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .ok-sats-hode .ok-belop-celle { font-size: var(--fs-label); }
 .ok-sats-rad:last-child { border-bottom: none; }
 @media (max-width: 860px) {
-  .ok-sats-hode, .ok-sats-rad { grid-template-columns: minmax(120px, 2fr) 110px auto; }
+  .ok-sats-hode, .ok-sats-rad { grid-template-columns: minmax(120px, 2fr) 110px 100px; }
   .ok-sats-eier, .ok-sats-brok, .ok-sats-kilde { display: none; }
 }
 
@@ -4340,14 +4342,14 @@ textarea.qr-input { resize: vertical; }
 
 /* Kjøringer og grunnlag. */
 .ok-kjoring-hode, .ok-kjoring-rad {
-  display: grid; grid-template-columns: minmax(160px, 2fr) 70px 120px 100px auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(160px, 2fr) 70px 120px 100px 230px; gap: 12px; align-items: center;
   padding: 9px 14px; border-bottom: 1px solid var(--border);
 }
 .ok-kjoring-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .ok-kjoring-hode .ok-belop-celle { font-size: var(--fs-label); }
 .ok-kjoring-rad:last-child { border-bottom: none; }
 @media (max-width: 760px) {
-  .ok-kjoring-hode, .ok-kjoring-rad { grid-template-columns: minmax(120px, 2fr) 100px auto; }
+  .ok-kjoring-hode, .ok-kjoring-rad { grid-template-columns: minmax(120px, 2fr) 100px 230px; }
   .ok-kjoring-linjer, .ok-kjoring-hode > span:nth-child(4), .ok-kjoring-rad > span:nth-child(4) { display: none; }
 }
 .ok-grunnlag { max-height: 60dvh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
@@ -4360,7 +4362,7 @@ textarea.qr-input { resize: vertical; }
 
 /* Eierregisteret. */
 .ok-eier-hode, .ok-eier-rad {
-  display: grid; grid-template-columns: minmax(130px, 1.3fr) minmax(160px, 2fr) 90px 70px 150px 120px auto; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(110px, 1fr) minmax(160px, 2fr) 90px 70px 150px 120px 250px; gap: 12px; align-items: center;
   padding: 9px 14px; border-bottom: 1px solid var(--border);
 }
 .ok-eier-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -4374,11 +4376,12 @@ textarea.qr-input { resize: vertical; }
 .ok-hist-rad { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .ok-hist-rad:last-child { border-bottom: none; }
 @media (max-width: 1000px) {
-  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(120px, 1.3fr) minmax(140px, 2fr) 150px auto; }
+  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(120px, 1.3fr) minmax(140px, 2fr) 150px 250px; }
   .ok-eier-fra, .ok-eier-bra, .ok-eier-sats { display: none; }
 }
 @media (max-width: 600px) {
-  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(100px, 1fr) minmax(100px, 1.4fr) auto; }
+  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(100px, 1fr) minmax(100px, 1.4fr) 250px; }
+  .ok-eier-rad .ok-linje-handling { flex-wrap: wrap; }
   .ok-eier-brok { display: none; }
 }
 

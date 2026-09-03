@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
 import { lukkPooler, withOrg } from "../src/db/client";
+import { enhetKortnavn } from "../src/lib/enhetnavn";
 import type { ApiFeil } from "../src/lib/api";
 import type { Aktor } from "../src/lib/aktor";
 import {
@@ -182,6 +183,13 @@ describe("okonomiregler", () => {
     expect(andelAvAaret(2025, sept)).toBe(1);
     expect(andelAvAaret(2027, sept)).toBe(0);
     expect(andelAvAaret(2026, sept)).toBeCloseTo(8 / 12);
+  });
+
+  it("bruker kortformen av enhetsnavnet — H-nummeret alene", () => {
+    expect(enhetKortnavn({ leilighetsnr: "H0101", oppgang: "101" })).toBe("H0101");
+    expect(enhetKortnavn({ andelsnr: "12", oppgang: "B" })).toBe("Andel 12");
+    expect(enhetKortnavn({ type: "fellesareal", navn: "Bossrom" })).toBe("Bossrom");
+    expect(enhetKortnavn({ oppgang: "A" })).toBe("Oppg. A");
   });
 
   it("lager CSV med semikolon, BOM og anførselstegn der det trengs", () => {
@@ -421,6 +429,8 @@ describe("halvårskjøring", () => {
     const fil = await i(orgId, (db) => eksporterKjoring(db, orgId, k.id, aktor));
     const tekst = new TextDecoder().decode(fil.innhold);
     expect(fil.navn).toBe("felleskostnader-2027-01-01-2027-06-30.csv");
+    // TextDecoder fjerner BOM-en ved dekoding — den er testet på `tilCsv` over.
+    expect(tekst.split("\r\n")[0]).toBe("Seksjon;Oppgang;Andelsnr;Eier;E-post;Fakturaadresse;Måned;Forfall;Beløp;Referanse");
     expect(tekst.split("\r\n").filter(Boolean).length).toBe(1 + 18);
     expect(tekst).toContain("1000;");
 

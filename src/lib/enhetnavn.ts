@@ -36,6 +36,20 @@ export function enhetNavn(e: Enhetsnavn | null | undefined): string {
 }
 
 /**
+ * Kortformen for tabeller der seksjonen er RADEN og oppgangen står i en egen kolonne eller
+ * metalinje — økonomimodulen. «H0101 · oppg. 101» førti ganger nedover er støy når
+ * oppgangen uansett er lik; H-nummeret alene er det eierne kjenner seksjonen sin på.
+ */
+export function enhetKortnavn(e: Enhetsnavn | null | undefined): string {
+  if (!e) return "—";
+  if (e.type === "fellesareal") return e.navn || "Fellesareal";
+  if (e.leilighetsnr) return e.leilighetsnr;
+  if (e.andelsnr) return `Andel ${e.andelsnr}`;
+  if (e.oppgang) return `Oppg. ${e.oppgang}`;
+  return "Enhet uten nummer";
+}
+
+/**
  * Sammenligningsformen: bare bokstaver og tall, små bokstaver. Gjør at «305» treffer
  * «H0305», og at «h 03 05» treffer det samme — brukeren skal ikke måtte gjette formatet.
  */
