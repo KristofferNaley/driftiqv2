@@ -44,9 +44,22 @@ docker compose up -d --build && docker compose exec app npm run test
   fange nøyaktig det bygget ikke fanger: `no-undef` og `rules-of-hooks` som `error`,
   DOM-globalene (`MouseEvent`, `HTMLInputElement`, `navigator`, …) listet eksplisitt.
 - Appen kjører på **3008**, bundet til localhost — Cloudflare-tunnelen når containeren via
-  `edge`-nettet. **Dette er produksjon.** Det finnes ikke noe eget testmiljø for v2.
-  Databasen er `driftiq_v2` på den sentrale Postgres 18-serveren (verten «postgres» på
-  `edge`-nettet) — ikke en del av stacken.
+  `edge`-nettet. **Dette er produksjon.** Databasen er `driftiq_v2` på den sentrale
+  Postgres 18-serveren (verten «postgres» på `edge`-nettet) — ikke en del av stacken.
+- **Testmiljøet (siden 03.09.2026)** er en egen klone i `/root/driftiqv2-test` på samme
+  vert: compose-prosjekt `driftiqv2-test`, port 3009, egen base `driftiq_v2_test` med egen
+  approlle, vertene `test.driftiq.no`/`test-admin.driftiq.no`, domenevakt PÅ. Port og
+  minnetak ligger i en usporet `docker-compose.override.yaml`. **Alt kodearbeid skjer der**;
+  prod-klonen `/root/driftiqv2` får bare `git pull` + `--build`, og en hook der avviser
+  redigering. `CLAUDE.local.md` i hver klone sier hvilken du står i. Testbasen inneholder
+  **kun de to «DEMO - »-organisasjonene** — den ble seedet fra en prod-dump (restore-test)
+  og deretter vasket for kundedata samme dag. Seedes den fra prod igjen, må tre ting gjøres
+  etterpå: vask bort alt som ikke er demo, slett `jwks`-raden (kryptert med prods
+  `BETTER_AUTH_SECRET`; ellers velter API-laget med «Failed to decrypt private key»), og
+  sett `org_webhooks.active = false` — kundenes Teams/Discord-webhooks har ingen miljøvakt
+  slik e-posten har, og varselsjobben ville postet testvarsler i kundens kanal. En vakt i
+  `lib/webhooks.ts` etter mønster av `EPOST_TILLATTE_DOMENER` er riktig varig løsning, og
+  et seed-skript (`scripts/seed-test.ts`) er riktig erstatning for dump-seeding.
 - `docker compose up -d --build` — deploy krever alltid `--build`; standalone-bygget bakes
   inn i imaget, og et `git pull` alene endrer ingenting for det som kjører.
 - E-postoppsettet verifiseres med `scripts/test-epost.ts` (sjekker nøkkel, avsender og
@@ -54,11 +67,11 @@ docker compose up -d --build && docker compose exec app npm run test
 
 ### Tester
 
-Testene kjører mot **samme database som appen** (`driftiq_v2`) — ingen egen testbase.
-**Siden 25.08.2026 er det produksjonsbasen.** Regelen under om å aldri røre rader testen
-ikke selv har opprettet er dermed ikke lenger en ryddighetsregel, men det eneste som står
-mellom testsuiten og kundedata — og en test som feiler midt i `afterEach` etterlater sine
-egne rader i prod. Et adskilt testmiljø står som neste steg i README.
+Testene kjører mot **samme database som appen de kjøres i**. Kjør dem i testmiljøet
+(`docker compose -p driftiqv2-test exec app npm run test` i `/root/driftiqv2-test`), aldri i
+prod-klonen — der er basen produksjonsbasen, og en test som feiler midt i `afterEach`
+etterlater sine egne rader hos kundene. Testbasen er en kopi av prod, så regelen under om
+å aldri røre rader testen ikke selv har opprettet gjelder der også.
 Derfor `fileParallelism: false` i `vitest.config.ts`: filene rydder med `DELETE` og ville
 sett hverandres data parallelt. Ingenting hoppes over uten DB; uten `DATABASE_URL` krasjer
 alt.
@@ -76,8 +89,10 @@ Konvensjon for en ny testfil (se `tests/avvik.test.ts` som mal):
 
 ### UI-testing
 
-- Testbruker i kunde-appen: `claude@driftiq.test`, orgadmin i to organisasjoner. Passordet
-  er satt lokalt og finnes ikke i repoet.
+- Testbruker i kunde-appen (kun testmiljøet): `agent@driftiq.no`, orgadmin i «DEMO - Sammen
+  Sameie» og «DEMO - Det Beste Borettslaget». Passordet ligger i
+  `/root/driftiqv2-test/.agent-bruker.txt` (utenfor git). Adressen er ekte og slipper
+  gjennom domenevakten, så e-post fra test kan leses.
 - **Plattformpanelet kan ikke UI-testes av en agent.** Begge plattformadmin-kontoene er
   ekte brukere, og en agent skriver ikke passord inn i innloggingsfelt — og skal heller
   ikke heve rollen til en testbruker for å komme rundt det. Panelet dekkes av

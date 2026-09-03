@@ -21,7 +21,7 @@ Gjenstår (fase 3): leverandørportalen (null brukere i dag) og modulkatalogen p
 | **Prod (v2)** | **3008** — localhost, via Cloudflare-tunnelen | **`driftiq_v2`** |
 
 v1 (prod 3002/3003/8000, test 3005/3006/8001, databasene `driftiq` og `driftiq_test`) er
-tatt ned. v2 har ikke noe eget testmiljø ennå — testsuiten kjører mot produksjonsbasen (se
+tatt ned. Testmiljøet for v2 er `/root/driftiqv2-test` (port 3009, `driftiq_v2_test`; se
 «Tester» i CLAUDE.md).
 
 ## Første gang
@@ -180,10 +180,11 @@ en mangler dekning.
    kravet kommer, men håndhevingen (i `sjekkInnloggingssperrer`, lib/tilgang.ts) er ikke
    skrudd på.
 3. Passkeys — en plugin til, nå som Better Auth står.
-4. Et testmiljø adskilt fra prod. I dag kjører testsuiten mot produksjonsbasen, og
-   `test.driftiq.no` er ikke lenger rutet noe sted.
+4. ~~Et testmiljø adskilt fra prod.~~ **Gjort 03.09.2026**: `/root/driftiqv2-test` på samme
+   vert, `test.driftiq.no` rutet dit. Se CLAUDE.md «Kommandoer og verifisering».
 5. Sikkerhetskopien ut av VPS-en. `/root/backup/backup-driftiqv2.sh` tar nattlig `pg_dump`
-   og tar av opplastingene, men kopiene ligger lokalt, og restore er ikke testet.
+   og tar av opplastingene, men kopiene ligger lokalt. Restore ble testet 03.09.2026 ved
+   seeding av testmiljøet: dump og opplastinger inn, migrasjoner og RLS-oppsett gikk rent.
 
 ## Webanalyse
 
