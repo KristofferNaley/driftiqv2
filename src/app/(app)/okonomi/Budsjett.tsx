@@ -143,6 +143,9 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
                 <span className="list-meta" title="Beløp lagres automatisk når du forlater feltet">
                   Sist lagret {datoTid(detalj.updatedAt)}
                 </span>
+                <span className={`badge ${detalj.faktiskKilde === "fiken" ? "ok" : "muted"}`} title="Hvor kolonnen «Faktisk» kommer fra">
+                  Faktisk fra {detalj.faktiskKilde === "fiken" ? "Fiken" : "godkjente fakturaer"}
+                </span>
                 {erAdmin && utkast && detalj.summer.resultat !== 0 && (
                   <button
                     className="btn btn-ghost"

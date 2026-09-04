@@ -378,8 +378,9 @@ Følger mønstrene i CLAUDE.md; det som er spesielt for Fiken står i kursiv.
 1. **Økonomi uten Fiken** — **bygget 03.09.2026** (se «Steg 1 slik det ble» under): brøk
    og eier på seksjon, budsjett med kontointervall, sats per seksjon, eksport av
    fakturagrunnlag, pluss fakturagodkjenning. Ingen ekstern avhengighet, selgbart alene.
-2. **Fiken-kobling, lesing**: OAuth, tokenlagring, synk av `purchases` → «faktisk» mot
-   budsjettlinjene, og leverandørkortet. Beviser kobling og synk med lav risiko.
+2. **Fiken-kobling, lesing** — **bygget 04.09.2026** (se «Steg 2 slik det ble»): OAuth,
+   kryptert tokenlagring, synk av `purchases` → «faktisk» mot budsjettlinjene. Leverandør-
+   kortet gjenstår.
 3. **Felleskostnader via Fiken**: halvårskjøringen oppretter og sender fakturaer,
    betalingsstatus tilbake. Krever kantene over. Søknad om produksjonsstatus hos Fiken
    sendes når dette er klikkbart i test.
@@ -443,6 +444,39 @@ Det som er avgjort i koden og ikke i notatet over:
 Åpent etter steg 1: ingen varsler/e-post ved registrering eller forfall; søket finner ikke
 fakturaer og eiere; fordelingsnøkkelen er alltid sameiebrøk; kontraktkortet viser ennå
 ikke avtalt mot faktisk per avtale.
+
+## Steg 2 slik det ble (04.09.2026)
+
+- **Adapteret** `lib/fiken.ts`: HTTP-laget med `TILLATTE_KALL` — hvitelista over metode og
+  sti som er det eneste klienten sender. I dag bare GET (`/companies`, `/companies/{slug}`,
+  `/purchases`, `/accountBalances`). Skrivekallene i steg 3 legges til der, synlig i diffen;
+  `tests/fiken.test.ts` låser lista. Sekvensielle kall, aldri `Promise.all` mot Fiken.
+- **Koblingen** `lib/fikenkobling.ts` + tabellene `fiken_connections` (én rad per org, tokens
+  kryptert med AES-256-GCM, nøkkel `FIKEN_TOKEN_KEY`) og `fiken_purchases` (speil, nøkkel
+  org + fikenId, linjer som JSON). Begge i RLS-registeret. `hentKobling()` returnerer aldri
+  tokenet. Frakobling sletter speilet og logges.
+- **To koblingsmåter:** OAuth (`/api/organizations/{org}/okonomi/fiken/start` → Fiken →
+  `/api/okonomi/fiken/callback`, fast redirect-URI uten org i stien; org-id-en ligger i
+  signert `state` med time-utløp) — krever `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET`. Og
+  **API-nøkkel, kun testmiljøet** (`ER_TESTMILJO`): personlig nøkkel mot demoforetaket, så
+  koblingen kan prøves uten OAuth-app. Ruta svarer 404 i prod.
+- **Synk** `synkKjop`: første gang alt, deretter `lastModifiedGe` = dagen før siste synk,
+  oppdatering på fikenId. Bare `supplier`/`cash_purchase`. Brutto = netto + mva per linje
+  (inngående mva er kostnad). Feil RETURNERES (`{ ok: false, feil }`) og lagres på raden —
+  et kast ville rullet tilbake feilmeldingen sammen med transaksjonen. Jobben `fiken-synk`
+  (05:30, én org om gangen i egen `withOrg`) og «Synk nå» på Integrasjon-fanen.
+- **«Faktisk» i budsjettet** kommer fra Fiken når koblingen finnes (kjøpslinjer i året,
+  summert per kontointervall) og fra godkjente fakturaer ellers — aldri begge.
+  `BudsjettDetalj.faktiskKilde` sier hvilken; budsjettfanen viser det som merke.
+- **Miljø:** `FIKEN_TOKEN_KEY` (64 hex), `FIKEN_CLIENT_ID`, `FIKEN_CLIENT_SECRET` er koblet
+  gjennom docker-compose.yaml. Testmiljøet har egen tokennøkkel i `.env`; prod må få sin
+  egen før koblingen tas i bruk der. OAuth-appen hos Fiken må ha redirect-URI
+  `https://<app-vert>/api/okonomi/fiken/callback` for hvert miljø.
+- **Prøvd 04.09.2026:** «DEMO - Sammen Sameie» koblet til «Fiken-demo - Venstre sky ESEK»
+  med nøkkel; 17 kjøp speilet, «faktisk» fordelt på fem budsjettlinjer etter konto.
+
+Gjenstår i steg 2: leverandørkortet (kjøp per leverandør via orgnr), `accountBalances` som
+alternativ til speil, håndtering av 402 «module not activated» i UI.
 
 ## Utvikling og testing uten å røre prod
 

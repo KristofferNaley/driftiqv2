@@ -684,6 +684,24 @@ export type Budsjettlinje = {
 
 export type BudsjettDetalj = Omit<Budsjett, "antallLinjer"> & {
   linjer: Budsjettlinje[]; faktiskKostnader: number;
+  /** «fiken» når regnskapet er koblet — da er faktisk bokførte kjøp, ikke godkjente fakturaer. */
+  faktiskKilde: "fiken" | "fakturaer";
+};
+
+export type FikenStatus = {
+  konfigurert: { kryptering: boolean; oauth: boolean; apiNokkel: boolean };
+  kobling: {
+    companySlug: string; companyName: string; companyOrgNumber: string | null; vatType: string | null;
+    authMode: string; connectedBy: string; createdAt: string; lastSyncAt: string | null; lastSyncError: string | null;
+  } | null;
+  kjop: { antall: number; sum: number };
+};
+
+export type FikenKjop = {
+  id: string; fikenId: string; date: string; dueDate: string | null; identifier: string | null;
+  supplierName: string | null; supplierOrgNumber: string | null; gross: number; paid: boolean;
+  settled: boolean; deleted: boolean; syncedAt: string;
+  linjer: Array<{ account: number | null; description: string | null; net: number; vat: number; gross: number }>;
 };
 
 export type Sats = {
@@ -827,6 +845,19 @@ export const okonomi = {
   lastOppFakturafil: (o: string, id: string, f: FormData) =>
     api.lastOpp<Faktura>(org(o, `/okonomi/fakturaer/${id}/fil`), f),
   slettFakturafil: (o: string, id: string) => api.slett(org(o, `/okonomi/fakturaer/${id}/fil`)),
+
+  fiken: {
+    status: (o: string) => api.hent<FikenStatus>(org(o, "/okonomi/fiken")),
+    /** Testmiljøet: personlig nøkkel mot demoforetaket. 404 i prod. */
+    kobleTilMedNokkel: (o: string, d: { apiKey: string; slug?: string | null }) =>
+      api.send<FikenStatus>(org(o, "/okonomi/fiken/noekkel"), d),
+    /** OAuth starter med en vanlig navigasjon — ruta svarer med redirect til Fiken. */
+    startUrl: (o: string) => `/api${org(o, "/okonomi/fiken/start")}`,
+    synk: (o: string) =>
+      api.send<{ ok: true; nye: number; oppdaterte: number; hentet: number } | { ok: false; feil: string }>(org(o, "/okonomi/fiken/synk"), {}),
+    kobleFra: (o: string) => api.slett(org(o, "/okonomi/fiken")),
+    kjop: (o: string, aar?: number) => api.hent<FikenKjop[]>(org(o, `/okonomi/fiken/kjop${aar ? `?aar=${aar}` : ""}`)),
+  },
 };
 
 export type Dashbord = {

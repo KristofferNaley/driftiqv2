@@ -69,6 +69,48 @@ export async function register(): Promise<void> {
 
   console.log(`[varsler] Planlagt: ${varsler.plan}.`);
 
+  // Regnskapskoblingen: orgene én om gangen i egen withOrg — withoutRls kun for å finne dem.
+  // Fiken bremser over 4 kall/s, så ingen parallellitet. Feil per org lagres på raden og
+  // varsles; jobben fortsetter med neste org.
+  const fikenSynk = JOBBER.find((j) => j.nokkel === "fiken-synk")!;
+  cron.schedule(
+    fikenSynk.cron,
+    () => {
+      void (async () => {
+        try {
+          await medKjoringslogg("fiken-synk", async () => {
+            const { withOrg, withoutRls } = await import("./db/client");
+            const { fikenConnections } = await import("./db/schema/okonomi");
+            const { synkKjop } = await import("./lib/fikenkobling");
+            const orger = await withoutRls("bakgrunnsjobb", (db) =>
+              db.select({ orgId: fikenConnections.orgId }).from(fikenConnections),
+            );
+            let ok = 0;
+            const feil: string[] = [];
+            for (const { orgId } of orger) {
+              try {
+                const r = await withOrg(orgId, (db) => synkKjop(db, orgId));
+                if (r.ok) ok++;
+                else feil.push(`${orgId}: ${r.feil}`);
+              } catch (e) {
+                feil.push(`${orgId}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }
+            if (feil.length > 0) void sendDriftsvarsel(`⚠️ Fiken-synk feilet for ${feil.length} org(er): ${feil.join("; ")}`);
+            const detalj = `${ok} av ${orger.length} orger synkronisert`;
+            console.log(`[fiken-synk] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[fiken-synk] Jobben feilet:", e);
+          void sendDriftsvarsel(`⚠️ Bakgrunnsjobben «fiken-synk» feilet: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      })();
+    },
+    { timezone: fikenSynk.timezone },
+  );
+  console.log(`[fiken-synk] Planlagt: ${fikenSynk.plan}.`);
+
   const rydding = JOBBER.find((j) => j.nokkel === "hendelsesrydding")!;
 
   cron.schedule(

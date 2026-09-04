@@ -67,7 +67,11 @@ export class ApiFeil extends Error {
 export const ikkeFunnet = (hva: string) => new ApiFeil(404, `${hva} ikke funnet`);
 export const ugyldig = (melding: string) => new ApiFeil(400, melding);
 
-async function hentBruker(req: Request): Promise<User> {
+/**
+ * Eksportert for den ene ruta som ikke kan gå gjennom `orgRute`: Fikens OAuth-callback,
+ * der org-id-en kommer i signert `state` og ikke i stien. Alt annet bruker wrapperen.
+ */
+export async function hentBruker(req: Request): Promise<User> {
   const sesjon = await auth.api.getSession({ headers: req.headers });
   if (!sesjon?.user?.id) throw new ApiFeil(401, "Ikke innlogget");
 

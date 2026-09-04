@@ -1,4 +1,4 @@
-import { date, index, integer, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { units } from "./units";
 import { users } from "./users";
@@ -255,6 +255,70 @@ export const supplierInvoices = pgTable("supplier_invoices", {
 }, (t) => [
   index("idx_supplier_invoices_org_status").on(t.orgId, t.status),
 ]);
+
+/**
+ * Regnskapskoblingen per org — Fiken først (adapteret i `lib/fiken.ts`).
+ *
+ * Én rad per org, ALDRI token i `organizations`. Tokens er kryptert med `FIKEN_TOKEN_KEY`
+ * (`lib/kryptering.ts`); basen alene gir ikke tilgang til kundens regnskap. `auth_mode`
+ * «api_key» finnes bare i testmiljøet (personlig nøkkel mot demoforetaket) — Fikens vilkår
+ * forbyr personlig nøkkel i en tredjepartsapp, så prod tillater kun «oauth».
+ */
+export const fikenConnections = pgTable("fiken_connections", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  companySlug: varchar("company_slug").notNull(),
+  companyName: varchar("company_name").notNull(),
+  companyOrgNumber: varchar("company_org_number"),
+  /** Fikens `vatType` for foretaket («no» = ikke mva-registrert, det normale for et sameie). */
+  vatType: varchar("vat_type"),
+  /** «oauth» | «api_key» (kun test). */
+  authMode: varchar("auth_mode").notNull(),
+  accessTokenEnc: text("access_token_enc").notNull(),
+  refreshTokenEnc: text("refresh_token_enc"),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  connectedBy: varchar("connected_by").notNull(),
+  connectedByUserId: varchar("connected_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncError: varchar("last_sync_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uq_fiken_connections_org").on(t.orgId),
+]);
+
+/**
+ * Speilede kjøp (leverandørfakturaer bokført i Fiken). Nøkkel: (org, fiken_id). Linjene
+ * ligger som JSON — «faktisk» summeres per konto fra dem, og det er den ene bruken.
+ * Slettede kjøp beholdes med `deleted = true` (Fiken sletter ikke, den motposterer).
+ */
+export const fikenPurchases = pgTable("fiken_purchases", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  fikenId: varchar("fiken_id").notNull(),
+  date: date("date").notNull(),
+  dueDate: date("due_date"),
+  identifier: varchar("identifier"),
+  supplierName: varchar("supplier_name"),
+  supplierOrgNumber: varchar("supplier_org_number"),
+  /** Brutto i øre (netto + mva over alle linjer) — det sameiet faktisk betaler. */
+  gross: integer("gross").notNull(),
+  paid: boolean("paid").notNull().default(false),
+  settled: boolean("settled").notNull().default(false),
+  deleted: boolean("deleted").notNull().default(false),
+  /** JSON: `[{ account, description, net, vat, gross }]`, beløp i øre. */
+  lines: text("lines").notNull(),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uq_fiken_purchases_org_fiken").on(t.orgId, t.fikenId),
+  index("idx_fiken_purchases_org_date").on(t.orgId, t.date),
+]);
+
+export type FikenConnection = typeof fikenConnections.$inferSelect;
+export type FikenPurchase = typeof fikenPurchases.$inferSelect;
 
 export type UnitOwner = typeof unitOwners.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;

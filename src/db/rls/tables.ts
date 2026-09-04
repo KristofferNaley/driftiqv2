@@ -62,6 +62,9 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // fakturaene er regnskap, begge mer sensitive enn resten av appen.
   "unit_owners", "budgets", "budget_lines", "unit_fee_rates",
   "fee_runs", "fee_run_lines", "supplier_invoices",
+  // Regnskapskoblingen: krypterte tokens og speilede kjøp. En kunde skal aldri kunne lese
+  // en annen kundes regnskap — heller ikke gjennom en glemt org-filter i en synkjobb.
+  "fiken_connections", "fiken_purchases",
 ];
 
 /**

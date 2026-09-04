@@ -38,6 +38,7 @@ import { vendors } from "../db/schema/vendors";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 import { enhetKortnavn, enhetNavn } from "./enhetnavn";
+import { faktiskFraFiken } from "./fikenkobling";
 import { loggHendelse } from "./hendelser";
 import { lagreFil, slettFil } from "./lagring";
 import {
@@ -462,14 +463,17 @@ export async function hentBudsjett(db: Db, orgId: string, budgetId: string) {
   const b = r[0];
   if (!b) throw ikkeFunnet("Budsjett");
 
-  const [linjer, faktisk] = await Promise.all([
-    db
-      .select()
-      .from(budgetLines)
-      .where(and(eq(budgetLines.budgetId, budgetId), eq(budgetLines.orgId, orgId)))
-      .orderBy(asc(budgetLines.sortOrder), asc(budgetLines.createdAt)),
-    faktiskPerLinje(db, orgId, budgetId),
-  ]);
+  const linjer = await db
+    .select()
+    .from(budgetLines)
+    .where(and(eq(budgetLines.budgetId, budgetId), eq(budgetLines.orgId, orgId)))
+    .orderBy(asc(budgetLines.sortOrder), asc(budgetLines.createdAt));
+
+  // Med regnskapskobling er REGNSKAPET fasit for «faktisk» (kjøp per konto); uten er det
+  // fakturaene styret har godkjent her. Aldri begge — en faktura godkjent i DriftIQ og
+  // bokført i Fiken er samme kostnad.
+  const fraFiken = await faktiskFraFiken(db, orgId, b.year, linjer);
+  const faktisk = fraFiken ?? (await faktiskPerLinje(db, orgId, budgetId));
 
   const medFaktisk = linjer.map((l) => ({ ...l, faktisk: faktisk.get(l.id) ?? 0 }));
   return {
@@ -477,6 +481,8 @@ export async function hentBudsjett(db: Db, orgId: string, budgetId: string) {
     linjer: medFaktisk,
     summer: budsjettSummer(linjer),
     faktiskKostnader: medFaktisk.filter((l) => l.kind === "kostnad").reduce((s, l) => s + l.faktisk, 0),
+    /** Hvor «faktisk» kommer fra — vises på budsjettet. */
+    faktiskKilde: (fraFiken ? "fiken" : "fakturaer") as "fiken" | "fakturaer",
   };
 }
 

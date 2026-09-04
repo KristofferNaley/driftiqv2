@@ -42,6 +42,15 @@ export const JOBBER: Jobb[] = [
     plan: "Hver natt kl. 04:00 (Europe/Oslo)",
     kilde: "app",
   },
+  {
+    nokkel: "fiken-synk",
+    navn: "Fiken-synk",
+    beskrivelse: "Speiler bokførte kjøp fra Fiken for orger med regnskapskobling",
+    cron: "30 5 * * *",
+    timezone: "Europe/Oslo",
+    plan: "Hver natt kl. 05:30 (Europe/Oslo)",
+    kilde: "app",
+  },
   // Vertsjobbene går i vertens LOKALTID (satt til Europe/Oslo 14.08.2026 — cron må
   // restartes etter et tidssonebytte, den leser sonen ved oppstart).
   {

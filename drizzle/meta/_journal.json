@@ -372,6 +372,13 @@
       "when": 1788511781031,
       "tag": "0052_budsjett_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788512793020,
+      "tag": "0053_fiken_kobling",
+      "breakpoints": true
     }
   ]
 }

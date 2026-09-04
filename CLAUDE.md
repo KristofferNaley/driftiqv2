@@ -361,6 +361,10 @@ komponenter — endres logikken, må begge med.
 - **`sum()` på integer gir bigint, og node-postgres returnerer bigint som STRENG.**
   «806205013 tokens» var 80 620 og 5 013 limt sammen med `+`. Typene lyver — gjennom
   `Number()` før aritmetikk.
+- **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
+  for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
+  har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test
+  (`ER_TESTMILJO`). Se `docs/fiken.md` «Steg 2 slik det ble».
 - **En ny env-variabel må kobles gjennom `docker-compose.yaml`.** AI-rådgiveren feilet
   med 503 fordi `ANTHROPIC_API_KEY` sto i `.env` men ikke i compose — variabelen fantes
   ikke i containermiljøet uansett.

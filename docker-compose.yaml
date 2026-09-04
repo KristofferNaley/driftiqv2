@@ -36,6 +36,11 @@ services:
       # AI-rådgiveren. Tom nøkkel = endepunktet svarer 503, resten av appen kjører videre.
       # Nøkkelen hentes fra console.anthropic.com; se .env.example.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Regnskapskoblingen (Fiken). Tokennøkkelen krypterer kundenes tokens i basen;
+      # client id/secret er OAuth-appen «DriftIQ» hos Fiken. Se docs/fiken.md.
+      FIKEN_TOKEN_KEY: ${FIKEN_TOKEN_KEY:-}
+      FIKEN_CLIENT_ID: ${FIKEN_CLIENT_ID:-}
+      FIKEN_CLIENT_SECRET: ${FIKEN_CLIENT_SECRET:-}
       # Driftsvarsler til Discord (oppstart, feilede bakgrunnsjobber). Tom = av.
       # Se .env.example og src/lib/driftsvarsel.ts.
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
