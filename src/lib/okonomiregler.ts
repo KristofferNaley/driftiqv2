@@ -49,6 +49,22 @@ export function tilKronerTekst(ore: number | null | undefined): string {
 }
 
 /**
+ * Øre → tekst til et REDIGERBART felt, med tusenskille («1 440 000» eller «5 725,50»).
+ * Vanlig mellomrom, ikke NBSP, så teksten kan skrives videre på — og `tilOre()` leser den
+ * tilbake. CSV og logger bruker `tilKronerTekst()` uten skille.
+ */
+export function belopFelt(ore: number | null | undefined): string {
+  if (ore === null || ore === undefined) return "";
+  const negativ = ore < 0;
+  const abs = Math.abs(ore);
+  const hele = Math.floor(abs / 100);
+  const rest = abs % 100;
+  const heleTekst = String(hele).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const tekst = rest === 0 ? heleTekst : `${heleTekst},${String(rest).padStart(2, "0")}`;
+  return negativ ? `-${tekst}` : tekst;
+}
+
+/**
  * Det brukeren skriver → øre. Tåler «3 500», «3500,50», «3.500,50», «3500.5» og «kr».
  * Returnerer `null` når teksten ikke er et beløp — kallstedet velger feilmeldingen.
  */

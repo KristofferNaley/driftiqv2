@@ -11,7 +11,7 @@ import {
   FAKTURA_STATUS_ETIKETT,
   isoDato,
   kroner,
-  tilKronerTekst,
+  belopFelt,
   tilOre,
   type FakturaStatus,
 } from "@/lib/okonomiregler";
@@ -216,7 +216,7 @@ function FakturaSkjema({
   const [nr, setNr] = useState(faktura?.invoiceNumber ?? "");
   const [datoVerdi, setDatoVerdi] = useState(faktura?.invoiceDate ?? isoDato(new Date()));
   const [forfall, setForfall] = useState(faktura?.dueDate ?? "");
-  const [belop, setBelop] = useState(faktura ? tilKronerTekst(faktura.amount) : "");
+  const [belop, setBelop] = useState(faktura ? belopFelt(faktura.amount) : "");
   const [kid, setKid] = useState(faktura?.kid ?? "");
   const [beskrivelse, setBeskrivelse] = useState(faktura?.description ?? "");
   const [notat, setNotat] = useState(faktura?.note ?? "");

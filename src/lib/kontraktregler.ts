@@ -17,6 +17,10 @@
  */
 export const SNART_UT_DAGER = 180;
 
+/** Speiler `KONTRAKT_TYPER`/`KONTRAKT_MAKS` i lib/kontrakter.ts — til hjelpeteksten i skjemaet. */
+export const KONTRAKT_MAKS_MB = 25;
+export const KONTRAKT_TYPER_TEKST = "PDF, PNG eller JPG";
+
 export type KontraktKategori = { verdi: string; etikett: string };
 
 /**

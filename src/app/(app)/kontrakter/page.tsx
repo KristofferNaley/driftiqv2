@@ -251,8 +251,9 @@ export default function Kontrakter({ searchParams }: { searchParams: Promise<{ a
           sendEtikett="Opprett kontrakt"
           onLukk={() => setNyKontrakt(false)}
           onLagre={async (felter) => {
-            await kontrakter.ny(orgId, felter);
+            const ny = await kontrakter.ny(orgId, felter);
             await last();
+            return ny;
           }}
         />
       )}

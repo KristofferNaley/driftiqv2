@@ -12,7 +12,7 @@ import {
   isoDato,
   kroner,
   manedTekst,
-  tilKronerTekst,
+  belopFelt,
   tilOre,
   type KjoringStatus,
 } from "@/lib/okonomiregler";
@@ -241,7 +241,7 @@ function SatsModal({
   onLagre: (d: { monthlyAmount: number; validFrom: string; note: string | null }) => Promise<void>;
   onSlett?: () => Promise<void>;
 }) {
-  const [belop, setBelop] = useState(rad.sats ? tilKronerTekst(rad.sats.monthlyAmount) : "");
+  const [belop, setBelop] = useState(rad.sats ? belopFelt(rad.sats.monthlyAmount) : "");
   const [fra, setFra] = useState(rad.sats?.validFrom ?? `${new Date().getFullYear()}-01-01`);
   const [notat, setNotat] = useState(rad.sats?.note ?? "");
   const { sender, feil, send } = useSending(onLukk);

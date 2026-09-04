@@ -629,6 +629,7 @@ export default function KontraktDetaljModal({
             await kontrakter.arkiver(orgId, id, { archiveNote: "Fornyet — erstattet av ny avtale" });
             await onEndret();
             onBytt(ny.id);
+            return ny;
           }}
         />
       )}

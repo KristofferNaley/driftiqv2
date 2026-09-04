@@ -11,7 +11,7 @@ import {
   forventetHittil,
   kontoTekst,
   kroner,
-  tilKronerTekst,
+  belopFelt,
   tilOre,
   type Linjetype,
 } from "@/lib/okonomiregler";
@@ -367,13 +367,13 @@ function LinjeRad({
   onBelop: (ore: number) => Promise<void>;
   onSlett: () => Promise<void>;
 }) {
-  const [tekst, setTekst] = useState(tilKronerTekst(linje.amount));
-  useEffect(() => setTekst(tilKronerTekst(linje.amount)), [linje.amount]);
+  const [tekst, setTekst] = useState(belopFelt(linje.amount));
+  useEffect(() => setTekst(belopFelt(linje.amount)), [linje.amount]);
 
   function lagre() {
     const ore = tilOre(tekst);
     if (ore === null || ore < 0) {
-      setTekst(tilKronerTekst(linje.amount));
+      setTekst(belopFelt(linje.amount));
       return;
     }
     if (ore !== linje.amount) void onBelop(ore);
@@ -460,7 +460,7 @@ function ForslagModal({
       .then((f) => {
         if (!aktiv) return;
         setData(f);
-        setValgt(Object.fromEntries(f.linjer.filter((l) => l.forslag !== null).map((l) => [l.lineId, tilKronerTekst(l.forslag!)])));
+        setValgt(Object.fromEntries(f.linjer.filter((l) => l.forslag !== null).map((l) => [l.lineId, belopFelt(l.forslag!)])));
       })
       .catch((e) => aktiv && setFeil(e instanceof Error ? e.message : "Kunne ikke hente forslaget"));
     return () => {
@@ -679,7 +679,7 @@ function LinjeModal({
   const [navn, setNavn] = useState(linje?.name ?? "");
   const [fra, setFra] = useState(linje?.accountFrom ? String(linje.accountFrom) : "");
   const [til, setTil] = useState(linje?.accountTo ? String(linje.accountTo) : "");
-  const [belop, setBelop] = useState(linje ? tilKronerTekst(linje.amount) : "");
+  const [belop, setBelop] = useState(linje ? belopFelt(linje.amount) : "");
   const [endringKr, setEndringKr] = useState("");
   const [endringProsent, setEndringProsent] = useState("");
   const [notat, setNotat] = useState(linje?.note ?? "");
@@ -695,13 +695,13 @@ function LinjeModal({
     setEndringKr(v);
     setEndringProsent("");
     const kr = tilOre(v);
-    if (kr !== null) setBelop(tilKronerTekst(grunnlag + kr));
+    if (kr !== null) setBelop(belopFelt(grunnlag + kr));
   }
   function justerProsent(v: string) {
     setEndringProsent(v);
     setEndringKr("");
     const p = Number(v.replace(",", "."));
-    if (v.trim() !== "" && Number.isFinite(p)) setBelop(tilKronerTekst(Math.round((grunnlag * (1 + p / 100)) / 100) * 100));
+    if (v.trim() !== "" && Number.isFinite(p)) setBelop(belopFelt(Math.round((grunnlag * (1 + p / 100)) / 100) * 100));
   }
 
   return (
