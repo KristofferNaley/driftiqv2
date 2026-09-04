@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { fikenConnections, fikenPurchases } from "../db/schema/okonomi";
+import { vendors } from "../db/schema/vendors";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 import {
@@ -36,6 +37,7 @@ import { loggHendelse } from "./hendelser";
 import { dekrypter, krypter, krypteringErKonfigurert } from "./kryptering";
 import { ER_TESTMILJO } from "./miljo";
 import { isoDato, kontoIIntervall } from "./okonomiregler";
+import { normaliserOrgnr } from "./orgnr";
 
 const MODUL = "okonomi" as const;
 
@@ -218,6 +220,7 @@ export async function synkKjop(db: Db, orgId: string, naa = new Date()): Promise
         nye++;
       }
     }
+    await oppdaterSistBrukt(db, orgId);
     await db
       .update(fikenConnections)
       .set({ lastSyncAt: naa, lastSyncError: null })
@@ -233,7 +236,73 @@ export async function synkKjop(db: Db, orgId: string, naa = new Date()): Promise
   }
 }
 
-/** Speilede kjøp, nyeste først — til lista på Integrasjon-fanen og leverandørkortet senere. */
+/**
+ * Kjøpene som hører til én leverandør i registeret: på normalisert orgnr når begge har det,
+ * ellers på navn (uten store/små bokstaver). Samme grep som partnerregisteret i
+ * leverandørportal-notatet — matching ved lesing, ingenting lagres.
+ */
+export function kjopTilhorer(
+  leverandor: { name: string; orgNumber: string | null },
+  kjop: { supplierName: string | null; supplierOrgNumber: string | null },
+): "orgnr" | "navn" | null {
+  const a = normaliserOrgnr(leverandor.orgNumber);
+  const b = normaliserOrgnr(kjop.supplierOrgNumber);
+  if (a && b) return a === b ? "orgnr" : null;
+  if (kjop.supplierName && kjop.supplierName.trim().toLowerCase() === leverandor.name.trim().toLowerCase()) return "navn";
+  return null;
+}
+
+/** Leverandørkortet: kjøpene fra Fiken for én leverandør, med sum per år. */
+export async function kjopForLeverandor(db: Db, orgId: string, vendorId: string) {
+  const lev = await db
+    .select({ id: vendors.id, name: vendors.name, orgNumber: vendors.orgNumber })
+    .from(vendors)
+    .where(and(eq(vendors.id, vendorId), eq(vendors.orgId, orgId)))
+    .limit(1);
+  if (!lev[0]) throw ikkeFunnet("Leverandør");
+  const koblet = (await db.select({ id: fikenConnections.id }).from(fikenConnections).where(eq(fikenConnections.orgId, orgId)).limit(1)).length > 0;
+  const alle = await hentKjopLokalt(db, orgId, { grense: 5000 });
+  const kjop = alle
+    .map((k) => ({ ...k, treff: kjopTilhorer(lev[0]!, k) }))
+    .filter((k) => k.treff !== null);
+  const perAar = new Map<number, { aar: number; antall: number; sum: number }>();
+  for (const k of kjop) {
+    const aar = Number(k.date.slice(0, 4));
+    const r = perAar.get(aar) ?? { aar, antall: 0, sum: 0 };
+    r.antall++;
+    r.sum += k.gross;
+    perAar.set(aar, r);
+  }
+  return {
+    koblet,
+    kjop: kjop.map(({ treff: _treff, ...k }) => k),
+    treffPaa: kjop[0]?.treff ?? null,
+    perAar: [...perAar.values()].sort((a, b) => b.aar - a.aar),
+    sisteKjop: kjop[0]?.date ?? null,
+  };
+}
+
+/**
+ * «Sist brukt» på handelskontoer fylles fra bokførte kjøp i stedet for for hånd — det var
+ * verdien notatet lovet leverandørkortet. Bare framover: en manuelt satt nyere dato røres ikke.
+ */
+async function oppdaterSistBrukt(db: Db, orgId: string) {
+  const [levs, kjop] = await Promise.all([
+    db.select({ id: vendors.id, name: vendors.name, orgNumber: vendors.orgNumber, lastUsedAt: vendors.lastUsedAt }).from(vendors).where(eq(vendors.orgId, orgId)),
+    hentKjopLokalt(db, orgId, { grense: 5000 }),
+  ]);
+  for (const lev of levs) {
+    let siste: string | null = null;
+    for (const k of kjop) {
+      if (kjopTilhorer(lev, k) && (!siste || k.date > siste)) siste = k.date;
+    }
+    if (siste && (!lev.lastUsedAt || siste > lev.lastUsedAt)) {
+      await db.update(vendors).set({ lastUsedAt: siste }).where(and(eq(vendors.id, lev.id), eq(vendors.orgId, orgId)));
+    }
+  }
+}
+
+/** Speilede kjøp, nyeste først — til lista på Integrasjon-fanen og leverandørkortet. */
 export async function hentKjopLokalt(db: Db, orgId: string, opts: { aar?: number; grense?: number } = {}) {
   const betingelser = [eq(fikenPurchases.orgId, orgId), eq(fikenPurchases.deleted, false)];
   if (opts.aar) {

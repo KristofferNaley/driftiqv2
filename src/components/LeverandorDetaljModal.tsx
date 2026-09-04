@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, FileText, KeyRound, NotebookPen, Pencil, UserPlus, Users } from "lucide-react";
+import { Building2, FileText, KeyRound, NotebookPen, Pencil, Receipt, UserPlus, Users } from "lucide-react";
 import { useOkt } from "@/components/OktProvider";
 import { Feil, Rad, Tom, dato, kr } from "@/components/felles";
 import { Avkryssing, Fanemodal, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending, type Fanevalg } from "@/components/skjema";
 import KontraktDetaljModal from "@/components/KontraktDetaljModal";
-import { kontrakter, leverandorer, type Kontrakt, type Leverandor } from "@/lib/klient";
+import { kontrakter, leverandorer, okonomi, type Kontrakt, type Leverandor } from "@/lib/klient";
+import { modulErAktivert } from "@/lib/moduler";
+import { kroner } from "@/lib/okonomiregler";
 import { kontraktKategoriEtikett, kontraktStatus } from "@/lib/kontraktregler";
 
-type Fane = "om" | "avtaler" | "kontakter" | "adgang" | "notater";
+type Fane = "om" | "avtaler" | "kontakter" | "adgang" | "notater" | "kjop";
 
 type Kontaktperson = { id: string; name: string; role: string | null; email: string | null; phone: string | null; isPrimary: boolean };
 type Adgangsobjekt = { id: string; title: string; status: string; issuedTo: string | null; areas: string | null; issuedAt: string | null };
@@ -66,6 +68,21 @@ export default function LeverandorDetaljModal({
    */
   const [avtaler, setAvtaler] = useState<Kontrakt[] | null>(null);
   const [apenKontrakt, setApenKontrakt] = useState<string | null>(null);
+
+  /**
+   * Kjøpene fra Fiken — bare når økonomimodulen er på, og hentet først når fanen åpnes.
+   * Matching på orgnr/navn skjer på serveren (`kjopForLeverandor`); ingenting lagres.
+   */
+  const harOkonomi = modulErAktivert(aktivOrg?.enabledModules, "okonomi");
+  type Kjop = Awaited<ReturnType<typeof okonomi.fiken.kjopForLeverandor>>;
+  const [kjop, setKjop] = useState<Kjop | null>(null);
+  useEffect(() => {
+    if (fane !== "kjop" || kjop !== null) return;
+    okonomi.fiken
+      .kjopForLeverandor(orgId, id)
+      .then(setKjop)
+      .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke hente kjøpene"));
+  }, [fane, kjop, orgId, id]);
   useEffect(() => {
     if (fane !== "avtaler" || avtaler !== null) return;
     kontrakter
@@ -181,6 +198,7 @@ export default function LeverandorDetaljModal({
     { nokkel: "kontakter", etikett: "Kontaktpersoner", Ikon: Users },
     { nokkel: "adgang", etikett: "Adgangskontroll", Ikon: KeyRound },
     { nokkel: "notater", etikett: "Notater", Ikon: NotebookPen },
+    ...(harOkonomi ? [{ nokkel: "kjop" as const, etikett: "Kjøp fra regnskapet", Ikon: Receipt }] : []),
   ];
 
   // Samme Escape-gate som kontraktmodalen: undermodalens Escape skal ikke rive hovedmodalen,
@@ -274,6 +292,55 @@ export default function LeverandorDetaljModal({
                   <Rad tittel="Status" hoyre={<span className="badge muted">Inaktiv</span>} />
                 )}
                 {data.notes && <Rad tittel="Notat" meta={data.notes} />}
+              </>
+            )}
+
+            {fane === "kjop" && (
+              <>
+                {kjop === null ? (
+                  <Tom tekst="Henter …" />
+                ) : !kjop.koblet ? (
+                  <Tom tekst="Regnskapet er ikke koblet til Fiken. Koble til under Økonomi → Integrasjon, så vises bokførte kjøp her." />
+                ) : kjop.kjop.length === 0 ? (
+                  <Tom
+                    tekst={
+                      data?.orgNumber
+                        ? "Ingen bokførte kjøp fra denne leverandøren i Fiken."
+                        : "Ingen treff. Legg inn organisasjonsnummer på leverandøren, så matches kjøpene på det i stedet for på navn."
+                    }
+                  />
+                ) : (
+                  <>
+                    <div className="field-note" style={{ marginBottom: "10px" }}>
+                      Bokførte kjøp fra Fiken, matchet på {kjop.treffPaa === "orgnr" ? "organisasjonsnummer" : "navn"}. Siste kjøp{" "}
+                      {dato(kjop.sisteKjop)}.
+                    </div>
+                    <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "10px" }}>
+                      {kjop.perAar.map((a) => (
+                        <div key={a.aar}>
+                          <div className="card-title">{a.aar}</div>
+                          <div style={{ fontSize: "var(--fs-md)", fontWeight: 600 }}>{kroner(a.sum)}</div>
+                          <div className="list-meta">{a.antall} kjøp</div>
+                        </div>
+                      ))}
+                    </div>
+                    {kjop.kjop.slice(0, 60).map((k) => (
+                      <Rad
+                        key={k.id}
+                        tittel={k.linjer[0]?.description ?? k.identifier ?? "Kjøp"}
+                        meta={[dato(k.date), k.identifier && `nr. ${k.identifier}`, [...new Set(k.linjer.map((l) => l.account).filter(Boolean))].join(", ")]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        hoyre={
+                          <>
+                            <span style={{ fontWeight: 600, fontSize: "var(--fs-sm)" }}>{kroner(k.gross)}</span>
+                            {!k.settled && !k.paid && <span className="badge warn">Ubetalt</span>}
+                          </>
+                        }
+                      />
+                    ))}
+                  </>
+                )}
               </>
             )}
 

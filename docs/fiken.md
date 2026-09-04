@@ -475,8 +475,12 @@ ikke avtalt mot faktisk per avtale.
 - **Prøvd 04.09.2026:** «DEMO - Sammen Sameie» koblet til «Fiken-demo - Venstre sky ESEK»
   med nøkkel; 17 kjøp speilet, «faktisk» fordelt på fem budsjettlinjer etter konto.
 
-Gjenstår i steg 2: leverandørkortet (kjøp per leverandør via orgnr), `accountBalances` som
-alternativ til speil, håndtering av 402 «module not activated» i UI.
+- **Leverandørkortet (04.09.2026):** fanen «Kjøp fra regnskapet» (kun med økonomimodulen)
+  viser bokførte kjøp matchet på normalisert orgnr, ellers på navn (`kjopTilhorer`), med
+  sum per år. Synken fyller `vendors.lastUsedAt` fra siste kjøp — bare framover.
+
+Gjenstår i steg 2: `accountBalances` som alternativ til speil, håndtering av 402 «module
+not activated» i UI.
 
 ## Utvikling og testing uten å røre prod
 

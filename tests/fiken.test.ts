@@ -16,7 +16,7 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import type { Aktor } from "../src/lib/aktor";
 import { TILLATTE_KALL, erTillatt, fikenKall, lagState, lesState, tilLokaltKjop, type FikenKjop } from "../src/lib/fiken";
-import { faktiskFraFiken, hentKjopLokalt, hentKobling, kobleFra, kobleTilMedNokkel, synkKjop } from "../src/lib/fikenkobling";
+import { faktiskFraFiken, hentKjopLokalt, hentKobling, kjopForLeverandor, kjopTilhorer, kobleFra, kobleTilMedNokkel, synkKjop } from "../src/lib/fikenkobling";
 import { dekrypter, krypter } from "../src/lib/kryptering";
 import { ER_TESTMILJO } from "../src/lib/miljo";
 import { endreLinje, godkjennFaktura, hentBudsjett, opprettBudsjett, registrerFaktura } from "../src/lib/okonomi";
@@ -219,6 +219,28 @@ describe("koblingen", () => {
     expect(r.ok).toBe(false);
     const s = await i(orgId, (db) => hentKobling(db, orgId));
     expect(s.kobling?.lastSyncError).toMatch(/avviste tilgangen/);
+  });
+
+  it("kobler kjøp til leverandøren på orgnr, ellers navn, og fyller «sist brukt»", async () => {
+    if (!ER_TESTMILJO) return;
+    expect(kjopTilhorer({ name: "Heis AS", orgNumber: "999 999 999" }, { supplierName: "HEIS AS", supplierOrgNumber: "999999999" })).toBe("orgnr");
+    expect(kjopTilhorer({ name: "Heis AS", orgNumber: "111111111" }, { supplierName: "Heis AS", supplierOrgNumber: "999999999" })).toBeNull();
+    expect(kjopTilhorer({ name: "Heis AS", orgNumber: null }, { supplierName: "heis as", supplierOrgNumber: "999999999" })).toBe("navn");
+
+    const { orgId, vendorId } = await oppsett();
+    await eier.query("UPDATE vendors SET org_number = '999 999 999' WHERE id = $1", [vendorId]);
+    stubbFiken([kjop(), kjop({ purchaseId: 102, date: "2025-03-01", lines: [{ netPrice: 1_000, vat: 0, account: "6620" }] }), kjop({ purchaseId: 103, supplier: { name: "Andre AS", organizationNumber: "111111111" } })]);
+    await i(orgId, (db) => kobleTilMedNokkel(db, orgId, aktor, { apiKey: "nokkel" }));
+    await i(orgId, (db) => synkKjop(db, orgId));
+
+    const r = await i(orgId, (db) => kjopForLeverandor(db, orgId, vendorId));
+    expect(r.koblet).toBe(true);
+    expect(r.treffPaa).toBe("orgnr");
+    expect(r.kjop.length).toBe(2);
+    expect(r.perAar).toEqual([{ aar: 2026, antall: 1, sum: 500_000 }, { aar: 2025, antall: 1, sum: 1_000 }]);
+    expect(r.sisteKjop).toBe("2026-09-01");
+    const lev = await eier.query("SELECT last_used_at::text AS d FROM vendors WHERE id = $1", [vendorId]);
+    expect(lev.rows[0].d).toBe("2026-09-01");
   });
 
   it("ser ikke en annen orgs kobling eller kjøp", async () => {

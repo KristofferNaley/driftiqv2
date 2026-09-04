@@ -857,6 +857,12 @@ export const okonomi = {
       api.send<{ ok: true; nye: number; oppdaterte: number; hentet: number } | { ok: false; feil: string }>(org(o, "/okonomi/fiken/synk"), {}),
     kobleFra: (o: string) => api.slett(org(o, "/okonomi/fiken")),
     kjop: (o: string, aar?: number) => api.hent<FikenKjop[]>(org(o, `/okonomi/fiken/kjop${aar ? `?aar=${aar}` : ""}`)),
+    /** Leverandørkortet: kjøpene som matcher leverandøren på orgnr eller navn. */
+    kjopForLeverandor: (o: string, vendorId: string) =>
+      api.hent<{
+        koblet: boolean; kjop: FikenKjop[]; treffPaa: "orgnr" | "navn" | null;
+        perAar: Array<{ aar: number; antall: number; sum: number }>; sisteKjop: string | null;
+      }>(org(o, `/okonomi/fiken/kjop?vendorId=${encodeURIComponent(vendorId)}`)),
   },
 };
 
