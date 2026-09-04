@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { Feil, Kort, Rad, Tom, dato, useOrgData } from "@/components/felles";
 import { okonomi } from "@/lib/klient";
 import {
@@ -14,6 +13,7 @@ import {
   type KjoringStatus,
 } from "@/lib/okonomiregler";
 import type { OkonomiFane } from "./page";
+import Kpi from "./Kpi";
 
 /**
  * Oversikten — det styret ser først: hva som venter på dem, hvor de ligger mot budsjettet,
@@ -212,17 +212,6 @@ export default function Oversikt({ onGaaTil }: { onGaaTil: (f: OkonomiFane, id?:
         </Kort>
       </div>
     </>
-  );
-}
-
-/** Nøkkeltall med fargebånd i toppen — mockupens `kpi-kort`, med modulprefiks. */
-function Kpi({ tone, etikett, verdi, under }: { tone: "blaa" | "gronn" | "gul" | "roed"; etikett: string; verdi: ReactNode; under?: ReactNode }) {
-  return (
-    <div className={`card ok-kpi-kort ok-kpi-${tone}`}>
-      <div className="ok-kpi-etikett">{etikett}</div>
-      <div className="ok-kpi-tall">{verdi}</div>
-      {under && <div className="ok-kpi-under">{under}</div>}
-    </div>
   );
 }
 

@@ -95,6 +95,12 @@ export const eierEndring = eierInn.omit({ unitId: true, ownerFrom: true }).parti
 export const brokInn = z.object({
   teller: z.number().int().min(0, "Teller kan ikke være negativ").nullable(),
   nevner: z.number().int().min(1, "Nevner må være minst 1").nullable(),
+  /** BRA i m², som streng (numeric) — se `enhetInn`. Utelatt = urørt. */
+  arealM2: z
+    .union([z.string(), z.number()])
+    .nullish()
+    .transform((v) => (v === null || v === undefined ? v : String(v)))
+    .optional(),
 });
 
 async function hentBoliger(db: Db, orgId: string) {
@@ -283,7 +289,7 @@ export async function slettEier(db: Db, orgId: string, ownerId: string, av: Akto
   });
 }
 
-/** Brøken settes på seksjonen — den er en egenskap ved seksjonen, ikke eieren. */
+/** Brøken (og BRA) settes på seksjonen — de er egenskaper ved seksjonen, ikke eieren. */
 export async function settBrok(db: Db, orgId: string, unitId: string, data: z.infer<typeof brokInn>) {
   const enhet = await krevEnhetIOrg(db, orgId, unitId);
   if (enhet.type === "fellesareal") throw ugyldig("Et fellesareal har ingen brøk.");
@@ -292,10 +298,97 @@ export async function settBrok(db: Db, orgId: string, unitId: string, data: z.in
   }
   const [endret] = await db
     .update(units)
-    .set({ brokTeller: data.teller, brokNevner: data.nevner })
+    .set({
+      brokTeller: data.teller,
+      brokNevner: data.nevner,
+      ...(data.arealM2 === undefined ? {} : { arealM2: data.arealM2 }),
+    })
     .where(and(eq(units.id, unitId), eq(units.orgId, orgId)))
     .returning();
   return endret!;
+}
+
+/**
+ * Alt seksjonsmodalen viser om ÉN seksjon: fysiske fakta, nåværende og tidligere eiere,
+ * satsene, fakturagrunnlaget måned for måned, og en tidslinje regnet ut av det samme —
+ * eierskifter, satsendringer og kjøringer. Ingen egen historikktabell: tidslinja er
+ * dataene selv, så den kan aldri sprike fra dem.
+ */
+export async function hentSeksjon(db: Db, orgId: string, unitId: string) {
+  const enhet = await krevEnhetIOrg(db, orgId, unitId);
+  const [eiere, satser, linjer] = await Promise.all([
+    db
+      .select()
+      .from(unitOwners)
+      .where(and(eq(unitOwners.orgId, orgId), eq(unitOwners.unitId, unitId)))
+      .orderBy(desc(unitOwners.ownerFrom)),
+    db
+      .select()
+      .from(unitFeeRates)
+      .where(and(eq(unitFeeRates.orgId, orgId), eq(unitFeeRates.unitId, unitId)))
+      .orderBy(desc(unitFeeRates.validFrom)),
+    db
+      .select({ linje: feeRunLines, status: feeRuns.status, kjoringOpprettet: feeRuns.createdAt, kjoringAv: feeRuns.createdBy })
+      .from(feeRunLines)
+      .innerJoin(feeRuns, eq(feeRuns.id, feeRunLines.feeRunId))
+      .where(and(eq(feeRunLines.orgId, orgId), eq(feeRunLines.unitId, unitId), ne(feeRuns.status, "annullert")))
+      .orderBy(desc(feeRunLines.month)),
+  ]);
+
+  const iDag = isoDato(new Date());
+  const eier = eiere.find((e) => e.ownerTo === null) ?? eierPaaDato(eiere, unitId, iDag);
+  const sats = satsPaaDato(satser, unitId, iDag);
+
+  type Hendelse = { dato: string; tone: "ok" | "info" | "warn" | "muted"; tittel: string; detalj: string };
+  const historikk: Hendelse[] = [];
+  for (const e of eiere) {
+    historikk.push({ dato: e.ownerFrom, tone: "ok", tittel: `Ny eier: ${e.name}`, detalj: e.ownerTo ? `til ${e.ownerTo}` : "nåværende eier" });
+    if (e.ownerTo) historikk.push({ dato: e.ownerTo, tone: "muted", tittel: `${e.name} avsluttet som eier`, detalj: "eierskifte" });
+  }
+  for (const s of satser) {
+    historikk.push({
+      dato: s.validFrom, tone: "info",
+      tittel: `Felleskostnad ${tilKronerTekst(s.monthlyAmount)} kr/mnd`,
+      detalj: s.source === "overstyrt" ? `satt manuelt${s.note ? ` · ${s.note}` : ""}` : "beregnet fra vedtatt budsjett",
+    });
+  }
+  const perKjoring = new Map<string, { forste: string; siste: string; sum: number; antall: number; av: string; opprettet: Date; status: string }>();
+  for (const l of linjer) {
+    const k = perKjoring.get(l.linje.feeRunId) ?? { forste: l.linje.month, siste: l.linje.month, sum: 0, antall: 0, av: l.kjoringAv, opprettet: l.kjoringOpprettet, status: l.status };
+    k.forste = l.linje.month < k.forste ? l.linje.month : k.forste;
+    k.siste = l.linje.month > k.siste ? l.linje.month : k.siste;
+    k.sum += l.linje.amount;
+    k.antall++;
+    perKjoring.set(l.linje.feeRunId, k);
+  }
+  for (const k of perKjoring.values()) {
+    historikk.push({
+      dato: isoDato(k.opprettet), tone: k.status === "sendt" ? "ok" : "info",
+      tittel: `Fakturagrunnlag ${k.forste.slice(0, 7)} – ${k.siste.slice(0, 7)}`,
+      detalj: `${k.antall} måneder · ${tilKronerTekst(k.sum)} kr · laget av ${k.av}`,
+    });
+  }
+  historikk.sort((a, b) => b.dato.localeCompare(a.dato));
+
+  return {
+    unitId: enhet.id,
+    navn: enhetKortnavn(enhet),
+    fulltNavn: enhetNavn(enhet),
+    type: enhet.type,
+    andelsnr: enhet.andelsnr,
+    leilighetsnr: enhet.leilighetsnr,
+    oppgang: enhet.oppgang,
+    etasje: enhet.etasje,
+    arealM2: enhet.arealM2,
+    brokTeller: enhet.brokTeller,
+    brokNevner: enhet.brokNevner,
+    eier,
+    tidligere: eiere.filter((e) => e.id !== eier?.id),
+    sats,
+    satser,
+    fakturalinjer: linjer.map((l) => ({ ...l.linje, kjoringStatus: l.status })),
+    historikk,
+  };
 }
 
 // =======================================================================================
@@ -307,6 +400,8 @@ export const budsjettInn = z.object({
   note: tekst,
   /** Kopier linjene fra et annet budsjett (typisk i fjor) i stedet for standardlinjene. */
   kopierFraId: z.string().nullish(),
+  /** Prisstigning lagt på alle kopierte beløp, i prosent. Ignoreres uten `kopierFraId`. */
+  justerProsent: z.number().min(-100).max(100).nullish(),
 });
 
 export const budsjettEndring = z.object({ note: tekst });
@@ -398,7 +493,7 @@ export async function opprettBudsjett(db: Db, orgId: string, av: Aktor, data: z.
     const kilde = await hentBudsjett(db, orgId, data.kopierFraId);
     mal = kilde.linjer.map((l) => ({
       kind: l.kind, name: l.name, accountFrom: l.accountFrom, accountTo: l.accountTo,
-      amount: l.amount, note: l.note,
+      amount: juster(l.amount, data.justerProsent ?? 0), note: l.note,
     }));
   } else {
     mal = STANDARD_LINJER.map((l) => ({ ...l, amount: 0, note: null }));
@@ -415,7 +510,7 @@ export async function opprettBudsjett(db: Db, orgId: string, av: Aktor, data: z.
   }
   await loggHendelse(db, orgId, av, {
     modul: MODUL, entitet: "budsjett", entitetId: ny!.id,
-    hendelse: `Opprettet budsjett for ${data.year}${data.kopierFraId ? " (kopi av tidligere år)" : ""}`,
+    hendelse: `Opprettet budsjett for ${data.year}${data.kopierFraId ? ` (kopi av tidligere år${data.justerProsent ? `, justert ${data.justerProsent} %` : ""})` : ""}`,
   });
   return hentBudsjett(db, orgId, ny!.id);
 }
@@ -432,9 +527,17 @@ export async function endreBudsjett(db: Db, orgId: string, budgetId: string, dat
   await hentBudsjett(db, orgId, budgetId);
   await db
     .update(budgets)
-    .set({ note: data.note ?? null })
+    .set({ note: data.note ?? null, updatedAt: new Date() })
     .where(and(eq(budgets.id, budgetId), eq(budgets.orgId, orgId)));
   return hentBudsjett(db, orgId, budgetId);
+}
+
+/** Stempler budsjettet som endret — kalles av alt som rører linjene eller statusen. */
+async function merkEndret(db: Db, orgId: string, budgetId: string) {
+  await db
+    .update(budgets)
+    .set({ updatedAt: new Date() })
+    .where(and(eq(budgets.id, budgetId), eq(budgets.orgId, orgId)));
 }
 
 /** Bare utkast kan slettes — et vedtatt budsjett er dokumentasjon. */
@@ -454,7 +557,7 @@ export async function vedtaBudsjett(db: Db, orgId: string, budgetId: string, av:
   }
   await db
     .update(budgets)
-    .set({ status: "vedtatt", adoptedDate: data.adoptedDate })
+    .set({ status: "vedtatt", adoptedDate: data.adoptedDate, updatedAt: new Date() })
     .where(and(eq(budgets.id, budgetId), eq(budgets.orgId, orgId)));
   await loggHendelse(db, orgId, av, {
     modul: MODUL, entitet: "budsjett", entitetId: budgetId,
@@ -468,7 +571,7 @@ export async function gjenapneBudsjett(db: Db, orgId: string, budgetId: string, 
   if (b.status !== "vedtatt") throw new ApiFeil(409, "Budsjettet er ikke vedtatt.");
   await db
     .update(budgets)
-    .set({ status: "utkast", adoptedDate: null })
+    .set({ status: "utkast", adoptedDate: null, updatedAt: new Date() })
     .where(and(eq(budgets.id, budgetId), eq(budgets.orgId, orgId)));
   await loggHendelse(db, orgId, av, {
     modul: MODUL, entitet: "budsjett", entitetId: budgetId, hendelse: `Gjenåpnet budsjettet for ${b.year}`,
@@ -495,6 +598,7 @@ export async function leggTilLinje(db: Db, orgId: string, budgetId: string, data
       sortOrder: data.sortOrder ?? b.linjer.length,
     })
     .returning();
+  await merkEndret(db, orgId, budgetId);
   return ny!;
 }
 
@@ -508,6 +612,7 @@ export async function endreLinje(db: Db, orgId: string, budgetId: string, lineId
     .set(data)
     .where(and(eq(budgetLines.id, lineId), eq(budgetLines.orgId, orgId)))
     .returning();
+  await merkEndret(db, orgId, budgetId);
   return endret!;
 }
 
@@ -515,6 +620,7 @@ export async function slettLinje(db: Db, orgId: string, budgetId: string, lineId
   const b = await krevUtkast(db, orgId, budgetId);
   if (!b.linjer.some((l) => l.id === lineId)) throw ikkeFunnet("Budsjettlinje");
   await db.delete(budgetLines).where(and(eq(budgetLines.id, lineId), eq(budgetLines.orgId, orgId)));
+  await merkEndret(db, orgId, budgetId);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -626,6 +732,7 @@ export async function brukForslag(db: Db, orgId: string, budgetId: string, av: A
       .where(and(eq(budgetLines.id, v.lineId), eq(budgetLines.orgId, orgId)));
     endret++;
   }
+  if (endret > 0) await merkEndret(db, orgId, budgetId);
   await loggHendelse(db, orgId, av, {
     modul: MODUL, entitet: "budsjett", entitetId: budgetId,
     hendelse: `Oppdaterte ${endret} ${endret === 1 ? "budsjettlinje" : "budsjettlinjer"} for ${b.year} fra forslaget basert på avtaler og vedlikeholdsplan`,

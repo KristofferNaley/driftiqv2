@@ -4230,7 +4230,11 @@ textarea.qr-input { resize: vertical; }
   font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px;
   color: var(--muted);
 }
-.ok-kpi-tall { font-size: var(--fs-xl); font-weight: 700; margin: 6px 0 2px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.ok-kpi-tall {
+  font-size: var(--fs-xl); font-weight: 700; margin: 6px 0 2px; letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ok-lenkeknapp { background: none; border: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .ok-kpi { display: flex; flex-direction: column; gap: 2px; }
 .ok-kpi-under { display: block; font-size: var(--fs-label); font-weight: 400; color: var(--muted); }
 .ok-kpi-varsel { color: var(--danger); }
@@ -4376,7 +4380,7 @@ textarea.qr-input { resize: vertical; }
 
 /* Eierregisteret. */
 .ok-eier-hode, .ok-eier-rad {
-  display: grid; grid-template-columns: minmax(110px, 1fr) minmax(160px, 2fr) 90px 70px 150px 120px 250px; gap: 12px; align-items: center;
+  display: grid; grid-template-columns: minmax(110px, 1fr) minmax(160px, 2fr) 90px 70px 100px 120px 100px 20px; gap: 12px; align-items: center;
   padding: 9px 14px; border-bottom: 1px solid var(--border);
 }
 .ok-eier-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -4390,14 +4394,48 @@ textarea.qr-input { resize: vertical; }
 .ok-hist-rad { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .ok-hist-rad:last-child { border-bottom: none; }
 @media (max-width: 1000px) {
-  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(120px, 1.3fr) minmax(140px, 2fr) 150px 250px; }
+  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(120px, 1.3fr) minmax(140px, 2fr) 100px 100px 20px; }
   .ok-eier-fra, .ok-eier-bra, .ok-eier-sats { display: none; }
 }
 @media (max-width: 600px) {
-  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(100px, 1fr) minmax(100px, 1.4fr) 250px; }
-  .ok-eier-rad .ok-linje-handling { flex-wrap: wrap; }
+  .ok-eier-hode, .ok-eier-rad { grid-template-columns: minmax(100px, 1fr) minmax(100px, 1.4fr) 100px 20px; }
   .ok-eier-brok { display: none; }
 }
+
+/* Seksjonsmodalen. */
+.ok-eier-rad.klikkbar { cursor: pointer; }
+.ok-eier-rad.klikkbar:hover { background: var(--surface2); }
+.ok-pil { color: var(--muted); font-size: var(--fs-md); text-align: right; }
+.ok-fakta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ok-fakta > div { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.ok-fakta-et { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.ok-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+.ok-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
+.ok-hist { position: relative; padding-left: 22px; display: flex; flex-direction: column; gap: 14px; }
+.ok-hist::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+.ok-hist > div { position: relative; }
+.ok-hist > div::before {
+  content: ""; position: absolute; left: -22px; top: 4px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--muted); box-sizing: border-box;
+}
+.ok-hist > div.ok::before { border-color: var(--accent2); }
+.ok-hist > div.info::before { border-color: var(--accent); }
+.ok-hist > div.warn::before { border-color: var(--warn); }
+.ok-hist-t { font-size: var(--fs-sm); font-weight: 500; }
+.ok-hist-d { color: var(--muted); font-size: var(--fs-label); }
+.ok-underoverskrift { font-size: var(--fs-label); font-weight: 600; text-transform: uppercase; letter-spacing: 0.9px; color: var(--muted); margin: 0 0 8px; }
+.ok-seksjon-topp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ok-seksjon-topp h3 { margin: 0; font-size: var(--fs-lg); font-weight: 700; }
+.ok-seksjon-sub { color: var(--muted); font-size: var(--fs-sm); }
+.ok-seksjon-topp .ok-handlinger { margin-left: auto; }
+.ok-seksjon-panel { display: flex; flex-direction: column; gap: 16px; }
+.ok-seksfakt-hode, .ok-seksfakt-rad {
+  display: grid; grid-template-columns: minmax(120px, 1.4fr) 100px 110px 110px; gap: 10px; align-items: center;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
+}
+.ok-seksfakt-hode { font-size: var(--fs-label); color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ok-seksfakt-hode .ok-belop-celle { font-size: var(--fs-label); }
+.ok-seksfakt-rad:last-child { border-bottom: none; }
 
 /* Fakturaer. */
 .ok-fakt-hode, .ok-fakt-rad {

@@ -31,6 +31,7 @@ import {
   hentKjoring,
   hentOkonomioversikt,
   hentSatser,
+  hentSeksjon,
   leggTilLinje,
   markerBetalt,
   opprettBudsjett,
@@ -263,6 +264,30 @@ describe("eierregisteret", () => {
     expect(hist[0]!.ownerTo).toBeNull();
   });
 
+  it("samler alt om én seksjon med tidslinje regnet av dataene", async () => {
+    const { orgId, enheter } = await oppsett();
+    await i(orgId, (db) => registrerEier(db, orgId, aktor, { unitId: enheter[0]!, name: "Kari", ownerFrom: "2020-01-01" }));
+    await i(orgId, (db) => registrerEier(db, orgId, aktor, { unitId: enheter[0]!, name: "Ola", ownerFrom: "2026-03-01" }));
+    await i(orgId, (db) => settSats(db, orgId, enheter[0]!, aktor, { monthlyAmount: 250_000, validFrom: "2026-01-01" }));
+    await i(orgId, (db) => settBrok(db, orgId, enheter[0]!, { teller: 1, nevner: 4, arealM2: "62.5" }));
+
+    const s = await i(orgId, (db) => hentSeksjon(db, orgId, enheter[0]!));
+    expect(s.navn).toBe("H0101");
+    expect(s.arealM2).toBe("62.50");
+    expect(s.eier?.name).toBe("Ola");
+    expect(s.tidligere.map((e) => e.name)).toEqual(["Kari"]);
+    expect(s.sats?.monthlyAmount).toBe(250_000);
+    expect(s.historikk.map((h) => h.tittel)).toEqual([
+      "Ny eier: Ola",
+      "Kari avsluttet som eier",
+      "Felleskostnad 2500 kr/mnd",
+      "Ny eier: Kari",
+    ]);
+    // Annen org ser ingenting.
+    const b = await oppsett();
+    expect((await feilFra(() => i(b.orgId, (db) => hentSeksjon(db, b.orgId, enheter[0]!)))).status).toBe(404);
+  });
+
   it("nekter eier og brøk på fellesareal, og halv brøk", async () => {
     const { orgId } = await oppsett();
     const felles = await eier.query("SELECT id FROM units WHERE org_id = $1 AND type = 'fellesareal'", [orgId]);
@@ -306,6 +331,19 @@ describe("budsjett", () => {
     await i(orgId, (db) => leggTilLinje(db, orgId, a.id, { kind: "kostnad", name: "Heis", accountFrom: 6620, amount: 5_000_000 }));
     const b = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2027, kopierFraId: a.id }));
     expect(b.linjer.find((l) => l.name === "Heis")?.amount).toBe(5_000_000);
+    // Med prisstigning: 50 000 × 1,04 = 52 000 kr.
+    const c = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2028, kopierFraId: a.id, justerProsent: 4 }));
+    expect(c.linjer.find((l) => l.name === "Heis")?.amount).toBe(5_200_000);
+  });
+
+  it("stempler sist lagret når linjer endres", async () => {
+    const { orgId } = await oppsett();
+    const b = await i(orgId, (db) => opprettBudsjett(db, orgId, aktor, { year: 2027 }));
+    const for_ = b.updatedAt.getTime();
+    await new Promise((r) => setTimeout(r, 20));
+    await i(orgId, (db) => endreLinje(db, orgId, b.id, b.linjer[0]!.id, { amount: 100 }));
+    const etter = await i(orgId, (db) => hentBudsjett(db, orgId, b.id));
+    expect(etter.updatedAt.getTime()).toBeGreaterThan(for_);
   });
 
   it("låser linjene etter vedtak, og krever felleskostnader over null", async () => {

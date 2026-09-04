@@ -1,16 +1,16 @@
 import { lesKropp, orgRute } from "@/lib/api";
-import { brokInn, hentEierhistorikk, settBrok } from "@/lib/okonomi";
+import { brokInn, hentSeksjon, settBrok } from "@/lib/okonomi";
 
 type P = { unitId: string };
 
-/** Eierhistorikken for én seksjon. */
+/** Alt om én seksjon — eiere, satser, fakturagrunnlag og tidslinje. Seksjonsmodalen. */
 export const GET = orgRute<P>({
   nivaa: "lesing",
   modul: "okonomi",
-  handler: ({ db, orgId, params }) => hentEierhistorikk(db, orgId, params.unitId),
+  handler: ({ db, orgId, params }) => hentSeksjon(db, orgId, params.unitId),
 });
 
-/** Sameiebrøken. Ligger på enheten, men settes herfra — den er økonomimodulens grunnlag. */
+/** Sameiebrøk og BRA. Ligger på enheten, men settes herfra — de er økonomimodulens grunnlag. */
 export const PUT = orgRute<P>({
   nivaa: "admin",
   modul: "okonomi",

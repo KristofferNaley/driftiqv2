@@ -8,6 +8,8 @@ import { withoutRls } from "@/db/client";
 import { users } from "@/db/schema/users";
 import { auth } from "@/lib/auth";
 import { erPlattformadminRolle } from "@/lib/nivaer";
+import { ER_TESTMILJO } from "@/lib/miljo";
+import type { Metadata } from "next";
 
 /**
  * Plattformpanelet — DriftIQs egen side.
@@ -44,6 +46,26 @@ import { erPlattformadminRolle } from "@/lib/nivaer";
  * gaten og i at hver plattformrute krever `nivaa: "plattformadmin"`. Klientkoden avgjør
  * bare hva som tegnes.
  */
+/**
+ * Fanen skal si hvor man er: «Plattformadmin», og «Plattformadmin TEST» i testmiljøet, med
+ * TEST-ikonene — samme grep som kundeappen (se (app)/layout.tsx). Panelet er ikke en PWA og
+ * får ikke noe manifest.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  await headers();
+  if (!ER_TESTMILJO) return { title: "Plattformadmin — DriftIQ" };
+  return {
+    title: "Plattformadmin TEST",
+    icons: {
+      icon: [
+        { url: "/favicon.svg", type: "image/svg+xml" },
+        { url: "/ikon-192-test.png", type: "image/png", sizes: "192x192" },
+      ],
+      apple: "/apple-touch-icon-test.png",
+    },
+  };
+}
+
 export default async function PlattformLayout({ children }: { children: ReactNode }) {
   const sesjon = await auth.api.getSession({ headers: await headers() });
   // Ingen `?retur=` med stien hit: skjemaet finner selv fram til `/plattform` på panelverten

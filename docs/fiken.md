@@ -433,6 +433,13 @@ Det som er avgjort i koden og ikke i notatet over:
   Skriver først når styret trykker «Bruk». Sirkelen er lukket: avtale → budsjett → faktura →
   faktisk.
 
+- **Seksjonsmodal (04.09.2026):** fanen «Seksjoner» har klikkbare rader som åpner en
+  fanemodal per seksjon — Oversikt, Eier, Fakturaer (grunnlaget måned for måned),
+  Eierskifte, Historikk (tidslinje regnet av eiere, satser og kjøringer) og «Purring og
+  inkasso» som Kommer-fane. `hentSeksjon` er ett kall. Budsjettlinjer justeres i kr eller %
+  fra nåværende beløp, kopi av fjoråret kan justeres med % i ett grep, og `budgets.updated_at`
+  viser «Sist lagret» — beløpene lagres automatisk når feltet forlates.
+
 Åpent etter steg 1: ingen varsler/e-post ved registrering eller forfall; søket finner ikke
 fakturaer og eiere; fordelingsnøkkelen er alltid sameiebrøk; kontraktkortet viser ennå
 ikke avtalt mot faktisk per avtale.

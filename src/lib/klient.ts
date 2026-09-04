@@ -651,6 +651,19 @@ export type Seksjon = {
   satsMnd: number | null;
 };
 
+export type SeksjonDetalj = {
+  unitId: string; navn: string; fulltNavn: string; type: string; andelsnr: string | null;
+  leilighetsnr: string | null; oppgang: string | null; etasje: string | null; arealM2: string | null;
+  brokTeller: number | null; brokNevner: number | null;
+  eier: Eier | null; tidligere: Eier[];
+  sats: Sats | null; satser: Sats[];
+  fakturalinjer: Array<{
+    id: string; month: string; dueDate: string; amount: number; ownerName: string | null;
+    orderReference: string; externalRef: string | null; kjoringStatus: string;
+  }>;
+  historikk: Array<{ dato: string; tone: "ok" | "info" | "warn" | "muted"; tittel: string; detalj: string }>;
+};
+
 export type Eierregister = {
   seksjoner: Seksjon[]; brokSum: number; utenBrok: number; utenEier: number; satsSumMnd: number;
 };
@@ -659,7 +672,7 @@ export type Budsjettsummer = { felleskost: number; inntekter: number; kostnader:
 
 export type Budsjett = {
   id: string; year: number; status: string; adoptedDate: string | null; note: string | null;
-  createdAt: string; summer: Budsjettsummer; antallLinjer: number;
+  createdAt: string; updatedAt: string; summer: Budsjettsummer; antallLinjer: number;
 };
 
 export type Budsjettlinje = {
@@ -754,11 +767,11 @@ export const okonomi = {
   oversikt: (o: string) => api.hent<Okonomioversikt>(org(o, "/okonomi/oversikt")),
 
   eiere: (o: string) => api.hent<Eierregister>(org(o, "/okonomi/eiere")),
-  eierhistorikk: (o: string, unitId: string) => api.hent<Eier[]>(org(o, `/okonomi/enheter/${unitId}`)),
+  seksjon: (o: string, unitId: string) => api.hent<SeksjonDetalj>(org(o, `/okonomi/enheter/${unitId}`)),
   registrerEier: (o: string, d: unknown) => api.send<Eier>(org(o, "/okonomi/eiere"), d),
   endreEier: (o: string, id: string, d: unknown) => api.endre<Eier>(org(o, `/okonomi/eiere/${id}`), d),
   slettEier: (o: string, id: string) => api.slett(org(o, `/okonomi/eiere/${id}`)),
-  settBrok: (o: string, unitId: string, d: { teller: number | null; nevner: number | null }) =>
+  settBrok: (o: string, unitId: string, d: { teller: number | null; nevner: number | null; arealM2?: string | null }) =>
     api.endre(org(o, `/okonomi/enheter/${unitId}`), d),
 
   budsjetter: (o: string) => api.hent<Budsjett[]>(org(o, "/okonomi/budsjett")),

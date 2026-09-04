@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Feil, Kort, Nokkeltall, Tom, dato, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { okonomi, type KjoringDetalj, type Satsoversikt } from "@/lib/klient";
 import {
@@ -17,6 +17,7 @@ import {
   type KjoringStatus,
 } from "@/lib/okonomiregler";
 import Belopfelt, { belopFeil } from "./Belopfelt";
+import Kpi from "./Kpi";
 
 /**
  * Felleskostnader: satsen per seksjon (regnet fra vedtatt budsjett, eller satt for hånd) og
@@ -50,13 +51,10 @@ export default function Felleskostnader({ erAdmin }: { erAdmin: boolean }) {
     <>
       <Feil melding={satser.feil ?? kjoringer.feil} />
 
-      <div className="auto-grid">
-        <Nokkeltall etikett="Per måned, alle seksjoner" verdi={s ? kroner(s.maanedligSum) : "—"} />
-        <Nokkeltall etikett="Per år" verdi={s ? kroner(s.maanedligSum * 12) : "—"} />
-        <Nokkeltall
-          etikett="Uten sats"
-          verdi={<span className={s && s.utenSats > 0 ? "ok-kpi-varsel" : undefined}>{s ? s.utenSats : "—"}</span>}
-        />
+      <div className="ok-kpi-grid">
+        <Kpi etikett="Per måned, alle seksjoner" verdi={s ? kroner(s.maanedligSum) : "—"} under={s ? `${s.rader.length} seksjoner` : undefined} />
+        <Kpi etikett="Per år" verdi={s ? kroner(s.maanedligSum * 12) : "—"} under="gjeldende satser × 12" />
+        <Kpi tone={s && s.utenSats > 0 ? "gul" : "gronn"} etikett="Uten sats" verdi={s ? String(s.utenSats) : "—"} under={s && s.utenSats > 0 ? "beregn fra vedtatt budsjett" : "alle har sats"} />
       </div>
 
       <Kort tittel="Fra budsjett til felleskostnader">

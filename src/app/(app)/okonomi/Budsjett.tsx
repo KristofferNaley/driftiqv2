@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Feil, Kort, Tom, dato, useOrgData } from "@/components/felles";
+import { Feil, Kort, Tom, dato, datoTid, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { okonomi, type Budsjett as BudsjettType, type BudsjettDetalj, type Budsjettforslag, type Budsjettlinje } from "@/lib/klient";
 import {
@@ -16,6 +16,7 @@ import {
   type Linjetype,
 } from "@/lib/okonomiregler";
 import Belopfelt, { belopFeil } from "./Belopfelt";
+import Kpi from "./Kpi";
 
 /**
  * Budsjettfanen. Ett budsjett per år; utkast redigeres linje for linje, vedtak låser det
@@ -118,14 +119,15 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
         <Tom tekst="Henter …" />
       ) : (
         <>
-          <div className="auto-grid">
-            <Sum etikett="Kostnader" verdi={detalj.summer.kostnader} />
-            <Sum etikett="Andre inntekter" verdi={detalj.summer.inntekter} />
-            <Sum etikett="Felleskostnader" verdi={detalj.summer.felleskost} />
-            <Sum
+          <div className="ok-kpi-grid">
+            <Kpi tone="roed" etikett="Kostnader" verdi={kroner(detalj.summer.kostnader)} under={`${detalj.linjer.filter((l) => l.kind === "kostnad").length} linjer`} />
+            <Kpi etikett="Andre inntekter" verdi={kroner(detalj.summer.inntekter)} under="utleie, renter og annet" />
+            <Kpi etikett="Felleskostnader" verdi={kroner(detalj.summer.felleskost)} under="fordeles etter brøk" />
+            <Kpi
+              tone={detalj.summer.resultat < 0 ? "roed" : "gronn"}
               etikett="Resultat"
-              verdi={detalj.summer.resultat}
-              tone={detalj.summer.resultat < 0 ? "danger" : detalj.summer.resultat > 0 ? "ok" : undefined}
+              verdi={kroner(detalj.summer.resultat)}
+              under={detalj.summer.resultat === 0 ? "i balanse" : detalj.summer.resultat < 0 ? "underskudd — øk felleskostnadene" : "overskudd"}
             />
           </div>
 
@@ -135,6 +137,11 @@ export default function Budsjett({ erAdmin }: { erAdmin: boolean }) {
               <div className="ok-handlinger">
                 <span className={`badge ${detalj.status === "vedtatt" ? "ok" : "warn"}`}>
                   {detalj.status === "vedtatt" ? `Vedtatt ${dato(detalj.adoptedDate)}` : "Utkast"}
+                </span>
+                {/* Beløpene lagres idet du går ut av feltet — ingen lagreknapp å glemme. Tidspunktet
+                    sier at det faktisk skjedde. */}
+                <span className="list-meta" title="Beløp lagres automatisk når du forlater feltet">
+                  Sist lagret {datoTid(detalj.updatedAt)}
                 </span>
                 {erAdmin && utkast && detalj.summer.resultat !== 0 && (
                   <button
@@ -341,17 +348,6 @@ function avvikTekst(grunnlag: number, faktisk: number, medFortegn: boolean) {
 const tomLinje = (kind: Linjetype) => ({
   budgetId: "", kind, name: "", accountFrom: null, accountTo: null, amount: 0, note: null, sortOrder: 0, faktisk: 0,
 });
-
-function Sum({ etikett, verdi, tone }: { etikett: string; verdi: number; tone?: "ok" | "danger" }) {
-  return (
-    <div className="card">
-      <div className="card-body">
-        <div className="card-title">{etikett}</div>
-        <div className={`nokkeltall-verdi ok-sum${tone ? ` ${tone}` : ""}`}>{kroner(verdi)}</div>
-      </div>
-    </div>
-  );
-}
 
 /** Beløpet redigeres rett i raden — et budsjett fylles ut linje for linje, ikke i modaler. */
 function LinjeRad({
@@ -578,11 +574,12 @@ function NyttBudsjettModal({
 }: {
   eksisterende: BudsjettType[];
   onLukk: () => void;
-  onLagre: (d: { year: number; kopierFraId: string | null; note: string | null }) => Promise<void>;
+  onLagre: (d: { year: number; kopierFraId: string | null; justerProsent: number; note: string | null }) => Promise<void>;
 }) {
   const neste = Math.max(new Date().getFullYear(), ...eksisterende.map((b) => b.year)) + (eksisterende.length ? 1 : 0);
   const [aar, setAar] = useState(String(neste));
   const [kopier, setKopier] = useState(eksisterende[0]?.id ?? "");
+  const [prosent, setProsent] = useState("0");
   const [notat, setNotat] = useState("");
   const { sender, feil, send } = useSending(onLukk);
 
@@ -592,7 +589,11 @@ function NyttBudsjettModal({
         style={{ display: "flex", flexDirection: "column", gap: "15px" }}
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => onLagre({ year: Number(aar), kopierFraId: kopier || null, note: notat.trim() || null }));
+          void send(() => {
+            const p = Number(prosent.replace(",", "."));
+            if (kopier && !Number.isFinite(p)) throw new Error("Justeringen må være et tall");
+            return onLagre({ year: Number(aar), kopierFraId: kopier || null, justerProsent: kopier ? p : 0, note: notat.trim() || null });
+          });
         }}
       >
         <Tekstfelt etikett="Regnskapsår" verdi={aar} onEndre={setAar} type="number" />
@@ -606,6 +607,15 @@ function NyttBudsjettModal({
           ]}
           notat="Linjene kan endres, slettes og legges til etterpå."
         />
+        {kopier && (
+          <Tekstfelt
+            etikett="Juster alle beløp med %"
+            verdi={prosent}
+            onEndre={setProsent}
+            plassholder="3"
+            notat="Prisstigning på alle linjer, rundet til hele kroner. Enkeltlinjer justeres etterpå med kr eller %."
+          />
+        )}
         <Tekstomrade etikett="Notat" verdi={notat} onEndre={setNotat} rader={2} plassholder="F.eks. forutsetninger, planlagte prosjekter" />
         <Feil melding={feil} />
         <Knapperad onAvbryt={onLukk} sender={sender} sendEtikett="Opprett budsjett" />
@@ -670,8 +680,29 @@ function LinjeModal({
   const [fra, setFra] = useState(linje?.accountFrom ? String(linje.accountFrom) : "");
   const [til, setTil] = useState(linje?.accountTo ? String(linje.accountTo) : "");
   const [belop, setBelop] = useState(linje ? tilKronerTekst(linje.amount) : "");
+  const [endringKr, setEndringKr] = useState("");
+  const [endringProsent, setEndringProsent] = useState("");
   const [notat, setNotat] = useState(linje?.note ?? "");
   const { sender, feil, send } = useSending(onLukk);
+
+  /**
+   * «Prisen øker med 1 200 kr» eller «med 4 %» — det er beskjeden styret får, og da skal de
+   * slippe kalkulatoren. Begge feltene regner fra linjas NÅVÆRENDE beløp og skriver resultatet
+   * i beløpsfeltet; det andre feltet tømmes så det aldri står to motstridende justeringer.
+   */
+  const grunnlag = linje?.amount ?? 0;
+  function justerKr(v: string) {
+    setEndringKr(v);
+    setEndringProsent("");
+    const kr = tilOre(v);
+    if (kr !== null) setBelop(tilKronerTekst(grunnlag + kr));
+  }
+  function justerProsent(v: string) {
+    setEndringProsent(v);
+    setEndringKr("");
+    const p = Number(v.replace(",", "."));
+    if (v.trim() !== "" && Number.isFinite(p)) setBelop(tilKronerTekst(Math.round((grunnlag * (1 + p / 100)) / 100) * 100));
+  }
 
   return (
     <Modal tittel={ny ? "Ny budsjettlinje" : "Endre budsjettlinje"} onLukk={onLukk}>
@@ -706,6 +737,12 @@ function LinjeModal({
           <Tekstfelt etikett="Konto til" verdi={til} onEndre={setTil} type="number" plassholder="6329" />
         </div>
         <Belopfelt etikett="Årsbeløp" verdi={belop} onEndre={setBelop} />
+        {!ny && (
+          <div className="field-row">
+            <Belopfelt etikett="Eller endring i kr" verdi={endringKr} onEndre={justerKr} plassholder="1 200" notat={`Fra ${kroner(grunnlag)}. Negativt tall for reduksjon.`} />
+            <Tekstfelt etikett="Eller endring i %" verdi={endringProsent} onEndre={justerProsent} plassholder="4" notat="Rundes til hele kroner." />
+          </div>
+        )}
         <Tekstomrade etikett="Notat" verdi={notat} onEndre={setNotat} rader={2} />
         <Feil melding={feil} />
         <Knapperad onAvbryt={onLukk} sender={sender} sendEtikett={ny ? "Legg til" : "Lagre"} />

@@ -77,6 +77,11 @@ export const budgets = pgTable("budgets", {
   adoptedDate: date("adopted_date"),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * Sist en linje eller status ble endret. Beløpene lagres automatisk idet man forlater
+   * feltet, uten lagreknapp — «Sist lagret 14:32» er det som forteller styret at det skjedde.
+   */
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("uq_budgets_org_year").on(t.orgId, t.year),
 ]);

@@ -16,7 +16,7 @@ export type OkonomiFane = "oversikt" | "eiere" | "budsjett" | "felleskostnader" 
 /** Rekkefølgen følger arbeidsgangen: grunnlaget (eiere) → budsjett → satser → fakturaer. */
 const FANER: ReadonlyArray<{ nokkel: OkonomiFane; etikett: string }> = [
   { nokkel: "oversikt", etikett: "Oversikt" },
-  { nokkel: "eiere", etikett: "Seksjoner og eiere" },
+  { nokkel: "eiere", etikett: "Seksjoner" },
   { nokkel: "budsjett", etikett: "Budsjett" },
   { nokkel: "felleskostnader", etikett: "Felleskostnader" },
   { nokkel: "fakturaer", etikett: "Fakturaer" },
