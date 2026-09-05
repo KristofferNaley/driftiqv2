@@ -12,7 +12,6 @@ import type { Db } from "../db/client";
 import { aiConversations, aiMessages, aiUsageDaily } from "../db/schema/ai";
 import { deviations } from "../db/schema/avvik";
 import { contracts } from "../db/schema/kontrakter";
-import { hmsGoals } from "../db/schema/internkontroll";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet } from "./api";
 import { verktoyskjemaer } from "./ai-verktoy";
@@ -357,12 +356,6 @@ export async function hentAiOversikt(db: Db, orgId: string): Promise<AiKort[]> {
     )
     .orderBy(asc(contracts.endDate));
 
-  const aar = new Date().getFullYear();
-  const maal = await db
-    .select({ approved: hmsGoals.approved })
-    .from(hmsGoals)
-    .where(and(eq(hmsGoals.orgId, orgId), eq(hmsGoals.year, aar)))
-    .limit(1);
 
   const kort: AiKort[] = [];
 
@@ -398,19 +391,6 @@ export async function hentAiOversikt(db: Db, orgId: string): Promise<AiKort[]> {
     });
   }
 
-  // HMS-målet: manglende eller ugodkjent er internkontrollens vanligste hull, og det
-  // rådgiveren faktisk kan forklare — den kjenner forskriftens punkter gjennom verktøyene.
-  if (!maal[0] || !maal[0].approved) {
-    // Tallet er 1 — det er ETT mål som mangler. Året står i tittelen, ikke i enheten.
-    kort.push({
-      antall: 1,
-      enhet: "hms-mål",
-      tittel: maal[0] ? `HMS-målet for ${aar} er ikke godkjent av styret` : `HMS-mål for ${aar} er ikke satt`,
-      detalj: "Internkontrollforskriften § 5 pkt. 4 krever skriftlige mål for helse, miljø og sikkerhet",
-      sporsmal: `Hva krever internkontrollforskriften av HMS-mål, og hva mangler hos oss i ${aar}?`,
-      tone: "gronn",
-    });
-  }
 
   return kort.slice(0, 3);
 }

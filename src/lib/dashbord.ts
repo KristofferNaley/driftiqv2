@@ -20,7 +20,6 @@ import type { Db } from "../db/client";
 import { deviations } from "../db/schema/avvik";
 import { documents } from "../db/schema/dokumenter";
 import { annualEvents } from "../db/schema/arshjul";
-import { hmsGoals } from "../db/schema/internkontroll";
 import { contracts } from "../db/schema/kontrakter";
 import { logEntries } from "../db/schema/driftslogg";
 import { supplierInvoices } from "../db/schema/okonomi";
@@ -61,7 +60,7 @@ export async function hentDashbord(db: Db, orgId: string) {
   const pa = (n: ModulNokkel) => modulErAktivert(lagret, n);
 
   // Bare det org-en faktisk har, hentes. En avslått modul koster ingen spørring.
-  const [oppgaver, avvik, kontrakter, hendelser, mal, rutinerRader, bygningsdeler, plasser, logg, dok, lev, fakturaer, satser] =
+  const [oppgaver, avvik, kontrakter, hendelser, rutinerRader, bygningsdeler, plasser, logg, dok, lev, fakturaer, satser] =
     await Promise.all([
       pa("tasks") ? hentOppgaver(db, orgId) : null,
       pa("avvik")
@@ -76,9 +75,6 @@ export async function hentDashbord(db: Db, orgId: string) {
         : null,
       pa("arshjul")
         ? db.select().from(annualEvents).where(eq(annualEvents.orgId, orgId)).orderBy(asc(annualEvents.eventDate))
-        : null,
-      pa("internkontroll")
-        ? db.select().from(hmsGoals).where(eq(hmsGoals.orgId, orgId)).orderBy(desc(hmsGoals.year))
         : null,
       pa("rutiner") ? db.select().from(routines).where(eq(routines.orgId, orgId)) : null,
       pa("vedlikehold")
@@ -117,8 +113,6 @@ export async function hentDashbord(db: Db, orgId: string) {
   const snartUtlopt =
     kontrakter?.filter((r) => r.k.endDate && r.k.endDate >= iDag() && r.k.endDate <= omDager(UTLOP_VARSEL_DAGER)) ?? [];
 
-  const aar = new Date().getFullYear();
-  const aaretsMal = mal?.find((m) => m.year === aar) ?? null;
 
   const tilGodkjenning = fakturaer?.filter((f) => f.status === "mottatt") ?? [];
   const forfalte = fakturaer?.filter((f) => erForfalt(f.dueDate, f.status, iDag())) ?? [];
@@ -197,24 +191,6 @@ export async function hentDashbord(db: Db, orgId: string) {
             tekst: `${snartUtlopt.length} ${snartUtlopt.length === 1 ? "kontrakt utløper" : "kontrakter utløper"} innen seks måneder`,
             detalj: snartUtlopt.slice(0, 2).map((r) => `${r.k.title} (${r.k.endDate})`).join(", "),
             sti: "/kontrakter",
-          }]
-        : []),
-      ...(pa("internkontroll") && aaretsMal && !aaretsMal.approved
-        ? [{
-            slag: "internkontroll" as const,
-            alvor: "lav" as const,
-            tekst: `HMS-målet for ${aar} er ikke godkjent`,
-            detalj: "Mangler godkjenning fra styret",
-            sti: "/internkontroll",
-          }]
-        : []),
-      ...(pa("internkontroll") && !aaretsMal
-        ? [{
-            slag: "internkontroll" as const,
-            alvor: "lav" as const,
-            tekst: `Ingen HMS-mål satt for ${aar}`,
-            detalj: "Internkontrollforskriften § 5 pkt. 4",
-            sti: "/internkontroll",
           }]
         : []),
     ],

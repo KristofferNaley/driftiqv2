@@ -80,7 +80,7 @@ const MODULER: { tittel: string; tekst: string; Ikon: LucideIcon; tone: Tone }[]
     Ikon: Shield,
     tone: "blaa",
     tekst:
-      "Risikovurdering, HMS-mål og vernerunde i én struktur, bygget rundt " +
+      "Risikovurdering og vernerunde i én struktur, bygget rundt " +
       "internkontrollforskriften § 5. Dokumentasjonen samles mens arbeidet gjøres.",
   },
   {

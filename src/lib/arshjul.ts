@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { annualEvents } from "../db/schema/arshjul";
-import { hmsGoals, safetyRounds } from "../db/schema/internkontroll";
+import { safetyRounds } from "../db/schema/internkontroll";
 import { hentOppgaver } from "./oppgaver";
 import { ikkeFunnet, ugyldig } from "./api";
 
@@ -119,18 +119,13 @@ export type Hjulhendelse = {
  * v1 tok etter brukertest.
  */
 export async function hentArshjul(db: Db, orgId: string, aar: number) {
-  const [manuelle, oppgaveliste, runder, maal] = await Promise.all([
+  const [manuelle, oppgaveliste, runder] = await Promise.all([
     hentHendelser(db, orgId),
     hentOppgaver(db, orgId),
     db
       .select({ id: safetyRounds.id, title: safetyRounds.title, roundDate: safetyRounds.roundDate })
       .from(safetyRounds)
       .where(eq(safetyRounds.orgId, orgId)),
-    db
-      .select({ id: hmsGoals.id, periodEnd: hmsGoals.periodEnd })
-      .from(hmsGoals)
-      .where(and(eq(hmsGoals.orgId, orgId), eq(hmsGoals.year, aar)))
-      .limit(1),
   ]);
 
   const hendelser: Hjulhendelse[] = [];
@@ -163,18 +158,6 @@ export async function hentArshjul(db: Db, orgId: string, aar: number) {
     });
   }
 
-  if (maal[0]?.periodEnd) {
-    hendelser.push({
-      id: `hmsmaal-${maal[0].id}`,
-      tittel: "HMS-mål fornyes",
-      under: "Årlig fornyelse",
-      kategori: "hms",
-      dato: maal[0].periodEnd,
-      startDato: null,
-      kilde: "internkontroll",
-      gjentas: true,
-    });
-  }
 
   for (const m of manuelle) {
     hendelser.push({
