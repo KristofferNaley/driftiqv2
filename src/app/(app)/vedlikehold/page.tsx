@@ -10,14 +10,16 @@ const GARANTIMERKE: Record<string, string> = { aktiv: "ok", utløpt: "muted", uk
 
 function Bygningsdeler() {
   const router = useRouter();
-  const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => vedlikehold.elementer(o));
+  const { data, feil, setFeil, laster, orgId } = useOrgData((o) => vedlikehold.elementer(o));
   const liste = data ?? [];
 
   async function nyttElement(navn: string) {
     if (!orgId) return;
     try {
-      await vedlikehold.nyttElement(orgId, { name: navn });
-      await last();
+      const ny = await vedlikehold.nyttElement(orgId, { name: navn });
+      // Navnet alene er ikke en bygningsdel. Rett til detaljsiden med redigeringen åpen,
+      // så kategori, montert år og installatør fylles inn i samme slengen.
+      router.push(`/vedlikehold/${ny.id}?rediger=1`);
     } catch (e) {
       setFeil(e instanceof Error ? e.message : "Kunne ikke legge til bygningsdelen");
     }

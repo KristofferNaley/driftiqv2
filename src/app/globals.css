@@ -2140,6 +2140,26 @@ textarea.qr-input { resize: vertical; }
 
 .vedlegg-lenke { color: var(--accent); text-decoration: none; }
 .vedlegg-lenke:hover { text-decoration: underline; }
+
+/* ── FDV-bokser på bygningsdelen (Vedlikehold). Én boks per slott; det som mangler er et
+   tomt, stiplet felt — ikke en setning nederst i kortet. Prefiks .fdv-. ── */
+.fdv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; padding: 14px 20px; }
+.fdv-boks {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2);
+}
+.fdv-boks.mangler { border-style: dashed; border-color: rgba(245, 166, 35, 0.55); }
+.fdv-boks-hode { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fdv-boks-tittel { font-size: var(--fs-sm); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fdv-fil { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-label); }
+.fdv-fil > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ikonknapp: en <button> arver verken farge eller font — begge settes. */
+.fdv-slett {
+  display: inline-flex; padding: 3px; border: none; border-radius: 6px; background: none;
+  color: var(--muted); font-family: var(--font-sans); cursor: pointer;
+}
+.fdv-slett:hover { color: var(--danger); background: var(--bg); }
+.fdv-last { align-self: flex-start; margin-top: auto; }
 /* Tittelen er en <button> når fila kan forhåndsvises, og skal se ut som lenken ved siden av.
    `font-family` og `color` må stå: knapper arver ingen av dem. Størrelse og vekt kommer fra
    `.list-tittel` på samme element, så de settes bevisst IKKE her — en `font: inherit` ville

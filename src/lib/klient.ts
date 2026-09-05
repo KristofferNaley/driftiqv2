@@ -398,13 +398,32 @@ export type Bygningsdel = {
   garanti: "aktiv" | "utløpt" | "ukjent"; fdv: { fylt: number; av: number; prosent: number };
 };
 
+export type Service = { id: string; serviceDate: string; title: string; performedBy: string | null; notes: string | null };
+
+/** Detaljen har hele raden — redigeringsskjemaet forhåndsutfylles fra den. */
+export type BygningsdelDetalj = Bygningsdel & {
+  expectedLifetimeYears: number | null;
+  warrantyYears: number | null;
+  vendorId: string | null;
+  notes: string | null;
+  dokumenter: Array<{ id: string; fdvType: string; title: string }>;
+  historikk: Service[];
+  antallEnhetsarbeider: number;
+};
+
 export const vedlikehold = {
   elementer: (o: string) => api.hent<Bygningsdel[]>(org(o, "/maintenance/elements")),
-  hent: (o: string, id: string) =>
-    api.hent<Bygningsdel & { dokumenter: Array<{ id: string; fdvType: string; title: string }>; historikk: Array<{ id: string; serviceDate: string; title: string; performedBy: string | null }>; antallEnhetsarbeider: number }>(org(o, `/maintenance/elements/${id}`)),
+  hent: (o: string, id: string) => api.hent<BygningsdelDetalj>(org(o, `/maintenance/elements/${id}`)),
   nyttElement: (o: string, d: unknown) => api.send<Bygningsdel>(org(o, "/maintenance/elements"), d),
+  endreElement: (o: string, id: string, d: unknown) => api.endre<Bygningsdel>(org(o, `/maintenance/elements/${id}`), d),
+  slettElement: (o: string, id: string) => api.slett(org(o, `/maintenance/elements/${id}`)),
   nyService: (o: string, id: string, d: unknown) => api.send(org(o, `/maintenance/elements/${id}/services`), d),
+  endreService: (o: string, id: string, serviceId: string, d: unknown) =>
+    api.endre(org(o, `/maintenance/elements/${id}/services/${serviceId}`), d),
+  slettService: (o: string, id: string, serviceId: string) =>
+    api.slett(org(o, `/maintenance/elements/${id}/services/${serviceId}`)),
   lastOppFdv: (o: string, id: string, f: FormData) => api.lastOpp(org(o, `/maintenance/elements/${id}/documents`), f),
+  slettFdv: (o: string, id: string, docId: string) => api.slett(org(o, `/maintenance/elements/${id}/documents/${docId}`)),
   arbeider: (o: string) => api.hent<Array<{ id: string; unitLabel: string; title: string; workDate: string; workType: string; paidBy: string; cost: number | null; vendorName: string | null }>>(org(o, "/maintenance/unit-works")),
   nyttArbeid: (o: string, d: unknown) => api.send(org(o, "/maintenance/unit-works"), d),
 };
