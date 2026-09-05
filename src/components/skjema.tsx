@@ -181,7 +181,7 @@ export type Fanevalg<T extends string> = {
 export function Fanemodal<T extends string>({
   tittel,
   onLukk,
-  bredde = 760,
+  bredde = 960,
   topp,
   faner,
   valgt,
