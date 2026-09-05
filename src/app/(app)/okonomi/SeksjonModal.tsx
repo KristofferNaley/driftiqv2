@@ -76,7 +76,6 @@ export default function SeksjonModal({
     <Fanemodal
       tittel={data ? `Seksjon ${data.andelsnr ?? data.navn}` : "Seksjon"}
       onLukk={onLukk}
-      bredde={960}
       faner={faner}
       valgt={fane}
       onVelg={setFane}

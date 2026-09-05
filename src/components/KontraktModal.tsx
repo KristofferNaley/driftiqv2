@@ -134,7 +134,6 @@ export default function KontraktModal({
     <Fanemodal
       tittel={tittel}
       onLukk={onLukk}
-      bredde={780}
       faner={faner}
       valgt={fane}
       onVelg={setFane}
