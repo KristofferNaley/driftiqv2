@@ -24,6 +24,7 @@ import {
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 import type { Aktor } from "./aktor";
 import { loggHendelse } from "./hendelser";
+import { antallAktiveNokler } from "./unlockobling";
 
 export const RELASJONSTYPER = ["avtale", "handelskonto", "adhoc"] as const;
 export const ADGANGSSTATUSER = ["utlevert", "bør_sjekkes", "innlevert"] as const;
@@ -224,6 +225,13 @@ export async function slettLeverandor(db: Db, orgId: string, vendorId: string) {
   if ((avtaler?.antall ?? 0) > 0) {
     const n = avtaler!.antall;
     throw ugyldig(`Leverandøren har ${n} kontrakt${n !== 1 ? "er" : ""} — slett disse først`);
+  }
+
+  // Digitale nøkler (Unloc) som fortsatt åpner dører skal ikke forsvinne fra bokføringen
+  // med leverandøren — de må kalles tilbake først. Eneste koblingen inn i Unloc-pakken.
+  const nokler = await antallAktiveNokler(db, orgId, vendorId);
+  if (nokler > 0) {
+    throw ugyldig(`Leverandøren har ${nokler} aktiv${nokler !== 1 ? "e" : ""} digital${nokler !== 1 ? "e" : ""} nøk${nokler !== 1 ? "ler" : "kel"} i Unloc — kall ${nokler !== 1 ? "dem" : "den"} tilbake først`);
   }
 
   // Kontakter, adgangselementer og notater kaskaderer med leverandøren — de har ingen verdi

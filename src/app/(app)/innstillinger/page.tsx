@@ -15,6 +15,7 @@ import {
   WEBHOOK_TYPE_ETIKETT,
   type WebhookType,
 } from "@/lib/webhookvalg";
+import UnlocKort from "./UnlocKort";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
 function storrelse(n: number): string {
@@ -804,6 +805,8 @@ function Integrasjoner() {
         varsel som ikke kommer frem stopper aldri handlingen det gjelder — feiler adressen,
         vises det her. Oppsett og endringer føres i hendelsesloggen.
       </div>
+
+      <UnlocKort />
 
       {ny && <WebhookSkjema orgId={orgId!} onLukk={() => setNy(false)} onLagret={last} />}
       {endrer && (

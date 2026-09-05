@@ -361,10 +361,18 @@ komponenter — endres logikken, må begge med.
 - **`sum()` på integer gir bigint, og node-postgres returnerer bigint som STRENG.**
   «806205013 tokens» var 80 620 og 5 013 limt sammen med `+`. Typene lyver — gjennom
   `Number()` før aritmetikk.
+- **Unloc (digitale nøkler)** er bygget som én fjernbar pakke — grensene og
+  fjerningsoppskriften står i `docs/unloc.md`. Ikke prøvd mot ekte Unloc ennå (ingen
+  credentials); nøkkelopprettelse er asynkron (202 + jobb), og formen på jobbresultatet er
+  antatt fra dokumentasjonen. Hemmeligheten krypteres med `FIKEN_TOKEN_KEY` — nøkkelen er
+  felles for integrasjonshemmeligheter, navnet er historisk.
 - **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
   for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
   har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test
   (`ER_TESTMILJO`). Se `docs/fiken.md` «Steg 2 slik det ble».
+- **Aldri svar 502 eller 504 fra API-et.** Cloudflare-tunnelen bytter ut de statusene fra
+  origin med sin egen HTML-feilside; klienten finner ingen `detail` og viser «Noe gikk galt»
+  uten spor i loggen (Unloc, 05.09.2026). Feil fra en tredjepart er 400 (avvist) eller 503.
 - **En ny env-variabel må kobles gjennom `docker-compose.yaml`.** AI-rådgiveren feilet
   med 503 fordi `ANTHROPIC_API_KEY` sto i `.env` men ikke i compose — variabelen fantes
   ikke i containermiljøet uansett.

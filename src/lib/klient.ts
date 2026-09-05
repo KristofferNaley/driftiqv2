@@ -1054,3 +1054,40 @@ export type SokTreff = {
 export const sok = {
   hent: (o: string, q: string) => api.hent<SokTreff[]>(org(o, `/sok?q=${encodeURIComponent(q)}`)),
 };
+
+// ---------------------------------------------------------------------------------------
+// Unloc — digitale nøkler til leverandører (docs/unloc.md). Én fjernbar blokk.
+// ---------------------------------------------------------------------------------------
+
+export type UnlocStatus = {
+  konfigurert: { kryptering: boolean };
+  kobling: {
+    clientId: string; projectId: string; projectName: string; connectedBy: string; createdAt: string;
+    lastError: string | null; lastCheckedAt: string | null;
+  } | null;
+  nokler: { aktive: number };
+};
+
+export type UnlocLaas = { id: string; name: string; vendor: string | null; floor: string | null; battery: string | null };
+
+export type UnlocNokkelState = "creating" | "scheduled" | "active" | "inactive" | "expired" | "revoked" | "error";
+
+export type UnlocNokkel = {
+  id: string; unlocKeyId: string; lockId: string; lockName: string; phone: string; holderName: string;
+  startAt: string; endAt: string | null; state: UnlocNokkelState; stateCheckedAt: string | null; note: string | null;
+  issuedBy: string; issuedByUserId: string | null; revokedBy: string | null; revokedAt: string | null; createdAt: string;
+};
+
+export const unloc = {
+  status: (o: string) => api.hent<UnlocStatus>(org(o, "/unloc")),
+  kobleTil: (o: string, d: { clientId: string; clientSecret: string; projectId?: string | null }) =>
+    api.endre<UnlocStatus>(org(o, "/unloc"), d),
+  kobleFra: (o: string) => api.slett(org(o, "/unloc")),
+  laaser: (o: string) => api.hent<UnlocLaas[]>(org(o, "/unloc/locks")),
+  /** Leverandørkortet: nøklene med tilstand frisket opp fra Unloc; `feil` når Unloc ikke svarte. */
+  nokler: (o: string, vendorId: string) =>
+    api.hent<{ koblet: boolean; feil: string | null; nokler: UnlocNokkel[] }>(org(o, `/vendors/${vendorId}/unloc-keys`)),
+  delUt: (o: string, vendorId: string, d: { lockId: string; phone: string; holderName: string; startAt?: string | null; endAt?: string | null; note?: string | null }) =>
+    api.send<UnlocNokkel>(org(o, `/vendors/${vendorId}/unloc-keys`), d),
+  tilbakekall: (o: string, vendorId: string, id: string) => api.slett(org(o, `/vendors/${vendorId}/unloc-keys/${id}`)),
+};

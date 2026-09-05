@@ -4465,6 +4465,17 @@ textarea.qr-input { resize: vertical; }
 .ok-beslutning { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--border); }
 .ok-integrasjon-tekst { display: flex; flex-direction: column; }
 
+/* ── Unloc (Innstillinger → Integrasjoner). Prefiks .un- — se docs/unloc.md. ── */
+.un-melding {
+  margin: 12px 14px 0; padding: 10px 14px; border-radius: 10px; font-size: var(--fs-sm);
+  background: rgba(15, 186, 129, 0.1); color: var(--accent2); border: 1px solid rgba(15, 186, 129, 0.25);
+}
+.un-fakta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.un-fakta > div { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.un-fakta-et { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.un-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+.un-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
+
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
   .vr-bunn, .vr-leggtil, .vr-valg, .print-skjul,

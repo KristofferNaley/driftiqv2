@@ -156,8 +156,9 @@ Null brukere i dag, derfor sist.
 **Modulkatalogen på `/moduler`.** Salgssiden for moduler kunden ikke har. Modulgaten selv
 virker — direktenavigering til en avslått modul gir `ModuleLocked`.
 
-**Vernerunde-PDF-en** (`report.py`, ReportLab) og **Unloc**. Begge bekreftet ubrukt
-09.08.2026 og dermed ute av portens omfang, ikke bare utsatt.
+**Vernerunde-PDF-en** (`report.py`, ReportLab). Bekreftet ubrukt 09.08.2026 og dermed ute
+av portens omfang, ikke bare utsatt. (Unloc sto her også, men ble bygget på nytt 05.09.2026
+fra Unloc API v2 — som én fjernbar pakke, se `docs/unloc.md`.)
 
 **Tidslinjevisningen på årshjulet.** v1 har en andre visning med canvas-målte brikker og
 kollisjonsbaner. Månedsrutenettet svarer på det samme, og tidslinja er den dyreste delen av
@@ -209,7 +210,7 @@ ikke hjemme i prod-tallene.
 | Avvik | komplett — inkl. vedlegg |
 | Kontrakter | komplett — første modul med filopplasting |
 | Dokumentarkiv | komplett — mapper, undermapper, speilmapper og søk |
-| Leverandører | mangler portalbruker (fase 3). Unloc er ute av omfang |
+| Leverandører | mangler portalbruker (fase 3). Digitale nøkler via Unloc: bygget, ikke prøvd mot ekte Unloc — `docs/unloc.md` |
 | Vedlikehold | komplett |
 | Rutiner | komplett |
 | HMS-maler | komplett (plattformdata — `plattformRute`, ikke `orgRute`) |

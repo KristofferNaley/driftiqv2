@@ -1,17 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, FileText, KeyRound, NotebookPen, Pencil, Receipt, UserPlus, Users } from "lucide-react";
+import { Building2, FileText, KeyRound, NotebookPen, Pencil, Receipt, Smartphone, UserPlus, Users } from "lucide-react";
 import { useOkt } from "@/components/OktProvider";
 import { Feil, Rad, Tom, dato, kr } from "@/components/felles";
 import { Avkryssing, Fanemodal, Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade, useSending, type Fanevalg } from "@/components/skjema";
 import KontraktDetaljModal from "@/components/KontraktDetaljModal";
+import UnlocNokler from "@/components/UnlocNokler";
 import { kontrakter, leverandorer, okonomi, type Kontrakt, type Leverandor } from "@/lib/klient";
 import { modulErAktivert } from "@/lib/moduler";
 import { kroner } from "@/lib/okonomiregler";
 import { kontraktKategoriEtikett, kontraktStatus } from "@/lib/kontraktregler";
 
-type Fane = "om" | "avtaler" | "kontakter" | "adgang" | "notater" | "kjop";
+type Fane = "om" | "avtaler" | "kontakter" | "adgang" | "nokler" | "notater" | "kjop";
 
 type Kontaktperson = { id: string; name: string; role: string | null; email: string | null; phone: string | null; isPrimary: boolean };
 type Adgangsobjekt = { id: string; title: string; status: string; issuedTo: string | null; areas: string | null; issuedAt: string | null };
@@ -95,6 +96,8 @@ export default function LeverandorDetaljModal({
   const [kontaktSkjema, setKontaktSkjema] = useState<"ny" | Kontaktperson | null>(null);
   const [adgangSkjema, setAdgangSkjema] = useState<"ny" | Adgangsobjekt | null>(null);
   const [nyttNotat, setNyttNotat] = useState(false);
+  /** Unloc-fanens eget skjema — meldes hit så Escape treffer riktig modal (se `undermodal`). */
+  const [unlocSkjema, setUnlocSkjema] = useState(false);
 
   // Inline-redigering av feltene — samme mønster og begrunnelse som i kontraktmodalen.
   const [redigerer, setRedigerer] = useState(false);
@@ -197,13 +200,14 @@ export default function LeverandorDetaljModal({
     { nokkel: "avtaler", etikett: "Avtaler", Ikon: FileText },
     { nokkel: "kontakter", etikett: "Kontaktpersoner", Ikon: Users },
     { nokkel: "adgang", etikett: "Adgangskontroll", Ikon: KeyRound },
+    { nokkel: "nokler", etikett: "Digitale nøkler", Ikon: Smartphone },
     { nokkel: "notater", etikett: "Notater", Ikon: NotebookPen },
     ...(harOkonomi ? [{ nokkel: "kjop" as const, etikett: "Kjøp fra regnskapet", Ikon: Receipt }] : []),
   ];
 
   // Samme Escape-gate som kontraktmodalen: undermodalens Escape skal ikke rive hovedmodalen,
   // og under redigering avbryter Escape/✕ redigeringen i stedet for å kaste feltene.
-  const undermodal = kontaktSkjema !== null || adgangSkjema !== null || nyttNotat || apenKontrakt !== null;
+  const undermodal = kontaktSkjema !== null || adgangSkjema !== null || nyttNotat || unlocSkjema || apenKontrakt !== null;
   const lukkHoved = () => {
     if (undermodal) return;
     if (redigerer) setRedigerer(false);
@@ -470,6 +474,18 @@ export default function LeverandorDetaljModal({
                   })
                 )}
               </>
+            )}
+
+            {fane === "nokler" && (
+              // Unloc (docs/unloc.md) — hele fanen bor i én komponent, så integrasjonen kan
+              // fjernes igjen med én fane og én import her.
+              <UnlocNokler
+                orgId={orgId}
+                vendorId={id}
+                kanRedigere={kanRedigere}
+                kontakter={data.kontakter}
+                onUndermodal={setUnlocSkjema}
+              />
             )}
 
             {fane === "notater" && (

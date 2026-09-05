@@ -26,10 +26,10 @@ export const POLICY_NAVN = "tenant_isolasjon";
  */
 export const DIREKTE_TABELLER: readonly string[] = [
   "vendors", "vendor_contacts", "vendor_access_items", "vendor_notes",
-  // Unloc (BL-87) er IKKE bygget ennå — tabellene (unloc_settings, vendor_unloc_keys)
-  // finnes ikke, og skal ikke stå her før de gjør det: registeret hevdet dekning av
-  // tabeller som ikke fantes, og plattformpanelets RLS-sjekk viste «mangler» for dem.
-  // Når integrasjonen bygges, tvinger tests/rls.test.ts dem inn igjen.
+  // Unloc (docs/unloc.md): kundens krypterte API-credentials og de digitale nøklene som er
+  // delt ut. Sto lenge som en kommentar her («ikke bygget ennå») — nå finnes tabellene.
+  // Fjernes integrasjonen, fjernes de her samtidig med migrasjonen som dropper dem.
+  "unloc_settings", "vendor_unloc_keys",
   "tasks", "contracts",
   "deviations", "deviation_attachments",
   "completion_photos",
