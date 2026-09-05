@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Trash2, Upload } from "lucide-react";
 import Layout from "@/components/Layout";
-import BygningsdelModal from "@/components/BygningsdelModal";
+import AnleggModal from "@/components/AnleggModal";
 import { Feil, Kort, Rad, Tom, dato, kr, useOrgData } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { vedlikehold, type Service } from "@/lib/klient";
+import { anleggKategoriEtikett } from "@/lib/anleggkategorier";
 
 /**
  * Slottene som teller mot komplett-prosenten, pluss samleposen. Én boks per slott på siden:
@@ -50,7 +51,7 @@ export default function Bygningsdel({ params }: { params: Promise<{ id: string }
 
   if (laster || !data) {
     return (
-      <Layout tittel="Bygningsdel">
+      <Layout tittel="Anlegg">
         <div className="page-content">
           <Feil melding={feil} />
           {!feil && <Tom tekst="Henter …" />}
@@ -106,8 +107,8 @@ export default function Bygningsdel({ params }: { params: Promise<{ id: string }
 
         <Feil melding={feil} />
 
-        <Kort tittel="Om bygningsdelen">
-          <Rad tittel="Kategori" hoyre={data.category ?? "—"} />
+        <Kort tittel="Om anlegget">
+          <Rad tittel="Kategori" hoyre={anleggKategoriEtikett(data.category) ?? "—"} />
           <Rad tittel="Tilstandsgrad" hoyre={data.conditionGrade ?? "Ikke vurdert"} />
           <Rad tittel="Montert" hoyre={data.installedYear ?? "—"} />
           <Rad tittel="Forventet levetid" hoyre={data.expectedLifetimeYears ? `${data.expectedLifetimeYears} år` : "—"} />
@@ -200,18 +201,18 @@ export default function Bygningsdel({ params }: { params: Promise<{ id: string }
           )}
         </Kort>
 
-        <Kort tittel="Fjern bygningsdelen">
+        <Kort tittel="Fjern anlegget">
           <div className="field-note" style={{ padding: "14px 20px" }}>
-            Sletter bygningsdelen med FDV-dokumenter og servicehistorikk. Enhetsarbeid som peker på den beholdes.{" "}
+            Sletter anlegget med FDV-dokumenter og servicehistorikk. Enhetsarbeid som peker på den beholdes.{" "}
             <button type="button" className="ok-lenkeknapp" onClick={() => setBekreftSlett(true)}>
-              Slett bygningsdel
+              Slett anlegg
             </button>
           </div>
         </Kort>
       </div>
 
       {rediger && orgId && (
-        <BygningsdelModal
+        <AnleggModal
           orgId={orgId}
           utgangspunkt={data}
           onLukk={() => setRediger(false)}
@@ -265,7 +266,7 @@ export default function Bygningsdel({ params }: { params: Promise<{ id: string }
       )}
 
       {bekreftSlett && orgId && (
-        <Modal tittel="Slett bygningsdel" onLukk={() => setBekreftSlett(false)} bredde={420}>
+        <Modal tittel="Slett anlegg" onLukk={() => setBekreftSlett(false)} bredde={420}>
           <p style={{ margin: 0 }}>
             Slette «{data.name}» med {data.dokumenter.length} FDV-dokument{data.dokumenter.length === 1 ? "" : "er"} og{" "}
             {data.historikk.length} service{data.historikk.length === 1 ? "" : "r"}? Dette kan ikke angres.
@@ -282,7 +283,7 @@ export default function Bygningsdel({ params }: { params: Promise<{ id: string }
                   await vedlikehold.slettElement(orgId, id);
                   router.push("/vedlikehold");
                 } catch (e) {
-                  setFeil(e instanceof Error ? e.message : "Kunne ikke slette bygningsdelen");
+                  setFeil(e instanceof Error ? e.message : "Kunne ikke slette anlegget");
                   setBekreftSlett(false);
                 }
               }}

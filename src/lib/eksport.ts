@@ -158,7 +158,7 @@ export async function byggEksport(db: Db, orgId: string) {
     "kontrakter/       Avtaledokumenter, per leverandør",
     "avvik/            Vedlegg, per avvik (nummerert som i appen)",
     "utkvitteringer/   Bilder fra utførte oppgaver",
-    "vedlikehold/      FDV-dokumentasjon, per bygningsdel",
+    "vedlikehold/      FDV-dokumentasjon, per anlegg",
     "enhetsarbeid/     Dokumentasjon på arbeid i enkeltenheter",
     "profil/           Dashbordbanneret",
     "",

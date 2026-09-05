@@ -345,7 +345,7 @@ export const ANBEFALT: ReadonlyArray<{ mappe: string; tittel: string; hint?: str
   {
     mappe: "bygningsdok",
     tittel: "Bygningsdokumentasjon",
-    hint: "Tegninger og tilsynsrapporter. FDV per bygningsdel ligger i Vedlikehold-mappa.",
+    hint: "Tegninger og tilsynsrapporter. FDV per anlegg ligger i Vedlikehold-mappa.",
   },
   { mappe: "forsikring", tittel: "Gjeldende forsikringsavtale" },
 ];
@@ -378,7 +378,7 @@ export async function hentArkivoversikt(db: Db, orgId: string) {
       .where(eq(documents.orgId, orgId)),
     hentMapper(db, orgId),
     lagringsstatus(db, orgId),
-    // Speil: FDV per bygningsdel.
+    // Speil: FDV per anlegg.
     db
       .select({ elementId: elementDocuments.elementId })
       .from(elementDocuments)

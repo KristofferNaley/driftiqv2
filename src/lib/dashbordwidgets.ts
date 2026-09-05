@@ -39,7 +39,7 @@ export const WIDGETDEFS: readonly Widgetdef[] = [
   { nokkel: "oppgaver", navn: "Oppgaver", gruppe: "Oppgaver", beskrivelse: "De nærmeste forfallene.", storrelse: "m", modul: "tasks" },
   { nokkel: "avvik", navn: "Åpne avvik", gruppe: "Avvik", beskrivelse: "Avvik som ikke er lukket.", storrelse: "s", modul: "avvik" },
   { nokkel: "kontrakter", navn: "Kontrakter som utløper", gruppe: "Kontrakter", beskrivelse: "Avtaler som nærmer seg sluttdato.", storrelse: "s", modul: "kontrakter" },
-  { nokkel: "tilstand", navn: "Tilstandsgrad (TG)", gruppe: "Vedlikehold", beskrivelse: "Bygningsdeler fordelt på tilstand.", storrelse: "s", modul: "vedlikehold" },
+  { nokkel: "tilstand", navn: "Tilstandsgrad (TG)", gruppe: "Vedlikehold", beskrivelse: "Anlegg fordelt på tilstand.", storrelse: "s", modul: "vedlikehold" },
   { nokkel: "parkering", navn: "Parkering", gruppe: "Parkering", beskrivelse: "Ledige og utleide plasser.", storrelse: "s", modul: "parkering" },
   { nokkel: "rutiner", navn: "Rutiner å revidere", gruppe: "Rutiner", beskrivelse: "Rutiner som ikke er gjennomgått på lenge.", storrelse: "s", modul: "rutiner" },
   { nokkel: "aktivitet", navn: "Siste aktivitet", gruppe: "Driftslogg", beskrivelse: "De siste innførslene i driftsloggen.", storrelse: "s", modul: "driftslogg" },

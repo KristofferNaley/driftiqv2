@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Layout from "@/components/Layout";
 import { Faner, Feil, Hurtigskjema, Kort, Nokkeltall, Rad, Tom, dato, kr, useOrgData } from "@/components/felles";
 import { vedlikehold } from "@/lib/klient";
+import { anleggKategoriEtikett } from "@/lib/anleggkategorier";
 
 const GARANTIMERKE: Record<string, string> = { aktiv: "ok", utløpt: "muted", ukjent: "muted" };
 
@@ -17,11 +18,11 @@ function Bygningsdeler() {
     if (!orgId) return;
     try {
       const ny = await vedlikehold.nyttElement(orgId, { name: navn });
-      // Navnet alene er ikke en bygningsdel. Rett til detaljsiden med redigeringen åpen,
+      // Navnet alene er ikke et anlegg. Rett til detaljsiden med redigeringen åpen,
       // så kategori, montert år og installatør fylles inn i samme slengen.
       router.push(`/vedlikehold/${ny.id}?rediger=1`);
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke legge til bygningsdelen");
+      setFeil(e instanceof Error ? e.message : "Kunne ikke legge til anlegget");
     }
   }
 
@@ -29,7 +30,7 @@ function Bygningsdeler() {
     <>
       <Feil melding={feil} />
       <div className="auto-grid">
-        <Nokkeltall etikett="Bygningsdeler" verdi={liste.length} />
+        <Nokkeltall etikett="Anlegg" verdi={liste.length} />
         <Nokkeltall
           etikett="Estimert tiltakskost"
           verdi={
@@ -47,13 +48,13 @@ function Bygningsdeler() {
       </div>
 
       <Kort
-        tittel="Bygningsdeler"
-        handling={<Hurtigskjema plassholder="Navn på bygningsdel" onSend={nyttElement} />}
+        tittel="Anlegg og bygningsdeler"
+        handling={<Hurtigskjema plassholder="Navn på anlegg, f.eks. «Sprinkleranlegg»" onSend={nyttElement} />}
       >
         {laster ? (
           <Tom tekst="Henter …" />
         ) : liste.length === 0 ? (
-          <Tom tekst="Ingen bygningsdeler registrert ennå." />
+          <Tom tekst="Ingen anlegg registrert ennå." />
         ) : (
           liste.map((e) => (
             <Rad
@@ -61,7 +62,7 @@ function Bygningsdeler() {
               onClick={() => router.push(`/vedlikehold/${e.id}`)}
               tittel={`${e.icon} ${e.name}`}
               meta={[
-                e.category,
+                anleggKategoriEtikett(e.category),
                 e.conditionGrade,
                 e.installedYear && `montert ${e.installedYear}`,
                 e.nextActionYear && `tiltak ${e.nextActionYear}`,
@@ -149,7 +150,7 @@ export default function Vedlikehold() {
           valgt={fane}
           onVelg={setFane}
           faner={[
-            { nokkel: "deler", etikett: "Bygningsdeler" },
+            { nokkel: "deler", etikett: "Anlegg" },
             { nokkel: "enheter", etikett: "Arbeid i enheter" },
           ]}
         />

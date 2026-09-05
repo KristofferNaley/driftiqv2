@@ -104,7 +104,7 @@ const MODULER: { tittel: string; tekst: string; Ikon: LucideIcon; tone: Tone }[]
     Ikon: Wrench,
     tone: "cyan",
     tekst:
-      "Bygningsdeler med tilstandsgrad, tidslinje for tiltak og budsjettbehov per " +
+      "Anlegg og bygningsdeler med tilstandsgrad, tidslinje for tiltak og budsjettbehov per " +
       "femårsperiode. Et behov som er dokumentert og priset er lettere å få vedtatt.",
   },
   {

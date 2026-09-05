@@ -208,7 +208,7 @@ function Forside({
               <Mappekort
                 ikon="🏗"
                 navn="Vedlikehold"
-                under={`${oversikt.speil.vedlikehold.antall} FDV-dokumenter · ${oversikt.speil.vedlikehold.antallDeler} bygningsdeler`}
+                under={`${oversikt.speil.vedlikehold.antall} FDV-dokumenter · ${oversikt.speil.vedlikehold.antallDeler} anlegg`}
                 speil
                 onClick={() => router.push("/vedlikehold")}
               />

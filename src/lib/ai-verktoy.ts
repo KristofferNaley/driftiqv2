@@ -383,7 +383,7 @@ export const VERKTOY: readonly Verktoy[] = [
   },
   {
     navn: "hent_vedlikeholdsplan",
-    beskrivelse: "Bygningsdeler med tilstandsgrad, planlagte tiltak og kostnadsestimat.",
+    beskrivelse: "Anlegg (tekniske installasjoner og bygningsdeler) med tilstandsgrad, planlagte tiltak og kostnadsestimat. Kategori etter NS 3451: bygning, vvs, elkraft, tele, andre, utendors.",
     skjema: { type: "object", properties: { kategori: { type: "string" } } },
     kjor: (db, orgId, a) => hentVedlikeholdsplan(db, orgId, a as Parameters<typeof hentVedlikeholdsplan>[2]),
   },

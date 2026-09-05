@@ -5,9 +5,10 @@ import { Info, ShieldCheck, Wrench } from "lucide-react";
 import { Feil } from "@/components/felles";
 import { Fanemodal, Nedtrekk, Tekstfelt, Tekstomrade, useSending, type Fanevalg } from "@/components/skjema";
 import { leverandorer, type BygningsdelDetalj } from "@/lib/klient";
+import { ANLEGG_KATEGORIER } from "@/lib/anleggkategorier";
 
 /** Det skjemaet leverer fra seg — matcher `elementInn`/`elementEndring` i API-et. */
-export type BygningsdelFelter = {
+export type AnleggFelter = {
   name: string;
   icon: string;
   category: string | null;
@@ -34,14 +35,14 @@ const TILSTAND = [
 ];
 
 /**
- * Redigering av en bygningsdel. Hurtigskjemaet i lista oppretter delen med bare et navn, og
+ * Redigering av et anlegg (teknisk installasjon eller bygningsdel). Hurtigskjemaet i lista oppretter delen med bare et navn, og
  * denne modalen er der resten fylles inn — den åpnes derfor også rett etter opprettelsen.
  *
  * Tre faner etter hva styret har for hånden: det som står på typeskiltet, det som kommer
  * fra en tilstandsvurdering, og det som står i kontrakten med installatøren. Bare navnet
  * er påkrevd; alt annet kan stå tomt til man vet det.
  */
-export default function BygningsdelModal({
+export default function AnleggModal({
   orgId,
   utgangspunkt,
   onLukk,
@@ -50,7 +51,7 @@ export default function BygningsdelModal({
   orgId: string;
   utgangspunkt: Partial<BygningsdelDetalj>;
   onLukk: () => void;
-  onLagre: (felter: BygningsdelFelter) => Promise<void>;
+  onLagre: (felter: AnleggFelter) => Promise<void>;
 }) {
   const tall = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n));
   const [fane, setFane] = useState<Fane>("om");
@@ -76,6 +77,14 @@ export default function BygningsdelModal({
       .then((v) => setFirmaer(v.map((f) => ({ id: f.id, navn: f.name }))))
       .catch(() => {});
   }, [orgId]);
+
+  // Kategorifeltet er fri tekst i basen. En lagret verdi utenfor NS 3451-lista vises som sitt
+  // eget valg — ellers ville redigering stille byttet kategori på anlegget.
+  const kategorier = [
+    { verdi: "", etikett: "Uten kategori" },
+    ...ANLEGG_KATEGORIER.map((k) => ({ verdi: k.verdi, etikett: `${k.etikett} — ${k.hint}` })),
+    ...(kategori && !ANLEGG_KATEGORIER.some((k) => k.verdi === kategori) ? [{ verdi: kategori, etikett: kategori }] : []),
+  ];
 
   const faner: ReadonlyArray<Fanevalg<Fane>> = [
     { nokkel: "om", etikett: "Om delen", Ikon: Info },
@@ -124,7 +133,7 @@ export default function BygningsdelModal({
 
   return (
     <Fanemodal
-      tittel={utgangspunkt.id ? "Rediger bygningsdel" : "Ny bygningsdel"}
+      tittel={utgangspunkt.id ? "Rediger anlegg" : "Nytt anlegg"}
       onLukk={onLukk}
       faner={faner}
       valgt={fane}
@@ -150,7 +159,7 @@ export default function BygningsdelModal({
               <Tekstfelt etikett="Navn *" verdi={navn} onEndre={setNavn} plassholder="F.eks. «Heis oppgang A»" />
               <Tekstfelt etikett="Ikon" verdi={ikon} onEndre={setIkon} notat="Ett tegn eller emoji, vises i lista." />
             </div>
-            <Tekstfelt etikett="Kategori" verdi={kategori} onEndre={setKategori} plassholder="F.eks. «Heis», «Tak», «Varmeanlegg»" />
+            <Nedtrekk etikett="Kategori (NS 3451)" verdi={kategori} onEndre={setKategori} valg={kategorier} notat="Hovedgruppene i bygningsdelstabellen — samme inndeling takstmenn og forretningsførere bruker." />
             <div className="field-row">
               <Tekstfelt etikett="Montert (år)" type="number" verdi={montert} onEndre={setMontert} plassholder="2009" />
               <Tekstfelt

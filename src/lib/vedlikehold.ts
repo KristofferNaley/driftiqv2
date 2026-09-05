@@ -111,7 +111,7 @@ async function krevIEgenOrg(
   if (f.elementId) {
     const r = await db.select({ id: buildingElements.id }).from(buildingElements)
       .where(and(eq(buildingElements.id, f.elementId), eq(buildingElements.orgId, orgId))).limit(1);
-    if (r.length === 0) throw ugyldig("Ugyldig bygningsdel for denne organisasjonen");
+    if (r.length === 0) throw ugyldig("Ugyldig anlegg for denne organisasjonen");
   }
 }
 
