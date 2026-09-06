@@ -34,6 +34,8 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // månedsforbruket. Samme fjernbare pakke-mønster som Unloc.
   "easee_settings", "easee_chargers", "easee_charger_usage",
   "easee_charger_hours", "easee_sessions", "easee_price_plans",
+  // Ladekjøringer — fakturagrunnlaget for lading (docs/easee.md «Etappe 3»). Begge har egen org_id.
+  "charging_runs", "charging_run_lines",
   "tasks", "contracts",
   "deviations", "deviation_attachments",
   "completion_photos",

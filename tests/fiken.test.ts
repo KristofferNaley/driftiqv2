@@ -113,16 +113,25 @@ function stubbFiken(kjopene: FikenKjop[]) {
 
 describe("adapteret", () => {
   it("har en hviteliste med bare lesekall — skriving mot Fiken må legges til her, synlig", () => {
-    expect(TILLATTE_KALL.every((k) => k.metode === "GET")).toBe(true);
+    // Skrivekallene er kun fakturering (docs/fiken.md «Steg 3»): kunde, faktura, teller, sending.
+    expect(TILLATTE_KALL.filter((k) => k.metode === "POST").map((k) => k.monster.source)).toEqual([
+      "^\\/companies\\/[a-z0-9-]+\\/contacts$",
+      "^\\/companies\\/[a-z0-9-]+\\/invoices$",
+      "^\\/companies\\/[a-z0-9-]+\\/invoices\\/counter$",
+      "^\\/companies\\/[a-z0-9-]+\\/invoices\\/send$",
+    ]);
     expect(erTillatt("GET", "/companies/demo-sameie/purchases?page=0")).toBe(true);
-    expect(erTillatt("GET", "/companies/demo-sameie/invoices")).toBe(false);
-    expect(erTillatt("POST" as "GET", "/companies/demo-sameie/purchases")).toBe(false);
+    expect(erTillatt("GET", "/companies/demo-sameie/invoices?orderReference=x")).toBe(true);
+    expect(erTillatt("POST", "/companies/demo-sameie/purchases")).toBe(false);
+    expect(erTillatt("POST", "/companies/demo-sameie/sales/1/payments")).toBe(false); // betalinger skrives aldri
+    expect(erTillatt("DELETE", "/companies/demo-sameie/invoices/1")).toBe(false);
+    expect(erTillatt("POST", "/companies/demo-sameie/creditNotes/full")).toBe(false);
   });
 
   it("nekter et kall utenfor hvitelista før noe går på nettet", async () => {
     const f = vi.fn();
     vi.stubGlobal("fetch", f);
-    await expect(fikenKall("t", "GET", "/companies/demo-sameie/invoices")).rejects.toThrow(/hvitelista/);
+    await expect(fikenKall("t", "GET", "/companies/demo-sameie/sales")).rejects.toThrow(/hvitelista/);
     expect(f).not.toHaveBeenCalled();
   });
 

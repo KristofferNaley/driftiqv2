@@ -10,8 +10,9 @@ import Budsjett from "./Budsjett";
 import Felleskostnader from "./Felleskostnader";
 import Fakturaer from "./Fakturaer";
 import Integrasjon from "./Integrasjon";
+import Ladekjoringer from "./Ladekjoringer";
 
-export type OkonomiFane = "oversikt" | "eiere" | "budsjett" | "felleskostnader" | "fakturaer" | "integrasjon";
+export type OkonomiFane = "oversikt" | "eiere" | "budsjett" | "felleskostnader" | "lading" | "fakturaer" | "integrasjon";
 
 /** Rekkefølgen følger arbeidsgangen: grunnlaget (eiere) → budsjett → satser → fakturaer. */
 const FANER: ReadonlyArray<{ nokkel: OkonomiFane; etikett: string }> = [
@@ -19,6 +20,7 @@ const FANER: ReadonlyArray<{ nokkel: OkonomiFane; etikett: string }> = [
   { nokkel: "eiere", etikett: "Seksjoner" },
   { nokkel: "budsjett", etikett: "Budsjett" },
   { nokkel: "felleskostnader", etikett: "Felleskostnader" },
+  { nokkel: "lading", etikett: "Lading" },
   { nokkel: "fakturaer", etikett: "Fakturaer" },
   { nokkel: "integrasjon", etikett: "Integrasjon" },
 ];
@@ -26,7 +28,7 @@ const FANER: ReadonlyArray<{ nokkel: OkonomiFane; etikett: string }> = [
 const erFane = (v: unknown): v is OkonomiFane => FANER.some((f) => f.nokkel === v);
 
 /**
- * Økonomi — «DriftIQ styrer, Fiken fører» (docs/fiken.md). Fanene deler ett grunnlag:
+ * Økonomi — «DriftIQ styrer, regnskapet fører» (docs/fiken.md). Fanene deler ett grunnlag:
  * eierregisteret gir mottakerne og brøken, budsjettet gir satsene, halvårskjøringen gir
  * fakturagrunnlaget, og fakturagodkjenningen gir «faktisk» tilbake til budsjettet.
  * Integrasjonsfanen sier hva regnskapskoblingen skal gjøre når den kommer.
@@ -62,6 +64,7 @@ export default function Okonomi({
         {fane === "eiere" && <Eiere erAdmin={erAdmin} />}
         {fane === "budsjett" && <Budsjett erAdmin={erAdmin} />}
         {fane === "felleskostnader" && <Felleskostnader erAdmin={erAdmin} />}
+        {fane === "lading" && <Ladekjoringer erAdmin={erAdmin} />}
         {fane === "fakturaer" && (
           <Fakturaer
             erAdmin={erAdmin}

@@ -742,6 +742,26 @@ export type Satsoversikt = {
   maanedligSum: number; utenSats: number;
 };
 
+export type Regnskapsstatus = {
+  system: "fiken" | "tripletex" | null; navn: string; foretak: string | null; kanFakturere: boolean; grunn: string | null;
+};
+
+export type Ladekjoring = {
+  id: string; periodStart: string; periodEnd: string; status: string; dueDate: string; incomeAccount: string;
+  totalAmount: number; lineCount: number; missingRecipients: number; totalKwh: number;
+  sentTo: string | null; sentAt: string | null; createdBy: string; note: string | null; createdAt: string;
+};
+
+export type LadekjoringDetalj = Ladekjoring & {
+  etikett: string;
+  linjer: Array<{
+    id: string; unitId: string | null; ownerId: string | null; ownerName: string | null; ownerEmail: string | null;
+    unitLabel: string | null; description: string; issue: string | null; kwh: number; kwhDay: number; kwhNight: number;
+    energyAmount: number; gridAmount: number; fixedAmount: number; amount: number; orderReference: string;
+    externalRef: string | null; externalNumber: string | null; sentToRecipient: string | null;
+  }>;
+};
+
 export type Kjoring = {
   id: string; periodStart: string; periodEnd: string; status: string; dueDay: number;
   totalAmount: number; lineCount: number; missingOwners: number; createdBy: string;
@@ -848,6 +868,19 @@ export const okonomi = {
   annullerKjoring: (o: string, id: string) => api.slett(org(o, `/okonomi/kjoringer/${id}`)),
   /** CSV-en lenkes direkte (`<a href>`) — ruta svarer med fil, ikke JSON. */
   eksportUrl: (o: string, id: string) => `/api${org(o, `/okonomi/kjoringer/${id}/eksport`)}`,
+
+  // Ladekjøringer — fakturagrunnlaget for lading (docs/easee.md «Etappe 3»). Sendes til
+  // det regnskapssystemet orgen er koblet til; `regnskap()` sier hvilket, aldri antatt.
+  regnskap: (o: string) => api.hent<Regnskapsstatus>(org(o, "/okonomi/regnskap")),
+  ladekjoringer: (o: string) => api.hent<Ladekjoring[]>(org(o, "/okonomi/ladekjoringer")),
+  ladekjoring: (o: string, id: string) => api.hent<LadekjoringDetalj>(org(o, `/okonomi/ladekjoringer/${id}`)),
+  nyLadekjoring: (o: string, d: { periodStart: string; maaneder: 1 | 3 | 6 | 12; dueDate: string; incomeAccount: string; note: string | null }) =>
+    api.send<LadekjoringDetalj>(org(o, "/okonomi/ladekjoringer"), d),
+  annullerLadekjoring: (o: string, id: string) => api.slett(org(o, `/okonomi/ladekjoringer/${id}`)),
+  endreLadekjoring: (o: string, id: string, d: { dueDate?: string; incomeAccount?: string }) =>
+    api.lapp<LadekjoringDetalj>(org(o, `/okonomi/ladekjoringer/${id}`), d),
+  sendLadekjoring: (o: string, id: string) => api.send<LadekjoringDetalj>(org(o, `/okonomi/ladekjoringer/${id}/send`), {}),
+  ladekjoringEksportUrl: (o: string, id: string) => `/api${org(o, `/okonomi/ladekjoringer/${id}/eksport`)}`,
 
   fakturaer: (o: string, filter: { status?: string; aar?: number } = {}) => {
     const q = new URLSearchParams();
@@ -1177,7 +1210,8 @@ export type Laderapport = {
   klar: { antall: number; sumOre: number };
 };
 
-export type Ladeokt = { id: string; carConnected: string; carDisconnected: string | null; kwh: number; isComplete: boolean };
+export type Ladeokt = { id: string; carConnected: string; carDisconnected: string | null; kwh: number; isComplete: boolean; kwhNatt: number | null; kostnadOre: number | null };
+export type Ladeokter = { okter: Ladeokt[]; fastleddOre: number; priset: boolean; sumOre: number };
 
 export const easee = {
   status: (o: string) => api.hent<EaseeStatus>(org(o, "/easee")),
@@ -1192,7 +1226,7 @@ export const easee = {
   /** Til en vanlig `<a href>` — nedlasting går utenom `request()`. */
   rapportCsvSti: (o: string, aar: number, maaned: number) => `/api${org(o, `/easee/rapport/csv?aar=${aar}&maaned=${maaned}`)}`,
   okter: (o: string, laderId: string, aar: number, maaned: number) =>
-    api.hent<Ladeokt[]>(org(o, `/easee/chargers/${laderId}/okter?aar=${aar}&maaned=${maaned}`)),
+    api.hent<Ladeokter>(org(o, `/easee/chargers/${laderId}/okter?aar=${aar}&maaned=${maaned}`)),
   /** Lading-fanen. `oppdater` tvinger ny henting av laderliste, tilstand og forbruk. */
   lading: (o: string) => api.hent<EaseeLading>(org(o, "/easee/lading")),
   oppdater: (o: string) => api.send<EaseeLading>(org(o, "/easee/lading"), {}),

@@ -4578,10 +4578,17 @@ textarea.qr-input { resize: vertical; }
 .ea-pris span b { color: var(--text); font-weight: 500; }
 .ea-sumrad td { font-weight: 800; background: var(--surface2); border-top: 1px solid var(--border); }
 .ea-underrad td { background: rgba(var(--accent-rgb), 0.05); padding: 0; }
-.ea-okter-rad { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); padding: 8px 14px 12px 60px; }
-.ea-okt-kort { padding: 8px 12px; border-left: 2px solid var(--border); font-size: var(--fs-label); }
-.ea-okt-kort b { display: block; font-family: ui-monospace, Menlo, monospace; font-weight: 500; color: var(--text); }
-.ea-okt-kort span { color: var(--muted); }
+.ea-okter-rad { padding: 10px 14px 12px 60px; font-size: var(--fs-label); }
+/* Øktene nedover: dato/klokkeslett | kWh | beløp. Brukes både under rapportraden og i skuffen. */
+.ea-oktliste { padding: 6px 14px 12px 60px; max-width: 640px; font-size: var(--fs-sm); }
+.skuff .ea-oktliste { padding: 0; max-width: none; }
+.ea-oktliste-hode, .ea-oktliste-rad { display: grid; grid-template-columns: minmax(0, 1fr) 90px 110px; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.ea-oktliste-hode { font-size: var(--fs-label); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.ea-oktliste-rad:last-child { border-bottom: 0; }
+.ea-oktliste .h { text-align: right; font-variant-numeric: tabular-nums; }
+.ea-oktliste-rad b { font-weight: 600; }
+.ea-oktliste-sum { font-weight: 700; border-top: 2px solid var(--border); }
+.ea-natt { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgba(107, 124, 255, 0.15); color: #9aa6ff; font-size: var(--fs-label); font-weight: 600; }
 .ea-advarsel {
   margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: var(--fs-label);
   background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.3); color: var(--warn);

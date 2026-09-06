@@ -686,7 +686,13 @@ describe("synk og rapport", () => {
     expect(aug.linjer.map((l) => l.sumOre)).toEqual([10_000, 10_000]);
 
     const okter = await i(orgId, (db) => hentOkter(db, orgId, p01.laderId, 2026, 7));
-    expect(okter.map((o) => o.kwh)).toEqual([6, 14]);
+    expect(okter.okter.map((o) => o.kwh)).toEqual([6, 14]);
+    // Beløp per økt fra timene økten dekker: lørdagsøkten (6 kWh natt) = 6 × (50 + 33); mandagsøkten 10 dag + 4 natt.
+    expect(okter.okter.map((o) => o.kostnadOre)).toEqual([6 * 83, 10 * 95 + 4 * 83]);
+    expect(okter.okter[0]?.kwhNatt).toBe(6);
+    expect(okter.fastleddOre).toBe(10_000);
+    expect(okter.sumOre).toBe(6 * 83 + 10 * 95 + 4 * 83 + 10_000);
+    expect(okter.sumOre).toBe(p01.sumOre); // øktene + fastleddet = rapportlinja
 
     // Laderlista: siste økt per lader, og tolv måneder med nattandel der timene finnes.
     const l = await i(orgId, (db) => hentLading(db, orgId, { frisk: false, naa: NAA }));

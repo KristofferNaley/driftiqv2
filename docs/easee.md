@@ -35,12 +35,12 @@ tas ut uten spor i resten av appen. Grensene:
 | RLS | seks tabellnavn i `DIREKTE_TABELLER` og `power_prices` i `UNNTATT` i `src/db/rls/tables.ts` |
 | HTTP-adapter | `src/lib/easee.ts` (importfri — `opModeTekst` brukes av klienten), `src/lib/spotpris.ts` (hvakosterstrommen.no) |
 | Regler | `src/lib/laderegler.ts` (importfri — prising, dag/natt, månedsgrenser; brukes av klienten også) |
-| Logikk | `src/lib/easeekobling.ts` |
+| Logikk | `src/lib/easeekobling.ts`, `src/lib/ladekjoring.ts` (kjøringen; skjema `src/db/schema/ladekjoring.ts`, `drizzle/0059`) |
 | Jobb | «easee-synk» i `lib/jobber.ts` + `instrumentation.ts` (nattlig, kl. 03:15) |
-| Ruter | `src/app/api/organizations/[orgId]/easee/**` |
+| Ruter | `src/app/api/organizations/[orgId]/easee/**`, `…/okonomi/ladekjoringer/**`, `…/okonomi/regnskap` |
 | Klient | `easee`-blokken nederst i `src/lib/klient.ts` |
-| UI | `src/app/(app)/innstillinger/EaseeKort.tsx`, `src/components/EaseeLading.tsx`, `.ea-`-blokken i `globals.css` |
-| Tester | `tests/easee.test.ts` |
+| UI | `src/app/(app)/innstillinger/EaseeKort.tsx`, `src/components/EaseeLading.tsx`, `src/app/(app)/okonomi/Ladekjoringer.tsx` (fanen «Lading»), `.ea-`-blokken i `globals.css` |
+| Tester | `tests/easee.test.ts`, `tests/ladekjoring.test.ts` |
 | Koblinger inn i resten | `<EaseeKort />` i Integrasjoner; `<EaseeLading />` er hele Lading-fanen i `parkering/page.tsx` (fanen viser plassene med ladepunkt uten kobling); `easee_settings` i `EKSKLUDERTE_TABELLER` i `lib/eksport.ts`; `kobleLaderTilPlass` setter `hasCharger`/`chargerLabel` på plassen (data, ikke skjema); `parking_spots.unit_id` (plass → seksjon, brukes av rapporten, men hører til parkering og blir stående) |
 
 Ingen egen modul (rutene gates med `modul: "parkering"`), ingen env-variabel, ingen
@@ -230,19 +230,45 @@ Alle priser er **øre** inkl. mva, som resten av økonomimodulen; `tilOre`/`kron
 `lib/okonomiregler.ts` gjør konverteringen. Kostnaden regnes per time (kWh × øre) og
 rundes til hele øre per lader og måned (`beregnKostnad`).
 
-## Etappe 3 — fakturering (ikke bygget)
+## Etappe 3 — ladekjøring til Økonomi (06.09.2026)
 
-Rapportlinjene har alt en faktura trenger: seksjon, eier (navn, e-post), beløp og måned.
-Planen er en «ladekjøring» i Økonomi-fanen etter mønster av `fee_runs`/`fee_run_lines`:
-kjøringen har `periodStart`/`periodEnd` som felleskostnadene, så **perioden er
-sameiets valg** — måned, kvartal eller halvår (avklart 06.09.2026: månedlig er
-standarden, men ikke alle vil ha tolv fakturaer). Én linje per seksjon per periode =
-summen av månedsrapportene i perioden, `orderReference = lading:<unitId>:<fra>:<til>`,
-CSV uten Fiken og fakturaer via Fiken-adapteret med kobling. **A-konto** er en egen
-kjøringstype oppå dette: fast beløp per plass per måned (feltet finnes i prisplanen som
-fastledd i dag; a-konto blir et eget felt), og en avregningskjøring per år som
-fakturerer eller krediterer differansen mot rapporten. Rapporten per måned er
-grunnlaget i alle variantene — den skal ikke endres for å støtte dem.
+**Ladekjøringen** (`lib/ladekjoring.ts`, tabellene `charging_runs`/`charging_run_lines`,
+fanen **Økonomi → Lading**) er fakturagrunnlaget, etter mønster av halvårskjøringen:
+
+- **Perioden er sameiets valg**: måned, kvartal, halvår eller år, alltid hele måneder
+  fra den 1. Én kjøring per periode; overlapp med en kjøring som ikke er annullert gir 409.
+- **Én linje per seksjon** = summen av `hentRapport()` for hver måned i perioden (kWh
+  dag/natt, kraft, nett, fastledd). Rapporten prises; kjøringen samler. Mangler en måned
+  prisplan eller spotpriser, lages ingenting — et grunnlag med hull er verre enn ingen.
+- **Linjer uten mottaker** (plass uten seksjon, seksjon uten eier, lader uten plass)
+  blir stående i kjøringen med `issue` satt og faktureres ikke. Styret ser dem, ordner
+  koblingen, annullerer og kjører på nytt.
+- **Mottakeren** er seksjonens eier når kjøringen lages. Eierskifte i perioden: ny eier
+  får hele perioden, som ved felleskostnader; kjøper og selger gjør opp seg imellom.
+- `orderReference` er «Lading juli 2026» — lesbar, den står på fakturaen. Sammen med
+  kunden (seksjonen) er den idempotensnøkkelen mot regnskapssystemet. CSV uten kobling
+  (logges), «Send til …» med.
+- Forfall og inntektskonto (standard 3100 «salgsinntekt, avgiftsfri»,
+  `LADING_INNTEKTSKONTO_STANDARD` — lading er salg av strøm, ikke leie; 3000 for
+  mva-registrerte) settes per kjøring og kan rettes på et grunnlag.
+
+**Regnskapslaget er generisk** — avklart 06.09.2026: Fiken skal aldri være en fast
+streng, Tripletex kan komme.
+
+- `lib/regnskap.ts` (importfri): `REGNSKAPSSYSTEMER` med navn, `regnskapNavn()`,
+  `Regnskapsstatus`. UI-et sier «Send til Fiken» fordi koblingen sier Fiken — og
+  «regnskapet» uten kobling.
+- `lib/regnskapskobling.ts`: `hentRegnskap(db, orgId)` (system, navn, foretak,
+  `kanFakturere`, `grunn`) og `adapterFor()`. `Fakturaadapter` er kontrakten: ta imot
+  `Fakturaoppdrag[]` (mottakernøkkel, navn, e-post, referanse, beskrivelse, beløp, datoer,
+  konto) og svar med `Fakturasvar[]` (ekstern id, nummer, sendt). Nytt system = én fil
+  som implementerer den, pluss en linje i `ADAPTERE`.
+- `lib/fikenfaktura.ts` er Fiken-adapteret; `lib/fiken.ts` fikk skrivekall (kunde,
+  faktura, teller, sending) i hvitelista. Se docs/fiken.md «Steg 3 slik det ble».
+
+**A-konto** er fortsatt neste: fast beløp per plass per måned og en avregningskjøring
+per år som fakturerer eller krediterer differansen mot rapporten. Kjøringen over er
+grunnlaget også for den.
 
 ## Kandidater senere, hvis den blir stående
 

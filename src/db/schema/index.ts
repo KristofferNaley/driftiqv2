@@ -38,3 +38,4 @@ export * from "./feedback";
 export * from "./okonomi";
 export * from "./unloc";
 export * from "./easee";
+export * from "./ladekjoring";

@@ -935,15 +935,44 @@ export async function hentRapport(db: Db, orgId: string, aar: number, maaned: nu
   };
 }
 
-/** Øktene for én lader i måneden — «hvem ladet når», til skuffen i rapporten. */
+/**
+ * Øktene for én lader i måneden — «hvem ladet når», med beløp per økt: timene økten
+ * dekker, priset etter planen (dag/natt, spot). Fastleddet er per måned, ikke per økt, og
+ * kommer som eget felt så lista summerer til rapportlinja.
+ */
 export async function hentOkter(db: Db, orgId: string, laderId: string, aar: number, maaned: number) {
   const { fra, til } = maanedsgrenser(aar, maaned);
+  const plan = gjeldendePlan(await hentPrisplaner(db, orgId), aar, maaned);
+  const lader = (await db.select({ spotId: easeeChargers.spotId, active: easeeChargers.active }).from(easeeChargers).where(and(eq(easeeChargers.id, laderId), eq(easeeChargers.orgId, orgId))).limit(1))[0];
+  if (!lader) throw ikkeFunnet("Lader");
   const r = await db
     .select()
     .from(easeeSessions)
     .where(and(eq(easeeSessions.orgId, orgId), eq(easeeSessions.chargerRowId, laderId), gte(easeeSessions.carConnected, fra), lt(easeeSessions.carConnected, til)))
     .orderBy(desc(easeeSessions.carConnected));
-  return r.map((o) => ({ id: o.id, carConnected: o.carConnected, carDisconnected: o.carDisconnected, kwh: o.kwh, isComplete: o.isComplete }));
+  const timer = await db
+    .select({ hourStart: easeeChargerHours.hourStart, kwh: easeeChargerHours.kwh })
+    .from(easeeChargerHours)
+    .where(and(eq(easeeChargerHours.orgId, orgId), eq(easeeChargerHours.chargerRowId, laderId), gte(easeeChargerHours.hourStart, fra), lt(easeeChargerHours.hourStart, til)));
+  const spot = new Map<number, number>();
+  if (plan?.kraftModel === "spot" && plan.priceArea) {
+    for (const p of await db.select({ hourStart: powerPrices.hourStart, nokPerKwh: powerPrices.nokPerKwh }).from(powerPrices).where(and(eq(powerPrices.area, plan.priceArea), gte(powerPrices.hourStart, fra), lt(powerPrices.hourStart, til)))) {
+      spot.set(p.hourStart.getTime(), p.nokPerKwh);
+    }
+  }
+  const okter = r.map((o) => {
+    const start = new Date(o.carConnected); start.setUTCMinutes(0, 0, 0);
+    const slutt = o.carDisconnected ?? til;
+    const mine = timer.filter((t) => t.hourStart >= start && t.hourStart < slutt).map((t) => ({ start: t.hourStart, kwh: t.kwh }));
+    const k = plan ? beregnKostnad(plan, mine, spot) : null;
+    return {
+      id: o.id, carConnected: o.carConnected, carDisconnected: o.carDisconnected, kwh: o.kwh, isComplete: o.isComplete,
+      kwhNatt: k?.kwhNatt ?? null,
+      kostnadOre: k ? k.kraftOre + k.nettOre : null,
+    };
+  });
+  const fastleddOre = plan && lader.spotId && lader.active ? plan.fastleddOre : 0;
+  return { okter, fastleddOre, priset: Boolean(plan), sumOre: okter.reduce((n, o) => n + (o.kostnadOre ?? 0), 0) + fastleddOre };
 }
 
 /** CSV av rapporten — til forretningsfører eller regneark. Eksport logges. */

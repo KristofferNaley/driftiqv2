@@ -84,8 +84,15 @@ async function hentRad(db: Db, orgId: string) {
   return r[0];
 }
 
-/** Gyldig token — fornyet via refresh-token når det er i ferd med å gå ut. */
-async function gyldigToken(db: Db, orgId: string): Promise<string> {
+/** Koblingsraden uten hemmeligheter, eller null — til `regnskapskobling.ts`. */
+export async function fikenRad(db: Db, orgId: string) {
+  const r = await db.select().from(fikenConnections).where(eq(fikenConnections.orgId, orgId)).limit(1);
+  const k = r[0];
+  return k ? { companySlug: k.companySlug, companyName: k.companyName, vatType: k.vatType, authMode: k.authMode } : null;
+}
+
+/** Gyldig token — fornyet via refresh-token når det er i ferd med å gå ut. Brukes også av fakturaadapteret. */
+export async function gyldigToken(db: Db, orgId: string): Promise<string> {
   const k = await hentRad(db, orgId);
   if (k.authMode === "api_key") return dekrypter(k.accessTokenEnc);
   const snartUte = k.tokenExpiresAt && k.tokenExpiresAt.getTime() - Date.now() < 5 * 60 * 1000;

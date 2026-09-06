@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Feil, Tom, datoTid, useOrgData } from "@/components/felles";
 import { Avkryssing, Nedtrekk, Skuff, Tekstfelt, Tekstomrade } from "@/components/skjema";
 import { grunnTekst, opModeTekst } from "@/lib/easee";
-import { avvik as avvikApi, easee, type EaseeLader, type Ladeokt, type Plass, type Prisplan, type PrisplanInn, type Rapportlinje } from "@/lib/klient";
+import { avvik as avvikApi, easee, okonomi, type EaseeLader, type Ladeokter, type Plass, type Prisplan, type PrisplanInn, type Rapportlinje } from "@/lib/klient";
 import { KRAFTMODELL_ETIKETT, PRISOMRADER, PRISOMRADE_ETIKETT } from "@/lib/laderegler";
 import { belopFelt, kroner, tilOre } from "@/lib/okonomiregler";
 
@@ -114,6 +114,9 @@ export default function EaseeLading({
   // Nøkkeltallene og varsellinja gjelder alltid inneværende måned, uansett hva rapporten viser.
   const rapportNaa = useOrgData((o) => easee.rapport(o, naaAar, naaMnd));
   const planer = useOrgData((o) => easee.prisplaner(o));
+  // Regnskapssystemet orgen er koblet til — navnet på knappen kommer herfra, aldri hardkodet.
+  // Uten økonomimodulen svarer ruta 403; da finnes ingen knapp å vise.
+  const regnskap = useOrgData((o) => okonomi.regnskap(o).catch(() => null));
   const [visPriser, setVisPriser] = useState(false);
   const [oppsett, setOppsett] = useState(false);
   const [oktSkuff, setOktSkuff] = useState<{ laderId: string; navn: string } | null>(null);
@@ -469,7 +472,15 @@ export default function EaseeLading({
             <button className="btn btn-ghost" onClick={() => setVisPriser(true)}>Priser{ingenPlan && <span style={{ color: "var(--warn)" }}> · mangler</span>}</button>
             {orgId && <a className="btn btn-ghost" href={easee.rapportCsvSti(orgId, aar, mnd)}>CSV</a>}
             <button className="btn btn-ghost" onClick={() => window.print()}>Skriv ut</button>
-            <button className="btn btn-primary" disabled title="Fakturering fra Lading til Økonomi kommer i neste etappe">Send til Fiken</button>
+            {regnskap.data !== null && regnskap.data !== undefined && (
+              <a
+                className="btn btn-primary"
+                href="/okonomi?fane=lading"
+                title={regnskap.data.kanFakturere ? `Lag ladekjøring og send til ${regnskap.data.navn}` : regnskap.data.grunn ?? undefined}
+              >
+                {regnskap.data.kanFakturere ? `Fakturer via ${regnskap.data.navn}` : "Lag ladekjøring"}
+              </a>
+            )}
           </div>
         </div>
         {r?.advarsler.filter((a) => !/Ingen prisplan/.test(a)).map((a) => <div key={a} className="ea-advarsel">{a}</div>)}
@@ -592,11 +603,11 @@ function LinjeMedOkter({ orgId, linje: l, aar, maaned, apen, harPlan, st, onTogg
   orgId: string; linje: Rapportlinje; aar: number; maaned: number; apen: boolean; harPlan: boolean;
   st: { etikett: string; farge: "g" | "w" }; onToggle: () => void; onApnePlass: () => void;
 }) {
-  const [okter, setOkter] = useState<Ladeokt[] | null>(null);
+  const [okter, setOkter] = useState<Ladeokter | null>(null);
   useEffect(() => {
     if (!apen || okter) return;
     let aktiv = true;
-    easee.okter(orgId, l.laderId, aar, maaned).then((o) => aktiv && setOkter(o)).catch(() => aktiv && setOkter([]));
+    easee.okter(orgId, l.laderId, aar, maaned).then((o) => aktiv && setOkter(o)).catch(() => aktiv && setOkter({ okter: [], fastleddOre: 0, priset: false, sumOre: 0 }));
     return () => { aktiv = false; };
   }, [apen, okter, orgId, l.laderId, aar, maaned]);
   const mottaker = l.eier?.name ?? l.avtale?.tenantName ?? l.plass?.holderName ?? null;
@@ -626,22 +637,48 @@ function LinjeMedOkter({ orgId, linje: l, aar, maaned, apen, harPlan, st, onTogg
           <td colSpan={9}>
             {!okter ? (
               <div className="ea-okter-rad"><span className="mut">Henter økter …</span></div>
-            ) : okter.length === 0 ? (
-              <div className="ea-okter-rad"><span className="mut">Ingen ladeøkter registrert denne måneden.</span></div>
             ) : (
-              <div className="ea-okter-rad">
-                {okter.map((o) => (
-                  <div key={o.id} className="ea-okt-kort">
-                    <b>{kortDato(o.carConnected)} {klokke(o.carConnected)}{o.carDisconnected ? ` – ${klokke(o.carDisconnected)}` : " – pågår"}</b>
-                    <span>{kwh(o.kwh, 2)}</span>
-                  </div>
-                ))}
-              </div>
+              <Oktliste data={okter} harPlan={harPlan} />
             )}
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+/* ── Øktene nedover: dato og klokkeslett, kWh, beløp — og fastleddet til slutt ── */
+
+function Oktliste({ data, harPlan }: { data: Ladeokter; harPlan: boolean }) {
+  const dagTekst = (iso: string) => {
+    const t = new Date(iso).toLocaleDateString("nb-NO", { weekday: "short", day: "numeric", month: "short" }).replace(/\./g, "");
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  const sammeDag = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
+  if (data.okter.length === 0 && data.fastleddOre === 0) return <div className="ea-okter-rad"><span className="mut">Ingen ladeøkter registrert denne måneden.</span></div>;
+  return (
+    <div className="ea-oktliste">
+      <div className="ea-oktliste-hode"><span>Økt</span><span className="h">kWh</span><span className="h">Beløp</span></div>
+      {data.okter.map((o) => (
+        <div key={o.id} className="ea-oktliste-rad">
+          <span>
+            <b>{dagTekst(o.carConnected)}</b> {klokke(o.carConnected)}
+            {o.carDisconnected ? ` – ${sammeDag(o.carConnected, o.carDisconnected) ? "" : `${dagTekst(o.carDisconnected).toLowerCase()} `}${klokke(o.carDisconnected)}` : " – pågår"}
+            {o.kwhNatt !== null && o.kwh > 0 && o.kwhNatt > 0 && <span className="ea-natt">{Math.round((o.kwhNatt / o.kwh) * 100)} % natt</span>}
+          </span>
+          <span className="h">{tall(o.kwh, 2)}</span>
+          <span className="h">{harPlan && o.kostnadOre !== null ? kroner(o.kostnadOre) : "—"}</span>
+        </div>
+      ))}
+      {data.fastleddOre > 0 && (
+        <div className="ea-oktliste-rad"><span className="mut">Fastledd for måneden</span><span className="h" /><span className="h">{kroner(data.fastleddOre)}</span></div>
+      )}
+      <div className="ea-oktliste-rad ea-oktliste-sum">
+        <span>{data.okter.length} økt{data.okter.length === 1 ? "" : "er"}</span>
+        <span className="h">{tall(data.okter.reduce((n, o) => n + o.kwh, 0), 2)}</span>
+        <span className="h">{harPlan ? kroner(data.sumOre) : "—"}</span>
+      </div>
+    </div>
   );
 }
 
@@ -828,51 +865,17 @@ function PrisplanSkjema({ orgId, plan, onLukk, onLagret }: { orgId: string; plan
 /* ── Ladeøktene for én lader (skuff fra laderlista) ── */
 
 function OktSkuff({ orgId, laderId, navn, aar, maaned, onLukk }: { orgId: string; laderId: string; navn: string; aar: number; maaned: number; onLukk: () => void }) {
-  const [okter, setOkter] = useState<Ladeokt[] | null>(null);
+  const [data, setData] = useState<Ladeokter | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
   useEffect(() => {
     let aktiv = true;
-    easee.okter(orgId, laderId, aar, maaned).then((o) => aktiv && setOkter(o)).catch((e) => aktiv && setFeil(e instanceof Error ? e.message : "Kunne ikke hente øktene"));
+    easee.okter(orgId, laderId, aar, maaned).then((o) => aktiv && setData(o)).catch((e) => aktiv && setFeil(e instanceof Error ? e.message : "Kunne ikke hente øktene"));
     return () => { aktiv = false; };
   }, [orgId, laderId, aar, maaned]);
-  const varighet = (o: Ladeokt) => {
-    if (!o.carDisconnected) return "pågår";
-    const min = Math.round((new Date(o.carDisconnected).getTime() - new Date(o.carConnected).getTime()) / 60000);
-    return min >= 60 ? `${Math.floor(min / 60)} t ${min % 60} min` : `${min} min`;
-  };
-  const dag = (iso: string) => {
-    const t = new Date(iso).toLocaleDateString("nb-NO", { weekday: "long", day: "numeric", month: "long" });
-    return t.charAt(0).toUpperCase() + t.slice(1);
-  };
-  const sammeDag = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
   return (
     <Skuff tittel={`Ladeøkter · ${navn} · ${maanedNavn(aar, maaned)}`} onLukk={onLukk}>
       <Feil melding={feil} />
-      {!okter ? (
-        <Tom tekst="Henter …" />
-      ) : okter.length === 0 ? (
-        <Tom tekst="Ingen ladeøkter denne måneden. Øktene hentes av nattjobben og «Oppdater fra Easee»." />
-      ) : (
-        <div className="ea-okter">
-          {okter.map((o) => (
-            <div key={o.id} className="ea-okt">
-              <div className="ea-okt-naar">
-                <div className="ea-okt-dag">{dag(o.carConnected)}</div>
-                <div className="ea-okt-tid">
-                  {klokke(o.carConnected)}
-                  {o.carDisconnected ? ` – ${sammeDag(o.carConnected, o.carDisconnected) ? "" : `${dag(o.carDisconnected).toLowerCase()} `}${klokke(o.carDisconnected)}` : " – pågår"}
-                  <span className="ea-okt-varighet">{varighet(o)}</span>
-                </div>
-              </div>
-              <div className="ea-okt-kwh">{kwh(o.kwh, 2)}</div>
-            </div>
-          ))}
-          <div className="ea-okt ea-okt-sum">
-            <div className="ea-okt-naar"><div className="ea-okt-dag">{okter.length} økter</div></div>
-            <div className="ea-okt-kwh">{kwh(okter.reduce((n, o) => n + o.kwh, 0), 2)}</div>
-          </div>
-        </div>
-      )}
+      {!data ? <Tom tekst="Henter …" /> : <Oktliste data={data} harPlan={data.priset} />}
     </Skuff>
   );
 }

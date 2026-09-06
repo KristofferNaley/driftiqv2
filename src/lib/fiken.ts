@@ -23,11 +23,21 @@ export const FIKEN_OAUTH_AUTHORIZE = "https://fiken.no/oauth/authorize";
 export const FIKEN_OAUTH_TOKEN = "https://fiken.no/oauth/token";
 
 /** Metode + sti-mønster. `{slug}` og `{id}` er plassholdere; ingen andre kall slipper ut. */
-export const TILLATTE_KALL: ReadonlyArray<{ metode: "GET"; monster: RegExp; hva: string }> = [
+export const TILLATTE_KALL: ReadonlyArray<{ metode: "GET" | "POST"; monster: RegExp; hva: string }> = [
   { metode: "GET", monster: /^\/companies$/, hva: "foretakene nøkkelen har tilgang til" },
   { metode: "GET", monster: /^\/companies\/[a-z0-9-]+$/, hva: "ett foretak" },
   { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/purchases$/, hva: "bokførte kjøp" },
   { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/accountBalances$/, hva: "saldo per konto" },
+  // Fakturering (docs/fiken.md «Steg 3»): kunder, bankkonto, faktura. Skrivekallene er de
+  // eneste — DriftIQ bokfører aldri betalinger, sletter aldri, rører aldri kjøp.
+  { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/bankAccounts$/, hva: "bankkontoene (fakturaen trenger én)" },
+  { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/contacts$/, hva: "kunder (oppslag på medlemsnummer)" },
+  { metode: "POST", monster: /^\/companies\/[a-z0-9-]+\/contacts$/, hva: "opprette kunde (seksjonseier)" },
+  { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/invoices$/, hva: "fakturaer (oppslag på ordrereferanse)" },
+  { metode: "GET", monster: /^\/companies\/[a-z0-9-]+\/invoices\/\d+$/, hva: "én faktura (nummer)" },
+  { metode: "POST", monster: /^\/companies\/[a-z0-9-]+\/invoices$/, hva: "opprette faktura" },
+  { metode: "POST", monster: /^\/companies\/[a-z0-9-]+\/invoices\/counter$/, hva: "starte fakturanummer-telleren (409 første gang)" },
+  { metode: "POST", monster: /^\/companies\/[a-z0-9-]+\/invoices\/send$/, hva: "sende faktura på e-post" },
 ];
 
 export class FikenFeil extends Error {
@@ -52,10 +62,10 @@ export function erTillatt(metode: string, sti: string): boolean {
  */
 export async function fikenKall<T>(
   token: string,
-  metode: "GET",
+  metode: "GET" | "POST",
   sti: string,
-  opts: { sok?: Record<string, string | number | undefined> } = {},
-): Promise<{ data: T; sider: number; antall: number }> {
+  opts: { sok?: Record<string, string | number | undefined>; kropp?: unknown } = {},
+): Promise<{ data: T; sider: number; antall: number; location: string | null }> {
   if (!erTillatt(metode, sti)) {
     throw new Error(`Fiken-kall utenfor hvitelista: ${metode} ${sti}`);
   }
@@ -65,12 +75,18 @@ export async function fikenKall<T>(
   }
   const svar = await fetch(url, {
     method: metode,
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(opts.kropp !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: opts.kropp !== undefined ? JSON.stringify(opts.kropp) : undefined,
     signal: AbortSignal.timeout(20_000),
   });
   if (!svar.ok) {
-    const tekst = await svar.text().catch(() => "");
-    let melding = tekst.slice(0, 200);
+    // Fiken sender feilmeldinger i ISO-8859-1 iblant («H�Y» i stedet for «HØY» med ren UTF-8-lesing).
+    const tekst = await lesTekst(svar);
+    let melding = tekst.slice(0, 300);
     try {
       const j = JSON.parse(tekst) as { message?: string; error_description?: string; error?: string };
       melding = j.message ?? j.error_description ?? j.error ?? melding;
@@ -81,11 +97,66 @@ export async function fikenKall<T>(
     if (svar.status === 402) melding = "Modulen er ikke aktivert i Fiken for dette foretaket";
     throw new FikenFeil(svar.status, melding || `Fiken svarte ${svar.status}`);
   }
+  // POST svarer 201 med tom kropp og `Location` — id-en er siste ledd i den.
+  const tekst = await svar.text();
+  let data: T = undefined as T;
+  if (tekst) {
+    try { data = JSON.parse(tekst) as T; } catch { data = undefined as T; }
+  }
   return {
-    data: (await svar.json()) as T,
+    data,
     sider: Number(svar.headers.get("fiken-api-page-count") ?? 1),
     antall: Number(svar.headers.get("fiken-api-result-count") ?? 0),
+    location: svar.headers.get("location"),
   };
+}
+
+async function lesTekst(svar: Response): Promise<string> {
+  try {
+    const bytes = new Uint8Array(await svar.arrayBuffer());
+    // Fiken oppgir ikke tegnsett og sender iblant ISO-8859-1 («H�Y»): prøv streng UTF-8
+    // først, og fall tilbake til latin-1 når bytene ikke er gyldig UTF-8.
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      return new TextDecoder("iso-8859-1").decode(bytes);
+    }
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Fikens norske navn på mva-kodene (slik de står i feilmeldingen «Mulige mva koder er
+ * […]») → API-ets `vatType`. Hvilke koder en konto godtar, vet bare Fiken — adapteret
+ * leser lista fra svaret og velger.
+ */
+export const MVA_KODER: Record<string, string> = {
+  SALG_INNTEKTER_UTEN_MVABEHANDLING: "NONE",
+  SALG_FRITATT_FOR_MVA_AVGIFTSFRITT: "EXEMPT",
+  SALG_UTENFOR_AVGIFTSOMRADET: "OUTSIDE",
+  SALG_UTFORSEL_AV_VARER_OG_TJENESTER: "EXEMPT_IMPORT_EXPORT",
+  SALG_INNENLANDSK_OMSETNING_MED_OMVENDT_AVGIFTPLIKT: "EXEMPT_REVERSE",
+  SALG_MED_HOY_SATS: "HIGH",
+  SALG_MED_MIDDELS_SATS: "MEDIUM",
+  SALG_MED_LAV_SATS: "LOW",
+};
+
+/** Kodene Fiken lister som lovlige i en 400-melding, oversatt til `vatType` — tom liste når meldingen er en annen. */
+export function lovligeMvaKoder(melding: string): string[] {
+  const m = /Mulige mva koder er \[([^\]]+)\]/.exec(melding);
+  if (!m) return [];
+  return m[1]!
+    .split(",")
+    .map((k) => k.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\uFFFD/g, "O").replace(/Ø/g, "O").replace(/Å/g, "A").replace(/Æ/g, "AE").toUpperCase())
+    .map((k) => MVA_KODER[k] ?? null)
+    .filter((k): k is string => Boolean(k));
+}
+
+/** Id-en Fiken svarer med i `Location` etter en POST («…/contacts/13665985352» → 13665985352). */
+export function idFraLocation(location: string | null): number | null {
+  const m = /\/(\d+)\/?$/.exec(location ?? "");
+  return m ? Number(m[1]) : null;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -240,4 +311,106 @@ export async function hentToken(
     throw new FikenFeil(svar.status, `Fiken avviste tokenforespørselen (${svar.status}) ${t.slice(0, 200)}`);
   }
   return (await svar.json()) as Tokensvar;
+}
+
+// ---------------------------------------------------------------------------------------
+// Fakturering — kunder, bankkonto, faktura (docs/fiken.md «Steg 3»)
+// ---------------------------------------------------------------------------------------
+
+export type FikenBankkonto = { bankAccountId: number; name?: string | null; accountCode?: string | null; bankAccountNumber?: string | null; type?: string | null; inactive?: boolean | null };
+
+export type FikenKunde = { contactId: number; name: string; email?: string | null; customer?: boolean | null; memberNumberString?: string | null; inactive?: boolean | null };
+
+export type FikenFaktura = {
+  invoiceId: number;
+  invoiceNumber?: number | null;
+  issueDate?: string;
+  dueDate?: string;
+  orderReference?: string | null;
+  gross?: number;
+  settled?: boolean | null;
+  associatedCreditNotes?: number[] | null;
+  customer?: { contactId?: number } | null;
+  /** Utsendingene (e-post, EHF …). Tom liste = aldri sendt til mottakeren. */
+  dispatches?: Array<{ date?: string; dispatchType?: string }> | null;
+};
+
+/** Bankkontoene — fakturaen må peke på én (`accountCode`, «1920:10001»). */
+export async function hentBankkontoer(token: string, slug: string): Promise<FikenBankkonto[]> {
+  return (await fikenKall<FikenBankkonto[]>(token, "GET", `/companies/${slug}/bankAccounts`)).data ?? [];
+}
+
+/** Kunden med gitt medlemsnummer — DriftIQ bruker seksjonens id, så navnebytte ikke gir dobbel kunde. */
+export async function finnKunde(token: string, slug: string, memberNumberString: string): Promise<FikenKunde | null> {
+  const r = await fikenKall<FikenKunde[]>(token, "GET", `/companies/${slug}/contacts`, { sok: { memberNumberString, customer: "true" } });
+  return (r.data ?? []).find((k) => k.memberNumberString === memberNumberString) ?? null;
+}
+
+export async function opprettKunde(token: string, slug: string, k: { name: string; email: string | null; memberNumberString: string }): Promise<number> {
+  const r = await fikenKall<unknown>(token, "POST", `/companies/${slug}/contacts`, {
+    kropp: { name: k.name, ...(k.email ? { email: k.email } : {}), customer: true, memberNumberString: k.memberNumberString },
+  });
+  const id = idFraLocation(r.location);
+  if (!id) throw new FikenFeil(502, "Fiken opprettet kunden, men svarte uten id");
+  return id;
+}
+
+/**
+ * Fakturaen med denne ordrereferansen hos denne kunden — idempotensnøkkelen (docs/fiken.md:
+ * `uuid` er IKKE idempotent). Referansen alene holder ikke: «Lading juli 2026» står på
+ * alle eiernes fakturaer for perioden. Krediterte fakturaer ses bort fra, ellers stopper
+ * en ny faktura etter en kreditering.
+ */
+export async function finnFakturaVedReferanse(token: string, slug: string, orderReference: string, customerId: number): Promise<FikenFaktura | null> {
+  const r = await fikenKall<FikenFaktura[]>(token, "GET", `/companies/${slug}/invoices`, { sok: { orderReference, customerId, pageSize: 25 } });
+  return (r.data ?? []).find((f) =>
+    f.orderReference === orderReference
+    && (f.customer?.contactId === undefined || f.customer.contactId === customerId)
+    && !(f.associatedCreditNotes && f.associatedCreditNotes.length > 0),
+  ) ?? null;
+}
+
+export async function hentFaktura(token: string, slug: string, invoiceId: number): Promise<FikenFaktura> {
+  return (await fikenKall<FikenFaktura>(token, "GET", `/companies/${slug}/invoices/${invoiceId}`)).data;
+}
+
+export type NyFaktura = {
+  issueDate: string;
+  dueDate: string;
+  customerId: number;
+  bankAccountCode: string;
+  orderReference: string;
+  ourReference?: string;
+  invoiceText?: string;
+  lines: Array<{ description: string; unitPrice: number; quantity: number; vatType: string; incomeAccount: string }>;
+};
+
+/**
+ * Oppretter fakturaen. 409 «invoice counter not initialized» kommer i et foretak som aldri
+ * har fakturert — da startes telleren (standard 10000) og kallet gjentas én gang.
+ */
+export async function opprettFaktura(token: string, slug: string, f: NyFaktura): Promise<number> {
+  const kropp = { ...f, cash: false };
+  let r: { location: string | null };
+  try {
+    r = await fikenKall<unknown>(token, "POST", `/companies/${slug}/invoices`, { kropp });
+  } catch (e) {
+    if (!(e instanceof FikenFeil && e.status === 409)) throw e;
+    await fikenKall<unknown>(token, "POST", `/companies/${slug}/invoices/counter`, { kropp: {} });
+    r = await fikenKall<unknown>(token, "POST", `/companies/${slug}/invoices`, { kropp });
+  }
+  const id = idFraLocation(r.location);
+  if (!id) throw new FikenFeil(502, "Fiken opprettet fakturaen, men svarte uten id");
+  return id;
+}
+
+/**
+ * Sender fakturaen på e-post (PDF som vedlegg) til adressen — Fiken bruker kundens adresse
+ * om den utelates. Feltene heter `recipientEmail` og `includeDocumentAttachments` (påkrevd);
+ * `emailAddress` finnes ikke og ga 400 (lært 06.09.2026).
+ */
+export async function sendFaktura(token: string, slug: string, invoiceId: number, recipientEmail: string | null): Promise<void> {
+  await fikenKall<unknown>(token, "POST", `/companies/${slug}/invoices/send`, {
+    kropp: { invoiceId, method: ["email"], includeDocumentAttachments: true, emailSendOption: "attachment", ...(recipientEmail ? { recipientEmail } : {}) },
+  });
 }

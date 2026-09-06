@@ -482,6 +482,61 @@ ikke avtalt mot faktisk per avtale.
 Gjenstår i steg 2: `accountBalances` som alternativ til speil, håndtering av 402 «module
 not activated» i UI.
 
+## Steg 3 slik det ble (06.09.2026) — fakturering, først for lading
+
+Første skriving mot Fiken kom med **ladekjøringen** (docs/easee.md «Etappe 3»), ikke
+felleskostnadene — samme mekanikk, mindre volum å teste på. Det generiske laget
+(`lib/regnskap.ts`, `lib/regnskapskobling.ts`) ligger mellom kjøringene og Fiken, så
+felleskostnadene kan sendes gjennom det samme adapteret senere, og Tripletex kan komme
+uten at kjøringene endres.
+
+- **Hvitelista** i `lib/fiken.ts` fikk GET `bankAccounts`, `contacts`, `invoices`,
+  `invoices/{id}` og POST `contacts`, `invoices`, `invoices/counter`, `invoices/send`.
+  Ikke betalinger, ikke kreditnota, ikke sletting — `tests/fiken.test.ts` låser lista.
+  `fikenKall` tar `POST` med kropp og returnerer `Location` (id-en er siste ledd).
+- **Adapteret** `lib/fikenfaktura.ts`, per faktura og sekvensielt: oppslag på
+  `orderReference` (krediterte ses bort fra) → kunde på `memberNumberString` =
+  seksjonens id (opprettes ved behov, med e-post) → `POST /invoices` med én linje →
+  `POST /invoices/send` (e-post, PDF-vedlegg) når mottakeren har adresse. 409 på telleren
+  håndteres ved å starte den og prøve igjen. Feil underveis kaster med «N av M opprettet
+  før feilen» — transaksjonen rulles tilbake, men Fiken-fakturaene finnes, og neste
+  forsøk finner dem på referansen. Fiskalårsfeilen (400) går uendret til styret.
+- **Mva følger foretaket** (`fikenLinje`): `vatType: "no"` på foretaket → `NONE` på
+  linja og beløpet er brutto; ellers `HIGH` med netto = brutto / 1,25. Inntektskonto
+  kommer fra kjøringen (3605 standard for lading).
+- **Bankkonto**: første aktive «normal»-konto med `accountCode` (feltet heter det, ikke
+  `bankAccountCode`, i `GET /bankAccounts`).
+- **Første ekte sending 06.09.2026** (demoforetaket) stoppet på kontoen: «… er ikke en
+  gyldig mva kode for kontoen 3605. Mulige mva koder er [SALG_MED_LAV_SATS,
+  SALG_MED_HØY_SATS]». 3605 er *avgiftspliktig* og krever mva-kode selv i et foretak uten mva.
+  Og lading er ikke leie av fast eiendom (3600-serien) i det hele tatt — det er salg av
+  strøm. Standardkontoen er derfor **3100 «salgsinntekt, avgiftsfri»** (3000 for
+  mva-registrerte), regnskapsføreren avgjør, og forfall/konto kan rettes på et grunnlag
+  uten å lage det på nytt.
+- **Mva-koden avhenger av kontoen, og bare Fiken vet hvilke som er lovlige.** Andre
+  forsøk (3100) ga «… ikke en gyldig mva kode for kontoen 3100. Mulige mva koder er
+  [SALG_FRITATT_FOR_MVA_AVGIFTSFRITT, SALG_UTFØRSEL_…, SALG_INNENLANDSK_…_OMVENDT_…]»
+  — 3100 vil ha `EXEMPT`, ikke `NONE` (som 3601 godtar). Adapteret sender først den
+  naturlige koden, og får det 400 med denne lista, oversetter `lovligeMvaKoder()` de
+  norske navnene til `vatType` (`MVA_KODER`) og prøver én gang til med den første koden
+  som passer foretaket: uten mva for et uregistrert, med sats for et registrert. Krever
+  kontoen mva i et uregistrert foretak, stopper det med beskjed om å bytte konto.
+  Feilmeldingene kommer i ISO-8859-1 uten tegnsett i headeren; `fikenKall` prøver
+  streng UTF-8 og faller tilbake til latin-1.
+- **Tredje forsøk opprettet faktura 10024, men sendte den ikke**: sendekallet brukte
+  `emailAddress`, som ikke finnes — feltene er `recipientEmail` og det påkrevde
+  `includeDocumentAttachments`. Sendingen ga 400, transaksjonen rullet tilbake, og neste
+  forsøk fant fakturaen på referansen og hoppet over sendingen. Nå sjekker «finnes fra
+  før»-grenen `dispatches`; er lista tom og mottakeren har e-post, sendes den. En sendt
+  kjøring kan sendes på nytt bare for linjer uten e-postsending («Send ubesendte på
+  e-post»). Ordrereferansen ble også gjort lesbar («Lading juli 2026») — den står på fakturaen
+  mottakeren får — og oppslaget skjer på referanse OG `customerId`, så identiteten
+  ligger i kunden (medlemsnummer = seksjonens id), ikke i teksten.
+- **Fjerde forsøk gikk hele veien** (06.09.2026): faktura 10024 i demoforetaket, sendt
+  på e-post med PDF og mottatt. Hele flyten ladekjøring → kunde → faktura → e-post er
+  dermed bekreftet mot ekte Fiken. Feilmeldingen kom med «H�Y» — Fiken svarer i ISO-8859-1; `fikenKall` leser
+  nå tegnsettet fra `Content-Type`.
+
 ## Utvikling og testing uten å røre prod
 
 Personlig nøkkel + demoforetak, rett fra verten:

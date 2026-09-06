@@ -384,7 +384,13 @@ komponenter — endres logikken, må begge med.
   ekte anlegg 06.09.2026 — funnene («inneværende måned krever `to` = 1. i neste måned»
   m.m.) står i notatet. Prising (Norgespris/spot, nettleie dag/natt, fastledd) er ren
   utregning i den importfrie `lib/laderegler.ts`; grunnlaget er timesforbruk hentet av
-  jobben «easee-synk». En spottime uten pris er aldri stille 0.
+  jobben «easee-synk». En spottime uten pris er aldri stille 0. Fakturagrunnlaget er
+  ladekjøringen (`lib/ladekjoring.ts`, Økonomi → Lading).
+- **Regnskapssystemet er aldri en fast streng.** `lib/regnskap.ts` (importfri) navngir
+  systemene; `hentRegnskap()` i `lib/regnskapskobling.ts` sier hva orgen er koblet til,
+  og `Fakturaadapter` er kontrakten et nytt system (Tripletex) implementerer. Kjøringer
+  og UI sier «Send til {navn}» / «regnskapet» — ikke «Fiken». Fiken-adapteret for
+  faktura er `lib/fikenfaktura.ts`; skrivekallene står i hvitelista i `lib/fiken.ts`.
 - **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
   for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
   har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test
