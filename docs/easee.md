@@ -6,6 +6,9 @@ owner. Partner/operatør-modellen er bevisst IKKE rørt før dette er testet mot
 
 ## Hva det gjør
 
+*Etappe 2 (06.09.2026): prisplaner og månedsrapport per plass og seksjon — se «Prisplan og
+rapport» under. Etappe 3, fakturering fra Lading til Økonomi-fanen, er ikke bygget.*
+
 Styret kobler ladeanlegget til én gang under **Innstillinger → Integrasjoner** med
 brukernavn og passord for Easee-kontoen som er *site owner* for anlegget. Passordet brukes
 én gang og lagres aldri (se «Auth»). Deretter viser **Parkering → Lading**:
@@ -28,24 +31,28 @@ tas ut uten spor i resten av appen. Grensene:
 
 | Del | Fil(er) |
 |---|---|
-| Skjema | `src/db/schema/easee.ts` (+ én linje i `index.ts`), `drizzle/0056_easee.sql` |
-| RLS | tre tabellnavn i `DIREKTE_TABELLER` i `src/db/rls/tables.ts` |
-| HTTP-adapter | `src/lib/easee.ts` (importfri — `opModeTekst` brukes av klienten) |
+| Skjema | `src/db/schema/easee.ts` (+ én linje i `index.ts`), `drizzle/0056_easee.sql`, `drizzle/0057_lading.sql` |
+| RLS | seks tabellnavn i `DIREKTE_TABELLER` og `power_prices` i `UNNTATT` i `src/db/rls/tables.ts` |
+| HTTP-adapter | `src/lib/easee.ts` (importfri — `opModeTekst` brukes av klienten), `src/lib/spotpris.ts` (hvakosterstrommen.no) |
+| Regler | `src/lib/laderegler.ts` (importfri — prising, dag/natt, månedsgrenser; brukes av klienten også) |
 | Logikk | `src/lib/easeekobling.ts` |
+| Jobb | «easee-synk» i `lib/jobber.ts` + `instrumentation.ts` (nattlig, kl. 03:15) |
 | Ruter | `src/app/api/organizations/[orgId]/easee/**` |
 | Klient | `easee`-blokken nederst i `src/lib/klient.ts` |
 | UI | `src/app/(app)/innstillinger/EaseeKort.tsx`, `src/components/EaseeLading.tsx`, `.ea-`-blokken i `globals.css` |
 | Tester | `tests/easee.test.ts` |
-| Koblinger inn i resten | `<EaseeKort />` i Integrasjoner; `<EaseeLading />` er hele Lading-fanen i `parkering/page.tsx` (fanen viser plassene med ladepunkt uten kobling); `easee_settings` i `EKSKLUDERTE_TABELLER` i `lib/eksport.ts`; `kobleLaderTilPlass` setter `hasCharger`/`chargerLabel` på plassen (data, ikke skjema) |
+| Koblinger inn i resten | `<EaseeKort />` i Integrasjoner; `<EaseeLading />` er hele Lading-fanen i `parkering/page.tsx` (fanen viser plassene med ladepunkt uten kobling); `easee_settings` i `EKSKLUDERTE_TABELLER` i `lib/eksport.ts`; `kobleLaderTilPlass` setter `hasCharger`/`chargerLabel` på plassen (data, ikke skjema); `parking_spots.unit_id` (plass → seksjon, brukes av rapporten, men hører til parkering og blir stående) |
 
 Ingen egen modul (rutene gates med `modul: "parkering"`), ingen env-variabel, ingen
-bakgrunnsjobb, ingen webhooks. Tokenene krypteres med samme nøkkel som Fiken-tokens
+webhooks. Én bakgrunnsjobb («easee-synk», se under). Tokenene krypteres med samme nøkkel som Fiken-tokens
 (`FIKEN_TOKEN_KEY` via `lib/kryptering.ts`). `parking_spots` har ingen kolonne som peker
 på Easee — koblingen ligger i `easee_chargers.spot_id`.
 
 ### Slik fjernes den
 
-1. Ny migrasjon som dropper `easee_charger_usage`, `easee_chargers` og `easee_settings`.
+1. Ny migrasjon som dropper `easee_charger_hours`, `easee_sessions`, `easee_price_plans`,
+   `easee_charger_usage`, `easee_chargers`, `easee_settings` og `power_prices`.
+   `parking_spots.unit_id` beholdes — plass → seksjon er nyttig uansett.
 2. Slett filene i tabellen over; fjern de tre tabellnavnene fra `rls/tables.ts`, linja i
    `schema/index.ts`, `easee`-blokken i `klient.ts`, `.ea-`-blokken i `globals.css`,
    `easee_settings` i `eksport.ts`.
@@ -74,23 +81,56 @@ på Easee — koblingen ligger i `easee_chargers.spot_id`.
 
 ## Oppfrisking — når Easee ringes
 
-Ingen bakgrunnsjobb. `hentLading()` (GET på Lading-fanen) ringer Easee bare når det trengs:
+`hentLading()` (GET på Lading-fanen) ringer Easee bare når det trengs:
 
 | Hva | Når | Kall |
 |---|---|---|
 | Tilstand | eldre enn 30 s (`TILSTAND_HOLDBARHET_MS`) | 1 |
-| Forbruk | eldre enn 6 t (`FORBRUK_HOLDBARHET_MS`) | 1 per lader |
-| Laderlista | bare ved «Oppdater fra Easee» (POST) | 1 |
+| Månedsforbruk | eldre enn 6 t (`FORBRUK_HOLDBARHET_MS`) | 1 per lader |
+| Laderlista, timesforbruk, økter, spotpriser | bare ved «Oppdater fra Easee» (POST) og i jobben | 1 + 2 per lader |
+
+**Jobben «easee-synk»** (kl. 03:15) gjør alt det siste for hver org med kobling:
+`synkEasee()` → laderliste, tilstand, månedsforbruk, timesforbruk og økter fra siste
+kjente time minus 48 t (`SYNK_OVERLAPP_TIMER`; Easee kan etterjustere), 92 dager tilbake
+første gang (`SYNK_TILBAKEFYLL_DAGER`), og spotpriser for orgens områder. Nulltimer lagres
+ikke. Økt-endepunktet tåler 10 kall/time per lader — derfor aldri ved visning. Feil per
+org havner i `last_error` på koblingen (Integrasjoner-kortet) og i Discord-varselet.
 
 Svikter Easee, kommer fanen likevel med sist kjente tall, `feil` satt og `last_error`
 notert på koblingen (vises på Integrasjoner-fanen). En lader som forsvinner fra anlegget
 settes `active = false` — raden og forbruket beholdes, avregningen for forrige måned skal
 ikke forsvinne fordi laderen ble byttet.
 
+## Prisplan og rapport
+
+Reglene er `lib/laderegler.ts`; tallene er øre inkl. mva, som økonomimodulen.
+
+- **Prisplan** (`easee_price_plans`, versjonert med `valid_from` — «Norgespris ut
+  desember, spot fra januar» er to rader; måneden prises etter planen som gjaldt den 1.):
+  - *Kraft*: `norgespris` (fast øre/kWh) eller `spot` (prisområde NO1–NO5, mva-prosent
+    som påføres spotprisen — 0 i NO4 — og påslag i øre/kWh inkl. mva).
+  - *Nettleie, energiledd*: dag- og nattsats, natt fra/til time (22–06), helg som natt.
+  - *Fastledd*: øre per måned per lader som står på en plass. Kan være 0.
+- **Timesforbruk** (`easee_charger_hours`) er grunnlaget — dag/natt og spot er per time.
+  Måneden er Oslo-måneden (`maanedsgrenser`), så julitallet er 1.7 kl. 00 til 1.8 kl. 00
+  norsk tid, ikke UTC. `easee_charger_usage` (månedstall fra Easee) brukes bare til
+  oversikten «denne måneden» i laderlista.
+- **Spotpriser** (`power_prices`): hvakosterstrommen.no, NOK/kWh uten mva, kvarter slått
+  sammen til timer. Felles for alle orger (UNNTATT i RLS). En spottime uten pris prises
+  IKKE som 0: rapporten teller dem, viser `*` på linja og varsler.
+- **Rapporten** (`hentRapport`): per lader → plass → seksjon (`parking_spots.unit_id`) →
+  nåværende eier (`unit_owners.owner_to IS NULL`): økter, kWh dag/natt, kraft, nett,
+  fastledd, sum. Advarsler for manglende plan, spotpris, seksjon og plass. CSV
+  (`eksporterRapport`, logges) og utskrift. Klikk på en linje viser øktene.
+- **Plass → seksjon**: nytt felt på plassen (nedtrekk fra økonomimodulens seksjoner;
+  `unitLabel` følger med som visningstekst). Det er dette som gjør at «plass G01 ladet
+  97 kWh» kan bli «faktura til eieren av H0301» i etappe 3.
+
 ## Hvitelista — kun lesing
 
-`TILLATTE_KALL` i `lib/easee.ts` er to POST-kall (innlogging, tokenfornying) og fem
-GET-kall: profil, anlegg, anleggsdetalj, anleggstilstand, månedsforbruk. Ingen kommandoer
+`TILLATTE_KALL` i `lib/easee.ts` er to POST-kall (innlogging, tokenfornying) og sju
+GET-kall: profil, anlegg, anleggsdetalj, anleggstilstand, månedsforbruk, timesforbruk,
+ladeøkter. Ingen kommandoer
 (start/stopp/pause), ingen innstillinger, ingen strømgrenser, ingen planer, ingen sletting.
 `tests/easee.test.ts` låser lista. Løftet til kunden: DriftIQ leser laderne, den styrer
 dem aldri.
@@ -136,6 +176,14 @@ Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bear
 - Økt-objektet har også pris (`pricePerKwhExcludingVat`, `costIncludingVat`, `currency`)
   fra anleggets prismodell i Easee — en kandidat til å hente strømprisen derfra i stedet
   for å taste den i DriftIQ.
+- **Timesforbruk tåler ~31 dager per kall**: 31 dager (744 timer) gikk, 45 ga 400 «Too
+  many timeperiods in specified interval, try a smaller interval or larger aggregation
+  type». Synken deler derfor perioden i vinduer på 28 dager (`SYNK_VINDU_DAGER`) — 92
+  dagers tilbakefyll er fire kall per lader, og en vanlig natt er ett.
+- **Øktlista gir bare avsluttede økter** («final charging sessions»); en pågående økt
+  vises som tilstand («Lader», kWh i økten) på laderen og i timesforbruket, og kommer i
+  lista når bilen kobles fra. Andre anlegg («Borettslaget Håsteinsgate 9», Easee Home
+  EHDQZV55): to økter på 30 dager, 30,86 kWh siste, samsvarer med timesforbruket.
 - **Ikke sett i praksis ennå:** tokenfornying (første token var fortsatt gyldig under
   testen) og hvor lenge refresh-tokenet lever. Testene dekker flyten mot stubb.
 
@@ -144,23 +192,41 @@ Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bear
 | Handling | Nivå |
 |---|---|
 | Se status/kobling, se ladere, tilstand og forbruk | `lesing` (modulen parkering) |
+| Se rapport, laste ned CSV, se prisplaner | `lesing` |
 | Koble lader til plass, «Oppdater fra Easee» | `redigering` |
-| Koble til / fra, sette strømpris | `admin` — innloggingen gir innsyn i kundens ladeanlegg; prisen er avregningsgrunnlag |
+| Koble til / fra, prisplaner | `admin` — innloggingen gir innsyn i kundens ladeanlegg; prisene er fakturagrunnlag |
 
 Frakobling lar ladere, plasskoblinger og forbruk stå (historikk), men ingenting oppdateres.
 
 ## Beløp
 
-Strømprisen lagres i **øre** per kWh (`easee_settings.price_per_kwh_ore`), som resten av
-økonomimodulen; `tilOre`/`kroner` i `lib/okonomiregler.ts` gjør konverteringen. Beløpet i
-avregningen er `round(kWh × øre)` per lader og vises med `kroner()`.
+Alle priser er **øre** inkl. mva, som resten av økonomimodulen; `tilOre`/`kroner` i
+`lib/okonomiregler.ts` gjør konverteringen. Kostnaden regnes per time (kWh × øre) og
+rundes til hele øre per lader og måned (`beregnKostnad`).
+
+## Etappe 3 — fakturering (ikke bygget)
+
+Rapportlinjene har alt en faktura trenger: seksjon, eier (navn, e-post), beløp og måned.
+Planen er en «ladekjøring» i Økonomi-fanen etter mønster av `fee_runs`/`fee_run_lines`:
+kjøringen har `periodStart`/`periodEnd` som felleskostnadene, så **perioden er
+sameiets valg** — måned, kvartal eller halvår (avklart 06.09.2026: månedlig er
+standarden, men ikke alle vil ha tolv fakturaer). Én linje per seksjon per periode =
+summen av månedsrapportene i perioden, `orderReference = lading:<unitId>:<fra>:<til>`,
+CSV uten Fiken og fakturaer via Fiken-adapteret med kobling. **A-konto** er en egen
+kjøringstype oppå dette: fast beløp per plass per måned (feltet finnes i prisplanen som
+fastledd i dag; a-konto blir et eget felt), og en avregningskjøring per år som
+fakturerer eller krediterer differansen mot rapporten. Rapporten per måned er
+grunnlaget i alle variantene — den skal ikke endres for å støtte dem.
 
 ## Kandidater senere, hvis den blir stående
 
+- **Leieavtaler som dokumenter** (parkering, ikke Easee, men samme flyt for styret):
+  avtalen opprettes i appen, genereres som PDF fra en mal, sendes leietakeren på e-post
+  (`etterCommit`, via `lib/epost.ts`) og legges i dokumentarkivet med kobling til plassen.
+  Signering er neste steg etter det. Nevnt av Kristoffer 06.09.2026.
+
 - Partner-/operatørmodellen (Easee «Operator»): nøkkel per DriftIQ, ikke per kunde, og
   laderne hentes på serienummer. Endrer koblingsskjemaet, ikke Lading-fanen.
-- Avregningen som CSV/utskrift, og som utkast til faktura i økonomimodulen for avtaler
-  med strøm «etter forbruk».
-- Nattlig oppfrisking av forbruk og token (jobb i `instrumentation.ts`) i stedet for ved
-  åpning — også så refresh-tokenet ikke rekker å dø mellom besøk.
+- Strømprisen fra Easees økt-objekt (`pricePerKwhExcludingVat`) som forslag i planen.
+- Kapasitetsledd etter høyeste timeeffekt — timesforbruket finnes allerede.
 - Zaptec med samme datamodell — `easee_chargers` blir da `chargers` med `provider`.

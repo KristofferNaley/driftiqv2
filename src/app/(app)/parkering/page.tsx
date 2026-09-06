@@ -6,7 +6,7 @@ import { Faner, Feil, Tom, dato, dagerSiden, useOrgData } from "@/components/fel
 import { Knapperad, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { useOkt } from "@/components/OktProvider";
 import EaseeLading from "@/components/EaseeLading";
-import { parkering, type Parkeringsavtale, type Plass, type Ventende } from "@/lib/klient";
+import { enheter, parkering, type Parkeringsavtale, type Plass, type Ventende } from "@/lib/klient";
 
 /**
  * Parkering — etter `mockups/parkering-mockup.html`: faner med tellere, kompakt
@@ -71,6 +71,7 @@ const utloperSnart = (a: Parkeringsavtale) =>
 export default function Parkering() {
   const { aktivOrg } = useOkt();
   const kanEndre = aktivOrg?.nivaa === "orgadmin" || aktivOrg?.nivaa === "redigering";
+  const erAdmin = aktivOrg?.nivaa === "orgadmin";
 
   const [fane, setFane] = useState<Fane>("plasser");
   const [filter, setFilter] = useState<PlassFilter>("alle");
@@ -478,7 +479,7 @@ export default function Parkering() {
             )}
 
             {fane === "lading" && (
-              <EaseeLading plasser={plasser} kanEndre={kanEndre} onApnePlass={setDetalj} />
+              <EaseeLading plasser={plasser} kanEndre={kanEndre} erAdmin={erAdmin} onApnePlass={setDetalj} />
             )}
           </>
         )}
@@ -701,8 +702,13 @@ function PlassSkjemaSkuff({
   const [type, setType] = useState(plass?.spotType ?? "standard");
   const [status, setStatus] = useState(plass?.status ?? "ledig");
   const [enhet, setEnhet] = useState(plass?.unitLabel ?? "");
+  const [seksjonId, setSeksjonId] = useState(plass?.unitId ?? "");
   const [disponent, setDisponent] = useState(plass?.holderName ?? "");
   const [lading, setLading] = useState(plass?.hasCharger ?? false);
+  // Seksjonene fra økonomimodulen — velges én, følger «H0301» med som visningstekst, og
+  // ladeforbruk på plassen kan faktureres eieren. Fritekst er fortsatt lov for plasser
+  // uten seksjon (gjester, næring).
+  const seksjoner = useOrgData((o) => enheter.liste(o));
   const [ladepunkt, setLadepunkt] = useState(plass?.chargerLabel ?? "");
   const [notater, setNotater] = useState(plass?.notes ?? "");
   const [bekreftSlett, setBekreftSlett] = useState(false);
@@ -724,6 +730,7 @@ function PlassSkjemaSkuff({
       status,
       holderName: disponent.trim() || null,
       unitLabel: enhet.trim() || null,
+      unitId: seksjonId || null,
       hasCharger: lading,
       chargerLabel: lading ? ladepunkt.trim() || null : null,
       notes: notater.trim() || null,
@@ -734,6 +741,7 @@ function PlassSkjemaSkuff({
       if (leggTilNy) {
         setNummer("");
         setEnhet("");
+        setSeksjonId("");
         setDisponent("");
       }
     } catch (e) {
@@ -805,7 +813,26 @@ function PlassSkjemaSkuff({
         />
       </div>
       <div className="field-row">
-        <Tekstfelt etikett="Tilhører enhet" verdi={enhet} onEndre={setEnhet} plassholder="H0301" />
+        {seksjoner.data && seksjoner.data.length > 0 ? (
+          <Nedtrekk
+            etikett="Seksjon"
+            verdi={seksjonId}
+            onEndre={(v) => {
+              setSeksjonId(v);
+              const u = seksjoner.data?.find((x) => x.id === v);
+              if (u) setEnhet(u.leilighetsnr ?? u.navn ?? u.andelsnr ?? "");
+            }}
+            valg={[
+              { verdi: "", etikett: enhet.trim() ? `Ingen (fritekst: ${enhet.trim()})` : "Ingen" },
+              ...seksjoner.data
+                .filter((u) => u.type === "bolig")
+                .map((u) => ({ verdi: u.id, etikett: [u.leilighetsnr ?? u.navn ?? u.andelsnr, u.oppgang ? `oppg. ${u.oppgang}` : null].filter(Boolean).join(" · ") })),
+            ]}
+            notat="Eieren av seksjonen faktureres for lading på plassen."
+          />
+        ) : (
+          <Tekstfelt etikett="Tilhører enhet" verdi={enhet} onEndre={setEnhet} plassholder="H0301" />
+        )}
         <Tekstfelt etikett="Disponent" verdi={disponent} onEndre={setDisponent} plassholder="Navn (valgfritt)" />
       </div>
       <div className="field-row">

@@ -4513,10 +4513,40 @@ textarea.qr-input { resize: vertical; }
 .ea-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
 .ea-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
 /* Radene bygger på .prk-hode/.prk-rad (samme modul); kolonnene er egne. */
-.ea-lader { grid-template-columns: minmax(0, 1.3fr) 170px minmax(0, 1fr) 170px 110px; }
+.ea-lader { grid-template-columns: minmax(0, 1.3fr) 170px minmax(0, 1fr) 190px 110px; }
+/* Tilstand i tre lag: farget punkt + tittel, forklaring under. Fargene følger .badge-paletten. */
+.ea-status { display: flex; flex-direction: column; min-width: 0; }
+.ea-status-tittel { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: var(--fs-sm); }
+.ea-punkt { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; background: var(--muted); }
+.ea-status.ok .ea-punkt { background: var(--accent2); box-shadow: 0 0 0 3px rgba(15, 186, 129, 0.18); }
+.ea-status.info .ea-punkt { background: var(--accent); }
+.ea-status.warn .ea-punkt { background: var(--warn); }
+.ea-status.danger .ea-punkt { background: var(--danger); }
+.ea-status.muted .ea-status-tittel { color: var(--muted); font-weight: 500; }
 .ea-avregning { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px 110px; }
 .ea-avregning-uten { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px; }
 .ea-sum { font-weight: 700; background: var(--surface2); }
+.ea-rapport-min { min-width: 1040px; }
+.ea-rapport { grid-template-columns: 64px minmax(0, 1.5fr) minmax(0, 1fr) 56px 80px 80px 90px 90px 90px 100px; }
+.ea-rapport .h { text-align: right; font-variant-numeric: tabular-nums; }
+.ea-rapport .list-meta { display: block; }
+.ea-klikk { cursor: pointer; }
+.ea-klikk:hover { background: var(--surface2); }
+.ea-advarsel {
+  margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: var(--fs-label);
+  background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.3); color: var(--warn);
+}
+/* Ladeøktene i skuffen: dag på én linje, klokkeslett og varighet under, kWh til høyre. */
+.ea-okt { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.ea-okt:last-child { border-bottom: none; }
+.ea-okt-naar { min-width: 0; }
+.ea-okt-dag { font-size: var(--fs-sm); font-weight: 600; }
+.ea-okt-tid { font-size: var(--fs-label); color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.ea-okt-varighet { margin-left: 10px; padding: 1px 7px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); }
+.ea-okt-kwh { font-size: var(--fs-md); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ea-okt-sum { margin-top: 4px; border-top: 2px solid var(--border); }
+.ea-okt-sum .ea-okt-dag { color: var(--muted); }
+.ea-skjema-del { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; }
 
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,

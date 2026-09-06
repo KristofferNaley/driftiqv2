@@ -33,6 +33,7 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Easee (docs/easee.md): kundens krypterte API-nøkkel, laderne i anlegget og
   // månedsforbruket. Samme fjernbare pakke-mønster som Unloc.
   "easee_settings", "easee_chargers", "easee_charger_usage",
+  "easee_charger_hours", "easee_sessions", "easee_price_plans",
   "tasks", "contracts",
   "deviations", "deviation_attachments",
   "completion_photos",
@@ -144,6 +145,7 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   pricing_versions: "prismodellens versjonshistorikk, samme begrunnelse",
   // Kjøringslogg for bakgrunnsjobbene — plattformdata uten org_id, kun plattformpanelet leser.
   job_runs: "plattformtabell (kjøringslogg for bakgrunnsjobber), ingen org_id",
+  power_prices: "offentlige spotpriser per prisområde og time (docs/easee.md), ingen org-eier",
 
   // --- Nytt i v2 ---
   // Better Auth eier disse selv. De er global identitet på samme måte som `users`:

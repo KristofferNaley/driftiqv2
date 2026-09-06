@@ -25,15 +25,24 @@ import {
   FORBRUK_HOLDBARHET_MS,
   TILSTAND_HOLDBARHET_MS,
   TOKEN_MARGIN_MS,
+  eksporterRapport,
   forbrukFra,
   forbrukTil,
   hentKobling,
   hentLading,
+  hentOkter,
+  hentPrisplaner,
+  hentRapport,
   kobleFra,
   kobleLaderTilPlass,
   kobleTil,
-  settPris,
+  lagrePrisplan,
+  slettPrisplan,
+  synkEasee,
 } from "../src/lib/easeekobling";
+import { type Prisplan, beregnKostnad, erNatt, gjeldendePlan, maanedsgrenser, prisForTime, spotTilOre } from "../src/lib/laderegler";
+import { opprettPlass } from "../src/lib/parkering";
+import { hentSpotpriser } from "../src/lib/spotpris";
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -65,28 +74,38 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   for (const id of ryddOrg.splice(0)) {
     await eier.query("DELETE FROM easee_charger_usage WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM easee_charger_hours WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM easee_sessions WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM easee_price_plans WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM easee_chargers WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM easee_settings WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM audit_events WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM parking_leases WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM parking_spots WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM unit_owners WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM units WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM organizations WHERE id = $1", [id]);
   }
+  // Spotprisene er felles (ingen org) — testene bruker et eget, fiktivt område.
+  await eier.query("DELETE FROM power_prices WHERE area = 'NO9'");
 });
 
 async function oppsett() {
   const orgId = `eas-${randomUUID()}`;
   await eier.query("INSERT INTO organizations (id, name, slug, active) VALUES ($1,$2,$3,true)", [orgId, "Ladelaget", orgId]);
   ryddOrg.push(orgId);
+  const unitId = randomUUID();
+  await eier.query("INSERT INTO units (id, org_id, type, leilighetsnr, oppgang) VALUES ($1,$2,'bolig','H0101','A')", [unitId, orgId]);
+  await eier.query("INSERT INTO unit_owners (id, org_id, unit_id, name, email, owner_from) VALUES ($1,$2,$3,'Ola Beboer','ola@example.org','2020-01-01')", [randomUUID(), orgId, unitId]);
   const p1 = randomUUID();
   const p2 = randomUUID();
-  await eier.query("INSERT INTO parking_spots (id, org_id, number, holder_name, unit_label, has_charger) VALUES ($1,$2,'P01','Ola Beboer','H0101',false)", [p1, orgId]);
+  await eier.query("INSERT INTO parking_spots (id, org_id, number, holder_name, unit_label, unit_id, has_charger) VALUES ($1,$2,'P01','Ola Beboer','H0101',$3,false)", [p1, orgId, unitId]);
   await eier.query("INSERT INTO parking_spots (id, org_id, number, has_charger, status) VALUES ($1,$2,'P02',true,'utleid')", [p2, orgId]);
   await eier.query(
     "INSERT INTO parking_leases (id, org_id, spot_id, tenant_name, price_per_month, power_billing) VALUES ($1,$2,$3,'Leif Leietaker',900,'forbruk')",
     [randomUUID(), orgId, p2],
   );
-  return { orgId, p1, p2 };
+  return { orgId, p1, p2, unitId };
 }
 
 const i = <T>(orgId: string, fn: Parameters<typeof withOrg<T>>[1]) => withOrg(orgId, fn);
@@ -115,6 +134,12 @@ type Stubbvalg = {
   gyldigeTokens?: string[];
   /** Svar 401 på fornying (refresh token er dødt). */
   fornyingFeiler?: boolean;
+  /** Timesforbruk per lader-id: [ISO-time, kWh]. */
+  timer?: Record<string, Array<[string, number]>>;
+  /** Ladeøkter per lader-id. */
+  okter?: Record<string, Array<{ id: number; carConnected: string; carDisconnected: string | null; kiloWattHours: number }>>;
+  /** Spotpris (NOK/kWh uten mva) per ISO-time for området NO9. */
+  spot?: Record<string, number>;
 };
 
 /** Stubber Easee: profil, anlegg, anleggsdetalj, tilstand og månedsforbruk. */
@@ -140,6 +165,20 @@ function stubbEasee(valg: Stubbvalg = {}) {
       const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
       const kropp = init?.body ? JSON.parse(String(init.body)) : undefined;
       kall.push({ metode, sti: `${u.pathname}${u.search}`, auth, kropp });
+
+      // hvakosterstrommen.no — én fil per dag og område, kvartersoppløsning som i virkeligheten.
+      if (u.hostname === "www.hvakosterstrommen.no") {
+        const m = /\/api\/v1\/prices\/(\d{4})\/(\d{2})-(\d{2})_(NO\d)\.json$/.exec(u.pathname);
+        if (!m || m[4] !== "NO9") return new Response("not found", { status: 404 });
+        const dag = `${m[1]}-${m[2]}-${m[3]}`;
+        const rader = Object.entries(valg.spot ?? {})
+          .filter(([iso]) => iso.startsWith(dag))
+          .flatMap(([iso, pris]) => [0, 15, 30, 45].map((min) => {
+            const start = new Date(new Date(iso).getTime() + min * 60000);
+            return { NOK_per_kWh: pris, EUR_per_kWh: pris / 11, EXR: 11, time_start: start.toISOString(), time_end: new Date(start.getTime() + 15 * 60000).toISOString() };
+          }));
+        return rader.length ? Response.json(rader) : new Response("not found", { status: 404 });
+      }
 
       if (u.pathname === "/api/accounts/login") {
         if (kropp.userName !== KONTO.userName || kropp.password !== KONTO.password) return Response.json({ title: "Unauthorized" }, { status: 401 });
@@ -169,6 +208,24 @@ function stubbEasee(valg: Stubbvalg = {}) {
           circuitStates: [{ circuit: { id: 1 }, chargerStates: ladere.map((l) => ({ chargerID: l.id, chargerState: tilstand[l.id] ?? null })) }],
         });
       }
+      const time = /^\/api\/chargers\/lifetime-energy\/([^/]+)\/hourly$/.exec(u.pathname);
+      if (time) {
+        const fra = new Date(u.searchParams.get("from")!).getTime();
+        const til = new Date(u.searchParams.get("to")!).getTime();
+        // Som ekte Easee (06.09.2026): mer enn ~31 dager med timer avvises.
+        if (til - fra > 31 * 24 * 3600 * 1000) return Response.json("Too many timeperiods in specified interval, try a smaller interval or larger aggregation type", { status: 400 });
+        return Response.json(
+          (valg.timer?.[time[1]!] ?? [])
+            .filter(([iso]) => new Date(iso).getTime() >= fra && new Date(iso).getTime() < til)
+            .map(([iso, kwh]) => { const d = new Date(iso); return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), consumption: kwh, date: iso }; }),
+        );
+      }
+      const oktSti = /^\/api\/sessions\/charger\/([^/]+)\/sessions\/([^/]+)\/([^/]+)$/.exec(u.pathname);
+      if (oktSti) {
+        const fra = new Date(decodeURIComponent(oktSti[2]!)).getTime();
+        const til = new Date(decodeURIComponent(oktSti[3]!)).getTime();
+        return Response.json((valg.okter?.[oktSti[1]!] ?? []).filter((o) => { const t = new Date(o.carConnected).getTime(); return t >= fra && t < til; }).map((o) => ({ ...o, chargerId: oktSti[1], isComplete: Boolean(o.carDisconnected) })));
+      }
       const mnd = /^\/api\/chargers\/lifetime-energy\/([^/]+)\/monthly$/.exec(u.pathname);
       if (mnd) {
         // Som ekte Easee: en måned er bare med når hele måneden ligger innenfor [from, to].
@@ -185,7 +242,10 @@ function stubbEasee(valg: Stubbvalg = {}) {
 describe("adapteret", () => {
   it("hvitelista: innlogging/fornying og ellers bare lesing; ingen kommandoer eller innstillinger", () => {
     expect(TILLATTE_KALL.filter((k) => k.metode === "POST").map((k) => k.hva)).toEqual(["token fra brukernavn og passord", "fornye token"]);
-    expect(TILLATTE_KALL.filter((k) => k.metode === "GET").length).toBe(5);
+    expect(TILLATTE_KALL.filter((k) => k.metode === "GET").length).toBe(7);
+    expect(erTillatt("GET", `/api/chargers/lifetime-energy/${LADER_A}/hourly?from=x&to=y`)).toBe(true);
+    expect(erTillatt("GET", `/api/sessions/charger/${LADER_A}/sessions/2026-07-01T00:00:00.000Z/2026-08-01T00:00:00.000Z`)).toBe(true);
+    expect(erTillatt("DELETE", `/api/chargers/${LADER_A}/sessions/1`)).toBe(false);
     expect(erTillatt("GET", `/api/sites/${SITE}/state`)).toBe(true);
     expect(erTillatt("GET", `/api/chargers/lifetime-energy/${LADER_A}/monthly?from=x&to=y`)).toBe(true);
     // Det som IKKE skal kunne skje fra DriftIQ:
@@ -292,16 +352,6 @@ describe("koblingen", () => {
     const etter = await i(orgId, (db) => hentLading(db, orgId));
     expect(etter.koblet).toBe(false);
     expect(etter.ladere.length).toBe(2);
-  });
-
-  it("strømprisen lagres i øre og logges i kroner", async () => {
-    const { orgId } = await oppsett();
-    stubbEasee();
-    await i(orgId, (db) => kobleTil(db, orgId, kari, { ...KONTO, siteId: null }));
-    const s = await i(orgId, (db) => settPris(db, orgId, kari, { pricePerKwhOre: 185 }));
-    expect(s.kobling?.pricePerKwhOre).toBe(185);
-    const logg = await eier.query("SELECT event FROM audit_events WHERE org_id = $1 ORDER BY occurred_at DESC LIMIT 1", [orgId]);
-    expect(logg.rows[0].event).toMatch(/1,85 kr\/kWh/);
   });
 });
 
@@ -466,6 +516,223 @@ describe("tokenfornying", () => {
     expect(l.feil).toMatch(/Easee-innloggingen er utløpt — koble til på nytt/);
     expect(l.ladere.find((x) => x.chargerId === LADER_A)?.opMode).toBe(3);
     expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toMatch(/koble til på nytt/);
+  });
+});
+
+// Fast plan til utregningstestene: Norgespris 50 øre, nett 45/33 øre, natt 22–06 + helg, fastledd 100 kr.
+const PLAN: Prisplan = { kraftModel: "norgespris", kraftOre: 50, paaslagOre: 0, priceArea: null, mvaProsent: 25, nettDagOre: 45, nettNattOre: 33, nattFra: 22, nattTil: 6, helgSomNatt: true, fastleddOre: 10_000 };
+const SPOTPLAN: Prisplan = { ...PLAN, kraftModel: "spot", kraftOre: 0, paaslagOre: 5, priceArea: "NO5" };
+
+describe("laderegler (ren utregning)", () => {
+  it("natt er 22–06 i Oslo-tid og hele helgen — sommertid og vintertid", () => {
+    expect(erNatt(new Date("2026-07-06T20:30:00Z"), PLAN)).toBe(true); // mandag 22:30 sommertid
+    expect(erNatt(new Date("2026-07-06T19:30:00Z"), PLAN)).toBe(false); // mandag 21:30
+    expect(erNatt(new Date("2026-07-07T03:59:00Z"), PLAN)).toBe(true); // tirsdag 05:59
+    expect(erNatt(new Date("2026-07-07T04:00:00Z"), PLAN)).toBe(false); // tirsdag 06:00
+    expect(erNatt(new Date("2026-01-12T21:30:00Z"), PLAN)).toBe(true); // mandag 22:30 vintertid
+    expect(erNatt(new Date("2026-07-11T10:00:00Z"), PLAN)).toBe(true); // lørdag formiddag = helg
+    expect(erNatt(new Date("2026-07-11T10:00:00Z"), { ...PLAN, helgSomNatt: false })).toBe(false);
+    expect(erNatt(new Date("2026-07-06T02:00:00Z"), { ...PLAN, nattFra: 0, nattTil: 6 })).toBe(true); // natt som ikke krysser midnatt
+  });
+
+  it("spot: NOK/kWh uten mva → øre inkl. mva, og timer uten pris rapporteres — ikke 0", () => {
+    expect(spotTilOre(0.8, 25)).toBe(100);
+    expect(spotTilOre(0.8, 0)).toBe(80);
+    expect(prisForTime(SPOTPLAN, new Date("2026-07-06T10:00:00Z"), 0.8)).toEqual({ kraftOre: 105, nettOre: 45, natt: false });
+    expect(prisForTime(SPOTPLAN, new Date("2026-07-06T10:00:00Z"), null)).toEqual({ kraftOre: null, nettOre: 45, natt: false });
+    expect(prisForTime(PLAN, new Date("2026-07-06T22:00:00Z"), null)).toEqual({ kraftOre: 50, nettOre: 33, natt: true });
+  });
+
+  it("summerer kostnad per time: kraft og nett hver for seg, dag og natt hver for seg", () => {
+    const timer = [
+      { start: new Date("2026-07-06T10:00:00Z"), kwh: 10 }, // dag: 10 × (50 + 45)
+      { start: new Date("2026-07-06T21:00:00Z"), kwh: 4 }, // natt (23:00 Oslo): 4 × (50 + 33)
+      { start: new Date("2026-07-06T11:00:00Z"), kwh: 0 }, // hopper over
+    ];
+    expect(beregnKostnad(PLAN, timer)).toEqual({ kwhDag: 10, kwhNatt: 4, kraftOre: 700, nettOre: 582, timerUtenPris: 0, kwhUtenPris: 0 });
+    const spot = new Map([[new Date("2026-07-06T10:00:00Z").getTime(), 0.8]]);
+    const k = beregnKostnad(SPOTPLAN, timer, spot);
+    expect(k.kraftOre).toBe(1050); // bare dagtimen har pris: 10 × 105
+    expect(k.timerUtenPris).toBe(1);
+    expect(k.kwhUtenPris).toBe(4);
+  });
+
+  it("planen for en måned er den nyeste som gjaldt den 1., og månedsgrensene er Oslo-midnatt", () => {
+    const planer = [{ validFrom: "2026-01-01", n: "spot" }, { validFrom: "2025-10-01", n: "norgespris" }];
+    expect(gjeldendePlan(planer, 2025, 12)?.n).toBe("norgespris");
+    expect(gjeldendePlan(planer, 2026, 1)?.n).toBe("spot");
+    expect(gjeldendePlan(planer, 2025, 9)).toBeNull();
+    const juli = maanedsgrenser(2026, 7);
+    expect(juli.fra.toISOString()).toBe("2026-06-30T22:00:00.000Z");
+    expect(juli.til.toISOString()).toBe("2026-07-31T22:00:00.000Z");
+    const jan = maanedsgrenser(2026, 1);
+    expect(jan.fra.toISOString()).toBe("2025-12-31T23:00:00.000Z");
+    expect(maanedsgrenser(2026, 12).til.toISOString()).toBe("2026-12-31T23:00:00.000Z");
+  });
+
+  it("spotpriser: kvarter slås sammen til timer, 404 = tom liste", async () => {
+    stubbEasee({ spot: { "2026-07-06T10:00:00.000Z": 0.8, "2026-07-06T11:00:00.000Z": 1.2 } });
+    const t = await hentSpotpriser("2026-07-06", "NO9");
+    expect(t.map((x) => [x.hourStart.toISOString(), x.nokPerKwh])).toEqual([["2026-07-06T10:00:00.000Z", 0.8], ["2026-07-06T11:00:00.000Z", 1.2]]);
+    expect(await hentSpotpriser("2026-07-07", "NO9")).toEqual([]);
+  });
+});
+
+describe("prisplaner", () => {
+  const inn = { validFrom: "2026-01-01", name: "Norgespris", kraftModel: "norgespris" as const, kraftOre: 50, paaslagOre: 0, priceArea: null, mvaProsent: 25, nettDagOre: 45, nettNattOre: 33, nattFra: 22, nattTil: 6, helgSomNatt: true, fastleddOre: 10_000, note: null };
+
+  it("opprettes, endres og slettes med hendelse; én plan per gyldig-fra; spot krever prisområde", async () => {
+    const { orgId } = await oppsett();
+    const planer = await i(orgId, (db) => lagrePrisplan(db, orgId, kari, inn));
+    expect(planer.length).toBe(1);
+    expect(planer[0]?.fastleddOre).toBe(10_000);
+    const e1 = await feilFra(() => i(orgId, (db) => lagrePrisplan(db, orgId, kari, { ...inn, name: "Dublett" })));
+    expect(e1.message).toMatch(/allerede en prisplan som gjelder fra 2026-01-01/);
+    const e2 = await feilFra(() => i(orgId, (db) => lagrePrisplan(db, orgId, kari, { ...inn, validFrom: "2026-06-01", kraftModel: "spot", priceArea: null })));
+    expect(e2.message).toMatch(/prisområde/);
+    const endret = await i(orgId, (db) => lagrePrisplan(db, orgId, kari, { ...inn, name: "Norgespris (justert)", kraftOre: 55 }, planer[0]!.id));
+    expect(endret[0]?.kraftOre).toBe(55);
+    await i(orgId, (db) => slettPrisplan(db, orgId, kari, planer[0]!.id));
+    expect(await i(orgId, (db) => hentPrisplaner(db, orgId))).toEqual([]);
+    const logg = await eier.query("SELECT event FROM audit_events WHERE org_id = $1 AND entity = 'easee_prisplan' ORDER BY occurred_at", [orgId]);
+    expect(logg.rows.map((r) => r.event)).toEqual([
+      "Opprettet prisplanen «Norgespris» for lading fra 2026-01-01: Norgespris 0,50 kr/kWh, nettleie dag 0,45 / natt 0,33 kr/kWh, fastledd 100 kr/mnd",
+      "Endret prisplanen «Norgespris (justert)» for lading fra 2026-01-01: Norgespris 0,55 kr/kWh, nettleie dag 0,45 / natt 0,33 kr/kWh, fastledd 100 kr/mnd",
+      "Slettet prisplanen «Norgespris (justert)» for lading (gjaldt fra 2026-01-01)",
+    ]);
+  });
+});
+
+describe("synk og rapport", () => {
+  // Juli 2026: lader A på P01 (seksjon H0101, eier Ola), lader B på P02 (leietaker Leif, uten seksjon).
+  const TIMER = {
+    [LADER_A]: [["2026-07-06T10:00:00.000Z", 10], ["2026-07-06T21:00:00.000Z", 4], ["2026-07-11T08:00:00.000Z", 6]] as Array<[string, number]>, // dag 10, natt 4 + 6 (lørdag)
+    [LADER_B]: [["2026-07-20T12:00:00.000Z", 2]] as Array<[string, number]>,
+  };
+  const OKTER: Record<string, Array<{ id: number; carConnected: string; carDisconnected: string | null; kiloWattHours: number }>> = {
+    [LADER_A]: [
+      { id: 101, carConnected: "2026-07-06T09:50:00Z", carDisconnected: "2026-07-06T23:10:00Z", kiloWattHours: 14 },
+      { id: 102, carConnected: "2026-07-11T07:30:00Z", carDisconnected: "2026-07-11T09:00:00Z", kiloWattHours: 6 },
+    ],
+    [LADER_B]: [{ id: 201, carConnected: "2026-07-20T11:55:00Z", carDisconnected: null, kiloWattHours: 2 }],
+  };
+  const NAA = new Date("2026-07-25T12:00:00Z");
+
+  async function medData(valg: Stubbvalg = {}) {
+    const o = await oppsett();
+    const stubb = stubbEasee({ timer: TIMER, okter: OKTER, ...valg });
+    await i(o.orgId, (db) => kobleTil(db, o.orgId, kari, { ...KONTO, siteId: null }, NAA));
+    const l = await i(o.orgId, (db) => hentLading(db, o.orgId, { naa: NAA }));
+    const a = l.ladere.find((x) => x.chargerId === LADER_A)!;
+    const b = l.ladere.find((x) => x.chargerId === LADER_B)!;
+    await i(o.orgId, (db) => kobleLaderTilPlass(db, o.orgId, kari, a.id, { spotId: o.p1 }));
+    await i(o.orgId, (db) => kobleLaderTilPlass(db, o.orgId, kari, b.id, { spotId: o.p2 }));
+    return { ...o, ...stubb, a, b };
+  }
+
+  it("jobben henter timer og økter per lader (nulltimer lagres ikke), og henter bare nytt neste gang", async () => {
+    const { orgId, kall } = await medData();
+    kall.length = 0;
+    const r = await i(orgId, (db) => synkEasee(db, orgId, NAA));
+    expect(r).toMatchObject({ ladere: 2, timer: 4, okter: 3, spotdager: 0 });
+    // 92 dager tilbakefyll i vinduer på 28 dager = 4 kall per lader — Easee avviser større vinduer.
+    expect(kall.filter((k) => k.sti.includes("/hourly")).length).toBe(8);
+    expect(kall.filter((k) => k.sti.includes("/sessions/")).length).toBe(8);
+    expect(Number((await eier.query("SELECT count(*) FROM easee_charger_hours WHERE org_id = $1", [orgId])).rows[0].count)).toBe(4);
+    expect(Number((await eier.query("SELECT count(*) FROM easee_sessions WHERE org_id = $1", [orgId])).rows[0].count)).toBe(3);
+
+    // Andre synk: fra siste time minus overlapp — ingen dubletter, og en økt som ble ferdig oppdateres.
+    OKTER[LADER_B]![0]!.carDisconnected = "2026-07-20T14:00:00Z";
+    kall.length = 0;
+    await i(orgId, (db) => synkEasee(db, orgId, new Date("2026-07-26T12:00:00Z")));
+    const fra = new URL(`https://x${kall.find((k) => k.sti.includes(`/lifetime-energy/${LADER_A}/hourly`))!.sti}`).searchParams.get("from")!;
+    expect(new Date(fra).toISOString()).toBe("2026-07-09T08:00:00.000Z"); // siste time 11.07 08:00 − 48 t
+    expect(kall.filter((k) => k.sti.includes(`/lifetime-energy/${LADER_A}/hourly`)).length).toBe(1); // 17 dager = ett vindu
+    expect(Number((await eier.query("SELECT count(*) FROM easee_charger_hours WHERE org_id = $1", [orgId])).rows[0].count)).toBe(4);
+    const okt = await eier.query("SELECT car_disconnected, is_complete FROM easee_sessions WHERE org_id = $1 AND easee_session_id = 201", [orgId]);
+    expect(okt.rows[0].is_complete).toBe(true);
+    OKTER[LADER_B]![0]!.carDisconnected = null;
+  });
+
+  it("rapporten: dag/natt, kraft, nett og fastledd per plass — med seksjon og eier fra økonomimodulen", async () => {
+    const { orgId, unitId } = await medData();
+    await i(orgId, (db) => synkEasee(db, orgId, NAA));
+    const uten = await i(orgId, (db) => hentRapport(db, orgId, 2026, 7));
+    expect(uten.plan).toBeNull();
+    expect(uten.advarsler[0]).toMatch(/Ingen prisplan/);
+    expect(uten.linjer.map((l) => [l.plass?.number, l.kwh])).toEqual([["P01", 20], ["P02", 2]]);
+
+    await i(orgId, (db) => lagrePrisplan(db, orgId, kari, { ...PLAN, validFrom: "2026-01-01", name: "Norgespris", note: null }));
+    const r = await i(orgId, (db) => hentRapport(db, orgId, 2026, 7));
+    expect(r.plan?.name).toBe("Norgespris");
+    const p01 = r.linjer[0]!;
+    expect(p01.seksjon).toEqual({ id: unitId, navn: "H0101" });
+    expect(p01.eier?.name).toBe("Ola Beboer");
+    expect(p01.okter).toBe(2);
+    expect(p01.kwhDag).toBe(10);
+    expect(p01.kwhNatt).toBe(10);
+    expect(p01.kraftOre).toBe(1000); // 20 × 50
+    expect(p01.nettOre).toBe(10 * 45 + 10 * 33);
+    expect(p01.fastleddOre).toBe(10_000);
+    expect(p01.sumOre).toBe(1000 + 780 + 10_000);
+    const p02 = r.linjer[1]!;
+    expect(p02.seksjon).toBeNull();
+    expect(p02.avtale).toEqual({ tenantName: "Leif Leietaker", powerBilling: "forbruk" });
+    expect(r.advarsler).toEqual([expect.stringMatching(/1 plass med lader mangler kobling til seksjon/)]);
+    expect(r.sum.sumOre).toBe(p01.sumOre + p02.sumOre);
+
+    // Måneden uten forbruk: bare fastledd for laderne som står på plass.
+    const aug = await i(orgId, (db) => hentRapport(db, orgId, 2026, 8));
+    expect(aug.linjer.map((l) => l.sumOre)).toEqual([10_000, 10_000]);
+
+    const okter = await i(orgId, (db) => hentOkter(db, orgId, p01.laderId, 2026, 7));
+    expect(okter.map((o) => o.kwh)).toEqual([6, 14]);
+
+    const csv = await i(orgId, (db) => eksporterRapport(db, orgId, 2026, 7, kari));
+    const tekst = new TextDecoder().decode(csv.innhold);
+    expect(csv.navn).toBe("lading-2026-07.csv");
+    expect(tekst).toContain("Ola Beboer");
+    expect(tekst).toContain("117,80"); // sum P01 i kroner
+    const logg = await eier.query("SELECT event FROM audit_events WHERE org_id = $1 AND entity = 'easee_rapport'", [orgId]);
+    expect(logg.rows[0].event).toMatch(/Eksporterte laderapporten for 2026-07/);
+  });
+
+  it("spotplan: prisene hentes for området, timer uten pris varsles, og mva + påslag legges på", async () => {
+    const spot = { "2026-07-06T10:00:00.000Z": 0.8, "2026-07-06T21:00:00.000Z": 0.4 }; // lørdagstimen 11.07 mangler
+    const { orgId, kall } = await medData({ spot });
+    await i(orgId, (db) => lagrePrisplan(db, orgId, kari, { ...SPOTPLAN, priceArea: "NO9" as never, validFrom: "2026-01-01", name: "Spot", note: null }));
+    const r1 = await i(orgId, (db) => synkEasee(db, orgId, NAA));
+    expect(r1.spotdager).toBe(1);
+    expect(kall.filter((k) => k.sti.includes("hvakosterstrommen") || k.sti.includes("/api/v1/prices/")).length).toBeGreaterThan(0);
+    const r = await i(orgId, (db) => hentRapport(db, orgId, 2026, 7));
+    const p01 = r.linjer[0]!;
+    // 10 kWh × (100 + 5) + 4 kWh × (50 + 5) = 1050 + 220; lørdagens 6 kWh uten pris.
+    expect(p01.kraftOre).toBe(1270);
+    expect(p01.timerUtenPris).toBe(1);
+    expect(p01.kwhUtenPris).toBe(6);
+    expect(r.advarsler.some((a) => /mangler spotpris/.test(a))).toBe(true);
+    // Neste synk henter ikke dagene som allerede ligger der.
+    kall.length = 0;
+    await i(orgId, (db) => synkEasee(db, orgId, NAA));
+    expect(kall.filter((k) => k.sti.includes("/api/v1/prices/2026/07-06_")).length).toBe(0);
+  });
+
+  it("«Oppdater fra Easee» henter også timer og økter", async () => {
+    const { orgId, kall } = await medData();
+    kall.length = 0;
+    await i(orgId, (db) => hentLading(db, orgId, { frisk: "alt", naa: NAA }));
+    expect(kall.filter((k) => k.sti.includes("/hourly")).length).toBe(8);
+    expect(Number((await eier.query("SELECT count(*) FROM easee_sessions WHERE org_id = $1", [orgId])).rows[0].count)).toBe(3);
+  });
+
+  it("plass med seksjon: visningsteksten følger seksjonen, og seksjon fra annen org avvises", async () => {
+    const { orgId, unitId } = await oppsett();
+    const annen = await oppsett();
+    const p = await i(orgId, (db) => opprettPlass(db, orgId, { number: "G07", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false, unitId, unitLabel: "feil" }));
+    expect(p.unitId).toBe(unitId);
+    expect(p.unitLabel).toBe("H0101");
+    const e = await feilFra(() => i(orgId, (db) => opprettPlass(db, orgId, { number: "G08", ownershipType: "felles", spotType: "standard", status: "ledig", hasCharger: false, unitId: annen.unitId })));
+    expect(e.status).toBe(404);
   });
 });
 

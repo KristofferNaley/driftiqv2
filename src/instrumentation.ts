@@ -145,6 +145,49 @@ export async function register(): Promise<void> {
   );
   console.log(`[fiken-synk] Planlagt: ${fikenSynk.plan}.`);
 
+  // Ladeanlegget: orgene én om gangen i egen withOrg — withoutRls kun for å finne dem.
+  // Easee ratebegrenser per lader (økter: 10 kall/time), så én gang i døgnet er riktig;
+  // feil per org lagres på koblingen og varsles, jobben fortsetter med neste org.
+  const easeeSynk = JOBBER.find((j) => j.nokkel === "easee-synk")!;
+  cron.schedule(
+    easeeSynk.cron,
+    () => {
+      void (async () => {
+        try {
+          await medKjoringslogg("easee-synk", async () => {
+            const { withOrg, withoutRls } = await import("./db/client");
+            const { easeeSettings } = await import("./db/schema/easee");
+            const { synkEasee } = await import("./lib/easeekobling");
+            const orger = await withoutRls("bakgrunnsjobb", (db) =>
+              db.select({ orgId: easeeSettings.orgId }).from(easeeSettings),
+            );
+            let ok = 0;
+            let timer = 0;
+            const feil: string[] = [];
+            for (const { orgId } of orger) {
+              try {
+                const r = await withOrg(orgId, (db) => synkEasee(db, orgId));
+                ok++;
+                timer += r.timer;
+              } catch (e) {
+                feil.push(`${orgId}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }
+            if (feil.length > 0) void sendDriftsvarsel(`⚠️ Easee-synk feilet for ${feil.length} org(er): ${feil.join("; ")}`);
+            const detalj = `${ok} av ${orger.length} orger synkronisert, ${timer} timer`;
+            console.log(`[easee-synk] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[easee-synk] Jobben feilet:", e);
+          void sendDriftsvarsel(`⚠️ Bakgrunnsjobben «easee-synk» feilet: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      })();
+    },
+    { timezone: easeeSynk.timezone },
+  );
+  console.log(`[easee-synk] Planlagt: ${easeeSynk.plan}.`);
+
   const rydding = JOBBER.find((j) => j.nokkel === "hendelsesrydding")!;
 
   cron.schedule(

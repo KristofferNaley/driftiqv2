@@ -276,7 +276,7 @@ ikke en garanti».
 testsuite — begrunnelse i `src/db/client.ts`). Regelen håndheves i stedet slik: alt
 klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `oppgaveregler.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
-`orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`. Ikke gi dem server-importer: verken tsc
+`orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`. Ikke gi dem server-importer: verken tsc
 eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i bygget.
 
 ## Frontend
@@ -382,7 +382,9 @@ komponenter — endres logikken, må begge med.
   `medToken()` før utløp og ved 401. Tilstanden for hele anlegget hentes i ett kall
   (`/api/sites/{id}/state`) fordi per-lader-endepunktene er ratebegrenset. Verifisert mot
   ekte anlegg 06.09.2026 — funnene («inneværende måned krever `to` = 1. i neste måned»
-  m.m.) står i notatet.
+  m.m.) står i notatet. Prising (Norgespris/spot, nettleie dag/natt, fastledd) er ren
+  utregning i den importfrie `lib/laderegler.ts`; grunnlaget er timesforbruk hentet av
+  jobben «easee-synk». En spottime uten pris er aldri stille 0.
 - **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
   for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
   har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test

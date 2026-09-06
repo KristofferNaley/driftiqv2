@@ -37,6 +37,8 @@ export const TILLATTE_KALL: ReadonlyArray<{ metode: "GET" | "POST"; monster: Reg
   { metode: "GET", monster: /^\/api\/sites\/\d+$/, hva: "ett anlegg med kurser og ladere" },
   { metode: "GET", monster: /^\/api\/sites\/\d+\/state$/, hva: "tilstanden til alle laderne i anlegget" },
   { metode: "GET", monster: /^\/api\/chargers\/lifetime-energy\/[A-Za-z0-9_-]+\/monthly$/, hva: "månedsforbruk for én lader" },
+  { metode: "GET", monster: /^\/api\/chargers\/lifetime-energy\/[A-Za-z0-9_-]+\/hourly$/, hva: "timesforbruk for én lader" },
+  { metode: "GET", monster: /^\/api\/sessions\/charger\/[A-Za-z0-9_-]+\/sessions\/[^/]+\/[^/]+$/, hva: "ladeøkter for én lader" },
 ];
 
 export class EaseeFeil extends Error {
@@ -185,6 +187,21 @@ export type EaseeSiteTilstand = {
 
 export type EaseeMaanedsforbruk = { year: number; month: number | null; consumption: number; date?: string };
 
+export type EaseeTimeforbruk = { year: number; month: number | null; day: number | null; hour: number | null; consumption: number; date: string };
+
+export type EaseeOkt = {
+  id: number;
+  chargerId?: string;
+  carConnected: string | null;
+  carDisconnected: string | null;
+  kiloWattHours: number;
+  isComplete?: boolean;
+  actualDurationSeconds?: number | null;
+  pricePerKwhExcludingVat?: number | null;
+  costIncludingVat?: number | null;
+  currency?: string | null;
+};
+
 // ---------------------------------------------------------------------------------------
 // Kallene
 // ---------------------------------------------------------------------------------------
@@ -245,4 +262,27 @@ export async function hentMaanedsforbruk(token: string, chargerId: string, fra: 
     sok: { from: fra.toISOString(), to: til.toISOString() },
   });
   return Array.isArray(r) ? r.filter((m) => typeof m.year === "number" && typeof m.month === "number") : [];
+}
+
+/**
+ * Timesforbruk (kWh per time) for én lader i perioden. `date` er timens start i UTC
+ * («2026-07-23T15:00:00+00:00»); år/måned/dag/time-feltene brukes ikke, tidspunktet
+ * leses fra `date`.
+ */
+export async function hentTimesforbruk(token: string, chargerId: string, fra: Date, til: Date): Promise<Array<{ start: Date; kwh: number }>> {
+  const r = await easeeKall<EaseeTimeforbruk[]>(token, "GET", `/api/chargers/lifetime-energy/${chargerId}/hourly`, {
+    sok: { from: fra.toISOString(), to: til.toISOString() },
+  });
+  return (Array.isArray(r) ? r : [])
+    .map((t) => ({ start: new Date(t.date), kwh: Number(t.consumption) || 0 }))
+    .filter((t) => !Number.isNaN(t.start.getTime()));
+}
+
+/**
+ * Ladeøktene for én lader i perioden — ratebegrenset til 10 kall per time per lader, så
+ * dette kalles av jobben (én gang i døgnet) og av «Oppdater fra Easee», aldri ved visning.
+ */
+export async function hentOkter(token: string, chargerId: string, fra: Date, til: Date): Promise<EaseeOkt[]> {
+  const r = await easeeKall<EaseeOkt[]>(token, "GET", `/api/sessions/charger/${chargerId}/sessions/${fra.toISOString()}/${til.toISOString()}`);
+  return (Array.isArray(r) ? r : []).filter((o) => typeof o.id === "number" && o.carConnected);
 }

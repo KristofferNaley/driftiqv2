@@ -81,6 +81,8 @@ export type Plass = {
   status: string;
   holderName: string | null;
   unitLabel: string | null;
+  /** Seksjonen plassen hører til — grunnlaget for å fakturere lading til eieren. */
+  unitId: string | null;
   hasCharger: boolean;
   chargerLabel: string | null;
   notes: string | null;
@@ -1122,7 +1124,7 @@ export type EaseeStatus = {
   konfigurert: { kryptering: boolean };
   kobling: {
     siteId: number; siteName: string; userName: string; accountEmail: string | null; tokenExpiresAt: string;
-    pricePerKwhOre: number | null; connectedBy: string; createdAt: string; lastError: string | null; lastCheckedAt: string | null;
+    connectedBy: string; createdAt: string; lastError: string | null; lastCheckedAt: string | null;
   } | null;
   ladere: { antall: number; koblet: number };
 };
@@ -1140,17 +1142,51 @@ export type EaseeForbruk = { chargerRowId: string; year: number; month: number; 
 export type EaseeLading = {
   koblet: boolean;
   feil: string | null;
-  anlegg: { siteName: string; pricePerKwhOre: number | null } | null;
+  anlegg: { siteName: string } | null;
   ladere: EaseeLader[];
   forbruk: EaseeForbruk[];
 };
+
+/** Prisplan for lading — reglene i lib/laderegler.ts. Alle beløp i øre inkl. mva. */
+export type Prisplan = {
+  id: string; validFrom: string; name: string; kraftModel: "norgespris" | "spot"; kraftOre: number; paaslagOre: number;
+  priceArea: "NO1" | "NO2" | "NO3" | "NO4" | "NO5" | null; mvaProsent: number; nettDagOre: number; nettNattOre: number;
+  nattFra: number; nattTil: number; helgSomNatt: boolean; fastleddOre: number; note: string | null; createdBy: string; createdAt: string;
+};
+export type PrisplanInn = Omit<Prisplan, "id" | "createdBy" | "createdAt">;
+
+export type Rapportlinje = {
+  laderId: string; laderNavn: string; chargerId: string; aktiv: boolean;
+  plass: { id: string; number: string; holderName: string | null; unitLabel: string | null } | null;
+  seksjon: { id: string; navn: string } | null;
+  eier: { id: string; name: string; email: string | null } | null;
+  avtale: { tenantName: string; powerBilling: string | null } | null;
+  okter: number; kwhDag: number; kwhNatt: number; kwh: number;
+  kraftOre: number; nettOre: number; fastleddOre: number; sumOre: number; timerUtenPris: number; kwhUtenPris: number;
+};
+
+export type Laderapport = {
+  aar: number; maaned: number; plan: Prisplan | null; linjer: Rapportlinje[];
+  sum: { kwh: number; kwhDag: number; kwhNatt: number; kraftOre: number; nettOre: number; fastleddOre: number; sumOre: number };
+  advarsler: string[]; spotTimer: number;
+};
+
+export type Ladeokt = { id: string; carConnected: string; carDisconnected: string | null; kwh: number; isComplete: boolean };
 
 export const easee = {
   status: (o: string) => api.hent<EaseeStatus>(org(o, "/easee")),
   /** Passordet sendes én gang og lagres aldri — bare tokenene Easee gir tilbake. */
   kobleTil: (o: string, d: { userName: string; password: string; siteId?: number | null }) => api.endre<EaseeStatus>(org(o, "/easee"), d),
-  settPris: (o: string, pricePerKwhOre: number | null) => api.lapp<EaseeStatus>(org(o, "/easee"), { pricePerKwhOre }),
   kobleFra: (o: string) => api.slett(org(o, "/easee")),
+  prisplaner: (o: string) => api.hent<Prisplan[]>(org(o, "/easee/prisplaner")),
+  lagrePrisplan: (o: string, d: PrisplanInn, id?: string) =>
+    id ? api.endre<Prisplan[]>(org(o, `/easee/prisplaner/${id}`), d) : api.send<Prisplan[]>(org(o, "/easee/prisplaner"), d),
+  slettPrisplan: (o: string, id: string) => api.slett(org(o, `/easee/prisplaner/${id}`)),
+  rapport: (o: string, aar: number, maaned: number) => api.hent<Laderapport>(org(o, `/easee/rapport?aar=${aar}&maaned=${maaned}`)),
+  /** Til en vanlig `<a href>` — nedlasting går utenom `request()`. */
+  rapportCsvSti: (o: string, aar: number, maaned: number) => `/api${org(o, `/easee/rapport/csv?aar=${aar}&maaned=${maaned}`)}`,
+  okter: (o: string, laderId: string, aar: number, maaned: number) =>
+    api.hent<Ladeokt[]>(org(o, `/easee/chargers/${laderId}/okter?aar=${aar}&maaned=${maaned}`)),
   /** Lading-fanen. `oppdater` tvinger ny henting av laderliste, tilstand og forbruk. */
   lading: (o: string) => api.hent<EaseeLading>(org(o, "/easee/lading")),
   oppdater: (o: string) => api.send<EaseeLading>(org(o, "/easee/lading"), {}),

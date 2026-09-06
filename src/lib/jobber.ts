@@ -52,6 +52,15 @@ export const JOBBER: Jobb[] = [
     kilde: "app",
   },
   {
+    nokkel: "easee-synk",
+    navn: "Easee-synk",
+    beskrivelse: "Henter timesforbruk, ladeøkter og spotpriser for orger med Easee-kobling",
+    cron: "15 3 * * *",
+    timezone: "Europe/Oslo",
+    plan: "Hver natt kl. 03:15 (Europe/Oslo)",
+    kilde: "app",
+  },
+  {
     nokkel: "fiken-synk",
     navn: "Fiken-synk",
     beskrivelse: "Speiler bokførte kjøp fra Fiken for orger med regnskapskobling",

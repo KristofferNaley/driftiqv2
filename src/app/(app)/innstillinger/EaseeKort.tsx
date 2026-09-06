@@ -5,7 +5,6 @@ import { useOkt } from "@/components/OktProvider";
 import { Feil, Kort, Tom, dato, datoTid, useOrgData } from "@/components/felles";
 import { Tekstfelt } from "@/components/skjema";
 import { easee } from "@/lib/klient";
-import { belopFelt, kroner, tilOre } from "@/lib/okonomiregler";
 
 /**
  * Easee-kortet under Innstillinger → Integrasjoner (docs/easee.md). Brukernavn og passord
@@ -20,7 +19,6 @@ export default function EaseeKort() {
   const { data, feil, setFeil, laster, last, orgId } = useOrgData((o) => easee.status(o));
   const [melding, setMelding] = useState<string | null>(null);
   const [jobber, setJobber] = useState(false);
-  const [pris, setPris] = useState<string | null>(null);
 
   async function utfor(fn: () => Promise<string | void>) {
     if (!orgId) return;
@@ -69,11 +67,6 @@ export default function EaseeKort() {
               <div className="list-meta">{data.ladere.koblet} koblet til plass</div>
             </div>
             <div>
-              <span className="ea-fakta-et">Strømpris</span>
-              <div className="ea-fakta-v">{k.pricePerKwhOre === null ? "Ikke satt" : `${kroner(k.pricePerKwhOre, { alltidOre: true })}/kWh`}</div>
-              <div className="list-meta">til avregningen i Lading-fanen</div>
-            </div>
-            <div>
               <span className="ea-fakta-et">Kobling</span>
               <div className="ea-fakta-v mut">av {k.connectedBy}</div>
               <div className="list-meta">{dato(k.createdAt)} · sist sjekket {k.lastCheckedAt ? datoTid(k.lastCheckedAt) : "aldri"}</div>
@@ -81,38 +74,12 @@ export default function EaseeKort() {
           </div>
           {k.lastError && <div className="feilmelding">Siste kall mot Easee feilet: {k.lastError}</div>}
           <div className="field-note">
-            Laderne kobles til parkeringsplasser i Parkering → Lading, der også tilstand og
-            månedsforbruk vises. DriftIQ leser bare: den starter, stopper eller styrer aldri
-            en lader, og endrer ingenting i Easee.
+            Laderne kobles til parkeringsplasser i Parkering → Lading, der også tilstand,
+            månedsrapport og prisplaner ligger. DriftIQ leser bare: den starter, stopper eller
+            styrer aldri en lader, og endrer ingenting i Easee.
           </div>
           {erAdmin && (
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
-              {pris === null ? (
-                <button className="btn btn-ghost" disabled={jobber} onClick={() => setPris(belopFelt(k.pricePerKwhOre))}>
-                  {k.pricePerKwhOre === null ? "Sett strømpris" : "Endre strømpris"}
-                </button>
-              ) : (
-                <form
-                  style={{ display: "flex", gap: "8px", alignItems: "flex-end", flexWrap: "wrap" }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const ore = pris.trim() === "" ? null : tilOre(pris);
-                    if (pris.trim() !== "" && ore === null) {
-                      setFeil("Skriv prisen i kroner per kWh, f.eks. 1,85");
-                      return;
-                    }
-                    void utfor(async () => {
-                      await easee.settPris(orgId!, ore);
-                      setPris(null);
-                      return ore === null ? "Strømprisen er fjernet." : "Strømprisen er lagret.";
-                    });
-                  }}
-                >
-                  <Tekstfelt etikett="Kr per kWh" verdi={pris} onEndre={setPris} plassholder="1,85" notat="Tom = bare kWh vises" />
-                  <button className="btn btn-primary" disabled={jobber}>Lagre</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setPris(null)}>Avbryt</button>
-                </form>
-              )}
               <button
                 className="btn btn-ghost"
                 disabled={jobber}

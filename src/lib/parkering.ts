@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { parkingLeases, parkingSpots, parkingWaitlist } from "../db/schema/parking";
+import { units } from "../db/schema/units";
 import { ikkeFunnet, ugyldig } from "./api";
 import type { Aktor } from "./aktor";
 import { loggHendelse } from "./hendelser";
@@ -36,6 +37,8 @@ export const plassInn = z.object({
   status: z.enum(STATUSER).default("ledig"),
   holderName: z.string().trim().nullish(),
   unitLabel: z.string().trim().nullish(),
+  /** Seksjonen plassen hører til (økonomimodulens `units`). Setter også `unitLabel`. */
+  unitId: z.string().trim().nullish(),
   hasCharger: z.boolean().default(false),
   chargerLabel: z.string().trim().nullish(),
   notes: z.string().nullish(),
@@ -168,13 +171,24 @@ export async function hentPlass(db: Db, orgId: string, spotId: string) {
   return plass;
 }
 
+/**
+ * Velges en seksjon, må den finnes i orgen, og visningsteksten følger med: «H0301» fra
+ * seksjonen slår fritekst. `unitId: null` løsner koblingen og lar teksten stå.
+ */
+async function medSeksjon<T extends { unitId?: string | null; unitLabel?: string | null }>(db: Db, orgId: string, data: T): Promise<T> {
+  if (!data.unitId) return data;
+  const u = (await db.select({ leilighetsnr: units.leilighetsnr, navn: units.navn, andelsnr: units.andelsnr }).from(units).where(and(eq(units.id, data.unitId), eq(units.orgId, orgId))).limit(1))[0];
+  if (!u) throw ikkeFunnet("Seksjon");
+  return { ...data, unitLabel: u.leilighetsnr ?? u.navn ?? u.andelsnr ?? data.unitLabel ?? null };
+}
+
 export async function opprettPlass(db: Db, orgId: string, data: z.infer<typeof plassInn>) {
   if (await nummerErTatt(db, orgId, data.number)) {
     throw ugyldig(`Plass ${data.number} finnes allerede`);
   }
   const [ny] = await db
     .insert(parkingSpots)
-    .values({ id: randomUUID(), orgId, ...data })
+    .values({ id: randomUUID(), orgId, ...(await medSeksjon(db, orgId, data)) })
     .returning();
   return { ...ny!, lease: null };
 }
@@ -191,7 +205,7 @@ export async function endrePlass(
   }
   const [endret] = await db
     .update(parkingSpots)
-    .set(data)
+    .set(await medSeksjon(db, orgId, data))
     .where(and(eq(parkingSpots.id, spotId), eq(parkingSpots.orgId, orgId)))
     .returning();
   return endret!;

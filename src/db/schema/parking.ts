@@ -1,5 +1,6 @@
 import { boolean, date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
+import { units } from "./units";
 
 /**
  * Parkering. Tre direkte tenant-tabeller — alle har egen `org_id` og RLS-policy.
@@ -23,7 +24,14 @@ export const parkingSpots = pgTable("parking_spots", {
   spotType: varchar("spot_type").notNull().default("standard"),
   status: varchar("status").notNull().default("ledig"),
   holderName: varchar("holder_name"),
+  /** Visningstekst («H0301»). Settes fra seksjonen når `unitId` velges; fritekst ellers. */
   unitLabel: varchar("unit_label"),
+  /**
+   * Seksjonen plassen hører til — den ekte pekeren. Det er den som gjør at ladeforbruk på
+   * plassen kan faktureres eieren i seksjonsregisteret (økonomimodulen). NULL for plasser
+   * uten kjent seksjon; `unitLabel` står da alene.
+   */
+  unitId: varchar("unit_id").references(() => units.id, { onDelete: "set null" }),
   /**
    * Ladepunkt på plassen. Egen kolonne og ikke en plasstype: en HC-plass kan ha lader, og
    * v1s «lading»-type gjorde det umulig å si begge deler. Migrasjon 0045 konverterer.
