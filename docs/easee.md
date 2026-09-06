@@ -126,6 +126,32 @@ Reglene er `lib/laderegler.ts`; tallene er øre inkl. mva, som økonomimodulen.
   `unitLabel` følger med som visningstekst). Det er dette som gjør at «plass G01 ladet
   97 kWh» kan bli «faktura til eieren av H0301» i etappe 3.
 
+## Lading-fanen (etter Kristoffers mockup 06.09.2026)
+
+Rekkefølgen er styrets prioritering: status først, penger etterpå, oppsett sjelden.
+
+1. **Nøkkeltall for anlegget**: ladere (hvorav på nett), feil, forbruk denne måneden
+   mot forrige, fakturerbart hittil (klare linjer), fakturagrunnlag klare av totalt.
+   Parkeringssidens egen KPI-stripe skjules på denne fanen.
+2. **Varsellinje** når fakturagrunnlaget for inneværende måned har linjer uten mottaker,
+   med knapper rett til plassen eller til «Koble til plasser».
+3. **Anlegget**: én rad per lader — navn og serienummer, plass, seksjon/disponent,
+   tilstand i tre lag (på nett / bil tilkoblet / lader, med `reasonForNoCurrent` som
+   forklaring), sist online (`latestPulse`), siste ladeøkt, kWh denne måneden. Feil og
+   frakoblet sorteres alltid øverst. Radhandlinger: ⚠ oppretter et avvik med laderens
+   navn, serienummer, plass og tilstand ferdig utfylt; › viser øktene. Plasskobling
+   ligger bak «Koble til plasser» (engangsjobb).
+4. **Forbruk siste 12 måneder** (stolper, natt nederst der timesdata og prisplan finnes)
+   ved siden av **Trenger oppfølging**: feil, frakoblet, linjer uten mottaker, manglende
+   prisplan — hver med knapp.
+5. **Fakturagrunnlag** per måned: plass, seksjon/eier, lader, økter, kWh, energi
+   (kraft + nett), fastledd, sum, status (klar / mangler seksjon / seksjon uten eier /
+   uten plass). Klikk på raden viser øktene under den. Prisene som chips i headeren;
+   «Priser» åpner skuffen; CSV og utskrift; «Send til Fiken» er deaktivert til etappe 3.
+
+Easees `errorCode` vises som tall — kodelista står ikke i den offentlige
+dokumentasjonen. `reasonForNoCurrent` er oversatt i `GRUNN_INGEN_STROM` i `lib/easee.ts`.
+
 ## Hvitelista — kun lesing
 
 `TILLATTE_KALL` i `lib/easee.ts` er to POST-kall (innlogging, tokenfornying) og sju
@@ -220,6 +246,16 @@ grunnlaget i alle variantene — den skal ikke endres for å støtte dem.
 
 ## Kandidater senere, hvis den blir stående
 
+- **Flyten «plassen blir ledig»** (parkering): oppsigelse eller eierskifte → plassen
+  ledig → veiviser som viser ventelisten og lar styret tildele i samme skjermbilde, med
+  avtale, e-post og (senere) kontrakt. Laderen følger plassen, så rapporten bytter
+  mottaker av seg selv. Nevnt av Kristoffer 06.09.2026: «enkelhet for styret».
+  **Rekkefølgen på ventelisten er ikke gitt**: noen lag tildeler etter dato på lista,
+  borettslag ofte etter ansiennitet (botid/andelsdato), og mange etter styrets skjønn
+  med vedtak. Regelen må derfor være et valg per lag («dato på lista» / «ansiennitet» /
+  «manuell rekkefølge») med mulighet til å overstyre med begrunnelse i loggen — ikke en
+  sortering vi bestemmer. Ansiennitet krever innflyttingsdato på eier/andel
+  (`unit_owners.owner_from` finnes for seksjonseiere).
 - **Leieavtaler som dokumenter** (parkering, ikke Easee, men samme flyt for styret):
   avtalen opprettes i appen, genereres som PDF fra en mal, sendes leietakeren på e-post
   (`etterCommit`, via `lib/epost.ts`) og legges i dokumentarkivet med kobling til plassen.

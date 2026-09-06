@@ -1132,9 +1132,11 @@ export type EaseeStatus = {
 export type EaseeLader = {
   id: string; chargerId: string; name: string; circuitName: string | null; spotId: string | null; active: boolean;
   opMode: number | null; isOnline: boolean | null; totalPower: number | null; sessionEnergy: number | null;
-  lifetimeEnergy: number | null; stateCheckedAt: string | null; usageCheckedAt: string | null;
+  lifetimeEnergy: number | null; latestPulse: string | null; errorCode: number | null; reasonForNoCurrent: number | null;
+  stateCheckedAt: string | null; usageCheckedAt: string | null;
   plass: { number: string; holderName: string | null; unitLabel: string | null } | null;
   avtale: { tenantName: string; powerBilling: string | null } | null;
+  sisteOkt: { carConnected: string; carDisconnected: string | null; kwh: number } | null;
 };
 
 export type EaseeForbruk = { chargerRowId: string; year: number; month: number; kwh: number };
@@ -1145,6 +1147,8 @@ export type EaseeLading = {
   anlegg: { siteName: string } | null;
   ladere: EaseeLader[];
   forbruk: EaseeForbruk[];
+  /** Tolv måneder, eldste først. `kwhNatt` er null når måneden mangler timesdata eller prisplan. */
+  maaneder: Array<{ year: number; month: number; kwh: number; kwhNatt: number | null }>;
 };
 
 /** Prisplan for lading — reglene i lib/laderegler.ts. Alle beløp i øre inkl. mva. */
@@ -1163,12 +1167,14 @@ export type Rapportlinje = {
   avtale: { tenantName: string; powerBilling: string | null } | null;
   okter: number; kwhDag: number; kwhNatt: number; kwh: number;
   kraftOre: number; nettOre: number; fastleddOre: number; sumOre: number; timerUtenPris: number; kwhUtenPris: number;
+  status: "klar" | "mangler_plass" | "mangler_seksjon" | "mangler_eier";
 };
 
 export type Laderapport = {
   aar: number; maaned: number; plan: Prisplan | null; linjer: Rapportlinje[];
   sum: { kwh: number; kwhDag: number; kwhNatt: number; kraftOre: number; nettOre: number; fastleddOre: number; sumOre: number };
   advarsler: string[]; spotTimer: number;
+  klar: { antall: number; sumOre: number };
 };
 
 export type Ladeokt = { id: string; carConnected: string; carDisconnected: string | null; kwh: number; isComplete: boolean };

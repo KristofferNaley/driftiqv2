@@ -175,7 +175,32 @@ export type EaseeLaderTilstand = {
   isOnline?: boolean | null;
   lifetimeEnergy?: number | null;
   latestPulse?: string | null;
+  errorCode?: number | null;
+  reasonForNoCurrent?: number | null;
 };
+
+/**
+ * Easees `reasonForNoCurrent` (observasjon 96) på norsk — hvorfor en bil som står i ikke
+ * får strøm. Gruppene 1–6 og 25–30 er lastbalansering; 50-serien er laderen selv;
+ * 75-serien er begrensninger. Ukjente koder vises som tallet.
+ */
+export const GRUNN_INGEN_STROM: Record<number, string> = {
+  0: "",
+  1: "lastbalansering", 2: "lastbalansering", 3: "lastbalansering", 4: "lastbalansering", 5: "lastbalansering", 6: "lastbalansering",
+  7: "ugyldig nettype", 8: "hovedenheten har ikke fått strømforespørsel", 9: "mistet kontakt med hovedenheten",
+  10: "for lite strøm fra Equalizer", 11: "fase ikke tilkoblet",
+  25: "begrenset av kurssikring", 26: "begrenset av kursens maksstrøm", 27: "begrenset av dynamisk kursstrøm",
+  28: "begrenset av Equalizer", 29: "begrenset av lastbalansering i kursen", 30: "begrenset av frakoblet-innstilling",
+  50: "bilen ber ikke om strøm", 51: "laderens maksstrøm for lav", 52: "dynamisk maksstrøm for lav", 53: "laderen er deaktivert",
+  54: "venter på planlagt lading", 55: "venter på godkjenning", 56: "laderen er i feiltilstand", 57: "bilen oppfører seg uregelmessig",
+  75: "begrenset av kabelen", 76: "begrenset av ladeplan", 77: "begrenset av laderens maksstrøm", 78: "begrenset av dynamisk laderstrøm",
+  79: "bilen lader ikke (full?)", 80: "begrenset lokalt", 81: "begrenset av bilen", 100: "udefinert feil",
+};
+
+export function grunnTekst(kode: number | null | undefined): string | null {
+  if (kode === null || kode === undefined || kode === 0) return null;
+  return GRUNN_INGEN_STROM[kode] ?? `kode ${kode}`;
+}
 
 export type EaseeSiteTilstand = {
   circuitStates?: Array<{

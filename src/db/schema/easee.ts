@@ -75,6 +75,12 @@ export const easeeChargers = pgTable("easee_chargers", {
   sessionEnergy: doublePrecision("session_energy"),
   /** kWh levert totalt siden laderen ble satt opp. */
   lifetimeEnergy: doublePrecision("lifetime_energy"),
+  /** Sist laderen meldte seg til Easee — «sist online» når den er frakoblet. */
+  latestPulse: timestamp("latest_pulse", { withTimezone: true }),
+  /** Easees feilkode (tall) når `opMode` er 5; ellers null/0. */
+  errorCode: integer("error_code"),
+  /** Easees `reasonForNoCurrent` (tall) — hvorfor det ikke lades når en bil står i. Tekster i `lib/easee.ts`. */
+  reasonForNoCurrent: integer("reason_for_no_current"),
   stateCheckedAt: timestamp("state_checked_at", { withTimezone: true }),
   usageCheckedAt: timestamp("usage_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

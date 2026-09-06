@@ -337,6 +337,9 @@ async function friskOppTilstand(db: Db, orgId: string, token: string, siteId: nu
         totalPower: t.totalPower ?? null,
         sessionEnergy: t.sessionEnergy ?? null,
         lifetimeEnergy: t.lifetimeEnergy ?? null,
+        latestPulse: t.latestPulse ? new Date(t.latestPulse) : null,
+        errorCode: t.errorCode ?? null,
+        reasonForNoCurrent: t.reasonForNoCurrent ?? null,
         stateCheckedAt: naa,
       })
       .where(and(eq(easeeChargers.id, r.id), eq(easeeChargers.orgId, orgId)));
@@ -399,6 +402,9 @@ function tilVisning(r: typeof easeeChargers.$inferSelect) {
     totalPower: r.totalPower,
     sessionEnergy: r.sessionEnergy,
     lifetimeEnergy: r.lifetimeEnergy,
+    latestPulse: r.latestPulse,
+    errorCode: r.errorCode,
+    reasonForNoCurrent: r.reasonForNoCurrent,
     stateCheckedAt: r.stateCheckedAt,
     usageCheckedAt: r.usageCheckedAt,
   };
@@ -463,6 +469,35 @@ export async function hentLading(db: Db, orgId: string, opts: { frisk?: boolean 
     .from(easeeChargerUsage)
     .where(eq(easeeChargerUsage.orgId, orgId));
 
+  // Siste økt per lader — «siste ladeøkt» i lista. Nyeste først, så første treff per lader vinner.
+  const okter = await db
+    .select({ chargerRowId: easeeSessions.chargerRowId, carConnected: easeeSessions.carConnected, carDisconnected: easeeSessions.carDisconnected, kwh: easeeSessions.kwh })
+    .from(easeeSessions)
+    .where(eq(easeeSessions.orgId, orgId))
+    .orderBy(desc(easeeSessions.carConnected));
+  const sisteOkt = new Map<string, (typeof okter)[number]>();
+  for (const o of okter) if (!sisteOkt.has(o.chargerRowId)) sisteOkt.set(o.chargerRowId, o);
+
+  // Tolv måneder: totalen fra Easees månedstall, nattandelen fra timene der de finnes.
+  const planer = await hentPrisplaner(db, orgId);
+  const timerFra = forbrukFra(naa, 12);
+  const timer = await db
+    .select({ hourStart: easeeChargerHours.hourStart, kwh: easeeChargerHours.kwh })
+    .from(easeeChargerHours)
+    .where(and(eq(easeeChargerHours.orgId, orgId), gte(easeeChargerHours.hourStart, timerFra)));
+  const maaneder: Array<{ year: number; month: number; kwh: number; kwhNatt: number | null }> = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(naa.getUTCFullYear(), naa.getUTCMonth() - i, 1));
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth() + 1;
+    const kwh = forbruk.filter((f) => f.year === year && f.month === month).reduce((n, f) => n + f.kwh, 0);
+    const plan = gjeldendePlan(planer, year, month);
+    const { fra, til } = maanedsgrenser(year, month);
+    const mine = timer.filter((t) => t.hourStart >= fra && t.hourStart < til);
+    const kwhNatt = plan && mine.length > 0 ? beregnKostnad(plan, mine.map((t) => ({ start: t.hourStart, kwh: t.kwh }))).kwhNatt : null;
+    maaneder.push({ year, month, kwh, kwhNatt });
+  }
+
   return {
     koblet: Boolean(kobling),
     feil,
@@ -470,13 +505,16 @@ export async function hentLading(db: Db, orgId: string, opts: { frisk?: boolean 
     ladere: rader.map((r) => {
       const p = r.spotId ? plassMedId.get(r.spotId) ?? null : null;
       const a = r.spotId ? avtaleMedPlass.get(r.spotId) ?? null : null;
+      const o = sisteOkt.get(r.id) ?? null;
       return {
         ...tilVisning(r),
         plass: p ? { number: p.number, holderName: p.holderName, unitLabel: p.unitLabel } : null,
         avtale: a ? { tenantName: a.tenantName, powerBilling: a.powerBilling } : null,
+        sisteOkt: o ? { carConnected: o.carConnected, carDisconnected: o.carDisconnected, kwh: o.kwh } : null,
       };
     }),
     forbruk,
+    maaneder,
   };
 }
 
@@ -786,6 +824,8 @@ export type Rapportlinje = {
   sumOre: number;
   timerUtenPris: number;
   kwhUtenPris: number;
+  /** Om linja kan faktureres: mottaker finnes, eller hva som mangler. */
+  status: "klar" | "mangler_plass" | "mangler_seksjon" | "mangler_eier";
 };
 
 /**
@@ -870,6 +910,7 @@ export async function hentRapport(db: Db, orgId: string, aar: number, maaned: nu
       sumOre: (kostnad?.kraftOre ?? 0) + (kostnad?.nettOre ?? 0) + fastledd,
       timerUtenPris: kostnad?.timerUtenPris ?? 0,
       kwhUtenPris: kostnad?.kwhUtenPris ?? 0,
+      status: !plass ? "mangler_plass" : !enhet ? "mangler_seksjon" : !eier ? "mangler_eier" : "klar",
     });
   }
   linjer.sort((a, b) => (a.plass?.number ?? "~").localeCompare(b.plass?.number ?? "~", "nb", { numeric: true }));
@@ -887,7 +928,11 @@ export async function hentRapport(db: Db, orgId: string, aar: number, maaned: nu
     (s, l) => ({ kwh: s.kwh + l.kwh, kwhDag: s.kwhDag + l.kwhDag, kwhNatt: s.kwhNatt + l.kwhNatt, kraftOre: s.kraftOre + l.kraftOre, nettOre: s.nettOre + l.nettOre, fastleddOre: s.fastleddOre + l.fastleddOre, sumOre: s.sumOre + l.sumOre }),
     { kwh: 0, kwhDag: 0, kwhNatt: 0, kraftOre: 0, nettOre: 0, fastleddOre: 0, sumOre: 0 },
   );
-  return { aar, maaned, plan, linjer, sum, advarsler, spotTimer: spot.size };
+  const klare = linjer.filter((l) => l.status === "klar");
+  return {
+    aar, maaned, plan, linjer, sum, advarsler, spotTimer: spot.size,
+    klar: { antall: klare.length, sumOre: klare.reduce((n, l) => n + l.sumOre, 0) },
+  };
 }
 
 /** Øktene for én lader i måneden — «hvem ladet når», til skuffen i rapporten. */

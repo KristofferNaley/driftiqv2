@@ -407,6 +407,13 @@
       "when": 1788714611647,
       "tag": "0057_lading",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1788717984422,
+      "tag": "0058_lader_tilstand",
+      "breakpoints": true
     }
   ]
 }

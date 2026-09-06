@@ -219,6 +219,7 @@ export default function Parkering() {
           </div>
         ) : (
           <>
+            {fane !== "lading" && (
             <div className="prk-stripe">
               <div className="prk-stripe-del">
                 <div className="k">Plasser</div>
@@ -247,6 +248,7 @@ export default function Parkering() {
                 </div>
               </div>
             </div>
+            )}
 
             {fane === "plasser" && (
               <>

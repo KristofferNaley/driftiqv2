@@ -4512,40 +4512,80 @@ textarea.qr-input { resize: vertical; }
 .ea-fakta-et { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
 .ea-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
 .ea-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
-/* Radene bygger på .prk-hode/.prk-rad (samme modul); kolonnene er egne. */
-.ea-lader { grid-template-columns: minmax(0, 1.3fr) 170px minmax(0, 1fr) 190px 110px; }
-/* Tilstand i tre lag: farget punkt + tittel, forklaring under. Fargene følger .badge-paletten. */
-.ea-status { display: flex; flex-direction: column; min-width: 0; }
-.ea-status-tittel { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: var(--fs-sm); }
-.ea-punkt { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; background: var(--muted); }
-.ea-status.ok .ea-punkt { background: var(--accent2); box-shadow: 0 0 0 3px rgba(15, 186, 129, 0.18); }
-.ea-status.info .ea-punkt { background: var(--accent); }
-.ea-status.warn .ea-punkt { background: var(--warn); }
-.ea-status.danger .ea-punkt { background: var(--danger); }
-.ea-status.muted .ea-status-tittel { color: var(--muted); font-weight: 500; }
-.ea-avregning { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px 110px; }
-.ea-avregning-uten { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px; }
-.ea-sum { font-weight: 700; background: var(--surface2); }
-.ea-rapport-min { min-width: 1040px; }
-.ea-rapport { grid-template-columns: 64px minmax(0, 1.5fr) minmax(0, 1fr) 56px 80px 80px 90px 90px 90px 100px; }
-.ea-rapport .h { text-align: right; font-variant-numeric: tabular-nums; }
-.ea-rapport .list-meta { display: block; }
-.ea-klikk { cursor: pointer; }
-.ea-klikk:hover { background: var(--surface2); }
+/* Nøkkeltall for anlegget (mockup 06.09.2026). */
+.ea-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.ea-kpi { padding: 14px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ea-kpi .l { font-size: var(--fs-label); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.ea-kpi .v { font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ea-kpi .v small { font-size: var(--fs-label); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.ea-kpi .v .gul { color: var(--warn); }
+.ea-kpi .d { font-size: var(--fs-label); color: var(--muted); overflow-wrap: anywhere; }
+.ea-kpi .d b.opp { color: var(--ok); } .ea-kpi .d b.ned { color: var(--danger); }
+.ea-kpi.alert .v { color: var(--danger); }
+/* Varsellinje med handling. */
+.ea-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.35); border-left: 4px solid var(--warn); border-radius: 10px; padding: 11px 14px; }
+.ea-banner .ic { width: 22px; height: 22px; border-radius: 50%; background: var(--warn); color: #1a1200; display: grid; place-items: center; font-weight: 800; font-size: var(--fs-label); flex: none; }
+.ea-banner p { margin: 0; flex: 1; min-width: 240px; font-size: var(--fs-sm); }
+/* Tabellene (anlegg og fakturagrunnlag). */
+.ea-tabell { width: 100%; min-width: 900px; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+.ea-tabell th { font-size: var(--fs-label); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: var(--muted); text-align: left; padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ea-tabell td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ea-tabell tr:last-child td { border-bottom: 0; }
+.ea-tabell th.r, .ea-tabell td.r { text-align: right; }
+.ea-tabell .mut { color: var(--muted); }
+.ea-rad { cursor: pointer; }
+.ea-rad:hover td { background: rgba(255, 255, 255, 0.025); }
+.ea-lader-navn b { display: block; font-weight: 700; }
+.ea-lader-navn span { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); }
+.ea-mono { font-family: ui-monospace, Menlo, monospace; font-size: var(--fs-label); color: var(--muted); }
+.ea-under { display: block; font-size: var(--fs-label); color: var(--muted); margin-top: 1px; }
+.ea-plass { background: none; border: 1px solid var(--border); border-radius: 7px; padding: 3px 9px; color: inherit; font: inherit; font-weight: 700; font-size: var(--fs-sm); cursor: pointer; }
+.ea-plass:hover { border-color: var(--accent); color: var(--accent); }
+.ea-plasschip { display: inline-block; border: 1px solid var(--border); background: var(--surface2); border-radius: 7px; padding: 3px 9px; font-weight: 700; }
+.ea-chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 2px 8px; font-size: var(--fs-label); font-weight: 700; white-space: nowrap; }
+.ea-chip.w { background: rgba(245, 166, 35, 0.12); color: var(--warn); border: 1px dashed rgba(245, 166, 35, 0.5); cursor: pointer; }
+.ea-chip.g { background: rgba(15, 186, 129, 0.12); color: var(--accent2); }
+.ea-chip.c { background: rgba(240, 64, 64, 0.12); color: var(--danger); }
+.ea-chip.n { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+/* Tilstand: farget punkt + tekst. */
+.ea-st { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
+.ea-st i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--muted); }
+.ea-st.lader i { background: #5ac8fa; box-shadow: 0 0 0 3px rgba(90, 200, 250, 0.2); }
+.ea-st.ledig i { background: var(--ok); }
+.ea-st.tilk i { background: var(--ok); opacity: 0.55; }
+.ea-st.off i { background: var(--muted); } .ea-st.off { color: var(--muted); }
+.ea-st.feil i { background: var(--danger); box-shadow: 0 0 0 3px rgba(240, 64, 64, 0.18); } .ea-st.feil { color: var(--danger); }
+.ea-st.mut { color: var(--muted); font-weight: 500; }
+.ea-radakt { display: flex; gap: 6px; justify-content: flex-end; opacity: 0.55; }
+.ea-rad:hover .ea-radakt { opacity: 1; }
+.ea-ico { width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface2); display: inline-grid; place-items: center; color: var(--muted); font: inherit; font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.ea-ico:hover { color: var(--text); border-color: var(--accent); }
+.ea-sync { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); }
+.ea-sync i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; } .ea-sync i.rod { background: var(--danger); }
+.ea-n { background: rgba(255, 255, 255, 0.12); border-radius: 999px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
+.ea-fot { padding: 10px 18px; font-size: var(--fs-label); color: var(--muted); border-top: 1px solid var(--border); }
+/* Forbruk + oppfølging side om side. */
+.ea-to { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 18px; }
+.ea-legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 0 18px 14px; font-size: var(--fs-label); color: var(--muted); }
+.ea-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.ea-li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border); }
+.ea-li:last-child { border-bottom: 0; }
+.ea-li .t { font-weight: 600; font-size: var(--fs-sm); }
+.ea-li .s { font-size: var(--fs-label); color: var(--muted); display: block; margin-top: 2px; }
+/* Fakturagrunnlaget: prischips, sumrad, øktene under raden. */
+.ea-pris { display: flex; gap: 6px; flex-wrap: wrap; }
+.ea-pris span { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.ea-pris span b { color: var(--text); font-weight: 500; }
+.ea-sumrad td { font-weight: 800; background: var(--surface2); border-top: 1px solid var(--border); }
+.ea-underrad td { background: rgba(var(--accent-rgb), 0.05); padding: 0; }
+.ea-okter-rad { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); padding: 8px 14px 12px 60px; }
+.ea-okt-kort { padding: 8px 12px; border-left: 2px solid var(--border); font-size: var(--fs-label); }
+.ea-okt-kort b { display: block; font-family: ui-monospace, Menlo, monospace; font-weight: 500; color: var(--text); }
+.ea-okt-kort span { color: var(--muted); }
 .ea-advarsel {
   margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: var(--fs-label);
   background: rgba(245, 166, 35, 0.08); border: 1px solid rgba(245, 166, 35, 0.3); color: var(--warn);
 }
-/* Ladeøktene i skuffen: dag på én linje, klokkeslett og varighet under, kWh til høyre. */
-.ea-okt { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.ea-okt:last-child { border-bottom: none; }
-.ea-okt-naar { min-width: 0; }
-.ea-okt-dag { font-size: var(--fs-sm); font-weight: 600; }
-.ea-okt-tid { font-size: var(--fs-label); color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.ea-okt-varighet { margin-left: 10px; padding: 1px 7px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); }
-.ea-okt-kwh { font-size: var(--fs-md); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ea-okt-sum { margin-top: 4px; border-top: 2px solid var(--border); }
-.ea-okt-sum .ea-okt-dag { color: var(--muted); }
 .ea-skjema-del { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; }
 
 @media print {

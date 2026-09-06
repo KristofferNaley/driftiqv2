@@ -688,6 +688,16 @@ describe("synk og rapport", () => {
     const okter = await i(orgId, (db) => hentOkter(db, orgId, p01.laderId, 2026, 7));
     expect(okter.map((o) => o.kwh)).toEqual([6, 14]);
 
+    // Laderlista: siste økt per lader, og tolv måneder med nattandel der timene finnes.
+    const l = await i(orgId, (db) => hentLading(db, orgId, { frisk: false, naa: NAA }));
+    const la = l.ladere.find((x) => x.chargerId === LADER_A)!;
+    expect(la.sisteOkt?.kwh).toBe(6);
+    expect(la.sisteOkt?.carConnected.toISOString()).toBe("2026-07-11T07:30:00.000Z");
+    expect(l.maaneder.length).toBe(12);
+    const juli = l.maaneder.find((m) => m.year === 2026 && m.month === 7)!;
+    expect(juli.kwhNatt).toBe(10); // 4 (natt) + 6 (lørdag) på A; de 2 på B er dag
+    expect(l.maaneder.find((m) => m.year === 2026 && m.month === 6)?.kwhNatt).toBeNull(); // ingen timer → ukjent, ikke 0
+
     const csv = await i(orgId, (db) => eksporterRapport(db, orgId, 2026, 7, kari));
     const tekst = new TextDecoder().decode(csv.innhold);
     expect(csv.navn).toBe("lading-2026-07.csv");
