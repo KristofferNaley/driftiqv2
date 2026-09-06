@@ -11,7 +11,18 @@
  * så sending feiler stille med en logglinje.
  */
 
+import { MARKED_URL } from "./urler";
+
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL ?? "";
+
+/**
+ * Avsenderprofilen — samme som kundevarslene i `webhooks.ts`: `username`/`avatar_url`
+ * overstyrer webhookens egen profil per melding, så varselet står som «DriftIQ» med logo
+ * uansett hva webhooken heter i Discord. Ikonet må ligge på en OFFENTLIG adresse (Discord
+ * henter det selv); markedsverten svarer uten sesjon.
+ */
+const AVSENDER = "DriftIQ";
+const IKON = `${MARKED_URL}/ikon-512.png`;
 
 /** Miljønavnet i meldingen, så prod og test kan dele kanal uten å forveksles. */
 function miljo(): string {
@@ -29,7 +40,11 @@ export async function sendDriftsvarsel(tekst: string): Promise<void> {
     const svar = await fetch(WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: `**${miljo()}** — ${tekst}` }),
+      body: JSON.stringify({
+        username: AVSENDER,
+        avatar_url: IKON,
+        content: `**${miljo()}** — ${tekst}`,
+      }),
       signal: AbortSignal.timeout(5000),
     });
     if (!svar.ok) {
