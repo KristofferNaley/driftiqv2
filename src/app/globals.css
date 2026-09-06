@@ -4502,6 +4502,22 @@ textarea.qr-input { resize: vertical; }
 .un-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
 .un-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
 
+/* ── Easee (Innstillinger → Integrasjoner + Parkering → Lading). Prefiks .ea- — se docs/easee.md. ── */
+.ea-melding {
+  margin: 12px 14px 0; padding: 10px 14px; border-radius: 10px; font-size: var(--fs-sm);
+  background: rgba(15, 186, 129, 0.1); color: var(--accent2); border: 1px solid rgba(15, 186, 129, 0.25);
+}
+.ea-fakta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ea-fakta > div { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.ea-fakta-et { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+.ea-fakta-v { font-size: var(--fs-md); font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+.ea-fakta-v.mut { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
+/* Radene bygger på .prk-hode/.prk-rad (samme modul); kolonnene er egne. */
+.ea-lader { grid-template-columns: minmax(0, 1.3fr) 170px minmax(0, 1fr) 170px 110px; }
+.ea-avregning { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px 110px; }
+.ea-avregning-uten { grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1fr) 90px; }
+.ea-sum { font-weight: 700; background: var(--surface2); }
+
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
   .vr-bunn, .vr-leggtil, .vr-valg, .print-skjul,

@@ -393,6 +393,13 @@
       "when": 1788693776956,
       "tag": "0055_dokumenttekst",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1788697480620,
+      "tag": "0056_easee",
+      "breakpoints": true
     }
   ]
 }

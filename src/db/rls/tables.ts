@@ -30,6 +30,9 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // delt ut. Sto lenge som en kommentar her («ikke bygget ennå») — nå finnes tabellene.
   // Fjernes integrasjonen, fjernes de her samtidig med migrasjonen som dropper dem.
   "unloc_settings", "vendor_unloc_keys",
+  // Easee (docs/easee.md): kundens krypterte API-nøkkel, laderne i anlegget og
+  // månedsforbruket. Samme fjernbare pakke-mønster som Unloc.
+  "easee_settings", "easee_chargers", "easee_charger_usage",
   "tasks", "contracts",
   "deviations", "deviation_attachments",
   "completion_photos",

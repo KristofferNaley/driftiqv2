@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import { Faner, Feil, Tom, dato, dagerSiden, useOrgData } from "@/components/felles";
 import { Knapperad, Nedtrekk, Skuff, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { useOkt } from "@/components/OktProvider";
+import EaseeLading from "@/components/EaseeLading";
 import { parkering, type Parkeringsavtale, type Plass, type Ventende } from "@/lib/klient";
 
 /**
@@ -13,9 +14,9 @@ import { parkering, type Parkeringsavtale, type Plass, type Ventende } from "@/l
  * leieavtaler MED historikk (avsluttede beholdes), og venteliste med tildeling som
  * fjerner oppføringen i samme operasjon.
  *
- * Bevisst utelatt fra mockupen: ladeanlegg-integrasjon (Easee/Zaptec med effekt, kWh og
- * månedsavregning — krever API-avtaler som ikke finnes), e-signering av avtaler, og
- * regneark-import. Lading-fanen viser det som er sant: hvilke plasser som har ladepunkt.
+ * Bevisst utelatt fra mockupen: e-signering av avtaler og regneark-import. Lading-fanen
+ * er `components/EaseeLading.tsx` (docs/easee.md): uten kobling viser den hvilke plasser
+ * som har ladepunkt; med Easee-kobling laderne med tilstand, plass og månedsforbruk.
  */
 
 const EIERSKAP_INFO: Record<string, { etikett: string; farge: string; bg: string; forklaring: string }> = {
@@ -131,8 +132,6 @@ export default function Parkering() {
     avtaleFilter === "aktive" ? !a.endedAt : avtaleFilter === "utloper" ? utloperSnart(a) : Boolean(a.endedAt),
   );
   const antallUtloper = avtaler.filter(utloperSnart).length;
-
-  const ladeplasser = plasser.filter((p) => p.hasCharger);
 
   const eierskapPill = (type: string) => {
     const info = EIERSKAP_INFO[type] ?? { etikett: type, farge: "var(--muted)", bg: "var(--surface2)" };
@@ -479,53 +478,7 @@ export default function Parkering() {
             )}
 
             {fane === "lading" && (
-              <>
-                <div className="card" style={{ overflow: "hidden" }}>
-                  <div className="card-header">
-                    <div>
-                      <div className="card-title">Ladepunkter</div>
-                      <div className="field-note">Plassene som har ladepunkt registrert.</div>
-                    </div>
-                  </div>
-                  <div className="prk-scroll">
-                    <div className="prk-min">
-                      <div className="prk-hode prk-vente">
-                        <span>Plass</span><span>Ladepunkt</span><span>Disponent</span><span>Status</span><span />
-                      </div>
-                      {ladeplasser.length === 0 ? (
-                        <Tom tekst="Ingen plasser har ladepunkt registrert. Sett «Ladepunkt» på plassen." />
-                      ) : (
-                        ladeplasser.map((p) => {
-                          const st = STATUS_INFO[p.status] ?? { etikett: p.status, merke: "muted" };
-                          return (
-                            <div key={p.id} className="prk-rad prk-vente">
-                              <span className="prk-nr" style={{ width: "60px" }}>{p.number}</span>
-                              <span style={{ color: "var(--warn)", fontSize: "var(--fs-label)" }}>
-                                ⚡ {p.chargerLabel || "Ladepunkt"}
-                              </span>
-                              <span style={{ minWidth: 0 }}>
-                                {[p.unitLabel, p.holderName].filter(Boolean).join(", ") || (
-                                  <span style={{ color: "var(--muted)" }}>Ingen</span>
-                                )}
-                              </span>
-                              <span><span className={`badge ${st.merke}`}>{st.etikett}</span></span>
-                              <span style={{ display: "flex", justifyContent: "flex-end" }}>
-                                <button className="btn btn-ghost" onClick={() => setDetalj(p)}>Åpne</button>
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="prk-note">
-                  Kobling mot ladeanlegg (Easee, Zaptec) med status, forbruk og
-                  månedsavregning er <b>ikke bygget ennå</b> — kWh må inntil videre leses av
-                  og avregnes manuelt. Si fra hvilke anlegg dere har, så prioriteres riktig
-                  integrasjon.
-                </div>
-              </>
+              <EaseeLading plasser={plasser} kanEndre={kanEndre} onApnePlass={setDetalj} />
             )}
           </>
         )}

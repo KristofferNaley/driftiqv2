@@ -375,6 +375,14 @@ komponenter — endres logikken, må begge med.
   credentials); nøkkelopprettelse er asynkron (202 + jobb), og formen på jobbresultatet er
   antatt fra dokumentasjonen. Hemmeligheten krypteres med `FIKEN_TOKEN_KEY` — nøkkelen er
   felles for integrasjonshemmeligheter, navnet er historisk.
+- **Easee (lading i parkeringsmodulen)** er bygget som samme fjernbare pakke — grensene og
+  fjerningsoppskriften i `docs/easee.md`. Hvitelista er innlogging, tokenfornying og
+  ellers KUN lesing; DriftIQ styrer aldri en lader. Kunden logger inn med Easee-kontoen
+  (site owner); **passordet lagres aldri**, bare tokenene (kryptert), fornyet av
+  `medToken()` før utløp og ved 401. Tilstanden for hele anlegget hentes i ett kall
+  (`/api/sites/{id}/state`) fordi per-lader-endepunktene er ratebegrenset. Verifisert mot
+  ekte anlegg 06.09.2026 — funnene («inneværende måned krever `to` = 1. i neste måned»
+  m.m.) står i notatet.
 - **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
   for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
   har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test

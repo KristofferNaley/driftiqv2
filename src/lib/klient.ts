@@ -1113,3 +1113,47 @@ export const unloc = {
     api.send<UnlocNokkel>(org(o, `/vendors/${vendorId}/unloc-keys`), d),
   tilbakekall: (o: string, vendorId: string, id: string) => api.slett(org(o, `/vendors/${vendorId}/unloc-keys/${id}`)),
 };
+
+// ---------------------------------------------------------------------------------------
+// Easee — ladeanlegget i parkeringsmodulen (docs/easee.md). Én fjernbar blokk.
+// ---------------------------------------------------------------------------------------
+
+export type EaseeStatus = {
+  konfigurert: { kryptering: boolean };
+  kobling: {
+    siteId: number; siteName: string; userName: string; accountEmail: string | null; tokenExpiresAt: string;
+    pricePerKwhOre: number | null; connectedBy: string; createdAt: string; lastError: string | null; lastCheckedAt: string | null;
+  } | null;
+  ladere: { antall: number; koblet: number };
+};
+
+export type EaseeLader = {
+  id: string; chargerId: string; name: string; circuitName: string | null; spotId: string | null; active: boolean;
+  opMode: number | null; isOnline: boolean | null; totalPower: number | null; sessionEnergy: number | null;
+  lifetimeEnergy: number | null; stateCheckedAt: string | null; usageCheckedAt: string | null;
+  plass: { number: string; holderName: string | null; unitLabel: string | null } | null;
+  avtale: { tenantName: string; powerBilling: string | null } | null;
+};
+
+export type EaseeForbruk = { chargerRowId: string; year: number; month: number; kwh: number };
+
+export type EaseeLading = {
+  koblet: boolean;
+  feil: string | null;
+  anlegg: { siteName: string; pricePerKwhOre: number | null } | null;
+  ladere: EaseeLader[];
+  forbruk: EaseeForbruk[];
+};
+
+export const easee = {
+  status: (o: string) => api.hent<EaseeStatus>(org(o, "/easee")),
+  /** Passordet sendes én gang og lagres aldri — bare tokenene Easee gir tilbake. */
+  kobleTil: (o: string, d: { userName: string; password: string; siteId?: number | null }) => api.endre<EaseeStatus>(org(o, "/easee"), d),
+  settPris: (o: string, pricePerKwhOre: number | null) => api.lapp<EaseeStatus>(org(o, "/easee"), { pricePerKwhOre }),
+  kobleFra: (o: string) => api.slett(org(o, "/easee")),
+  /** Lading-fanen. `oppdater` tvinger ny henting av laderliste, tilstand og forbruk. */
+  lading: (o: string) => api.hent<EaseeLading>(org(o, "/easee/lading")),
+  oppdater: (o: string) => api.send<EaseeLading>(org(o, "/easee/lading"), {}),
+  kobleTilPlass: (o: string, laderId: string, spotId: string | null) =>
+    api.lapp<EaseeLader>(org(o, `/easee/chargers/${laderId}`), { spotId }),
+};

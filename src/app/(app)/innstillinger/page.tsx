@@ -15,6 +15,7 @@ import {
   WEBHOOK_TYPE_ETIKETT,
   type WebhookType,
 } from "@/lib/webhookvalg";
+import EaseeKort from "./EaseeKort";
 import UnlocKort from "./UnlocKort";
 
 /** Samme trinn som API-et — se `formatterStorrelse` i lib/lagring.ts. */
@@ -807,6 +808,7 @@ function Integrasjoner() {
       </div>
 
       <UnlocKort />
+      <EaseeKort />
 
       {ny && <WebhookSkjema orgId={orgId!} onLukk={() => setNy(false)} onLagret={last} />}
       {endrer && (
