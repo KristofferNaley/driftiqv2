@@ -74,11 +74,17 @@ type Kilde = {
   tabell: PgTable;
   orgId: AnyPgColumn;
   id: AnyPgColumn;
-  /** MÅ speile indeksuttrykket i drizzle/0047_sok_indekser.sql. */
+  /** MÅ speile indeksuttrykket i drizzle/0047_sok_indekser.sql (dokumenter: 0055). */
   fts: SQL;
   /** Kolonnen trigram-indeksen står på — ILIKE-grenen. */
   tittel: AnyPgColumn;
-  undertekst: SQL;
+  /**
+   * Ekstra ILIKE-gren på innholdet (dokumentteksten). Uttrykket MÅ speile trigram-indeksen
+   * i drizzle/0055 — `coalesce(content_text,'')` — ellers seq scan over all tekst.
+   */
+  innhold?: SQL;
+  /** Fast utdrag, eller en funksjon av søket når utdraget skal vise selve treffet. */
+  undertekst: SQL | ((tsquery: SQL, q: string) => SQL);
   dato: SQL;
   /** Kun avvik. */
   nummer?: AnyPgColumn;
@@ -121,9 +127,22 @@ const KILDER: readonly Kilde[] = [
     tabell: documents,
     orgId: documents.orgId,
     id: documents.id,
-    fts: sql`to_tsvector('norwegian', coalesce(${documents.title},'') || ' ' || coalesce(${documents.description},'') || ' ' || coalesce(${documents.originalName},''))`,
+    // Innholdet (content_text, docs/tekstsok.md) er med i FTS-uttrykket — speilet i
+    // drizzle/0055_dokumenttekst.sql, som erstattet 0047-indeksen for denne tabellen.
+    fts: sql`to_tsvector('norwegian', coalesce(${documents.title},'') || ' ' || coalesce(${documents.description},'') || ' ' || coalesce(${documents.originalName},'') || ' ' || coalesce(${documents.contentText},''))`,
     tittel: documents.title,
-    undertekst: sql`left(coalesce(${documents.description}, ${documents.originalName}, ''), 140)`,
+    /** Innholdet søkes også som delord (trigram) — «lekkasje» i en 40-siders rapport. */
+    innhold: sql`coalesce(${documents.contentText},'')`,
+    // Utdraget skal vise HVOR i dokumentet søkeordet står, ikke beskrivelsen. FTS-treff får
+    // ts_headline (stemmede ord); delords-treff får tekstbiten rundt første forekomst.
+    // Linjeskift i utdraget blir mellomrom — treffet vises på én linje i søkeboksen.
+    undertekst: (tsquery, q) => sql`regexp_replace(CASE
+      WHEN ${documents.contentText} IS NOT NULL AND to_tsvector('norwegian', ${documents.contentText}) @@ ${tsquery}
+        THEN '… ' || ts_headline('norwegian', left(${documents.contentText}, 60000), ${tsquery}, 'MaxWords=24, MinWords=14, MaxFragments=1, StartSel=«, StopSel=», FragmentDelimiter= … ') || ' …'
+      WHEN ${documents.contentText} IS NOT NULL AND position(lower(${q}) in lower(${documents.contentText})) > 0
+        THEN '… ' || substring(${documents.contentText} from greatest(1, position(lower(${q}) in lower(${documents.contentText})) - 60) for 150) || ' …'
+      ELSE left(coalesce(${documents.description}, ${documents.originalName}, ''), 140)
+    END, '\\s+', ' ', 'g')`,
     dato: sql`${documents.uploadedAt}::date::text`,
   },
   {
@@ -228,14 +247,16 @@ export async function hentGlobaltSok(db: Db, orgId: string, q: string): Promise<
     const treffBetingelse = or(
       sql`${kilde.fts} @@ ${tsquery}`,
       sql`${kilde.tittel} ILIKE ${somDelord}`,
+      ...(kilde.innhold ? [sql`${kilde.innhold} ILIKE ${somDelord}`] : []),
       ...(kilde.nummer && nummer ? [eq(kilde.nummer, Number(nummer[1]))] : []),
     )!;
+    const undertekst = typeof kilde.undertekst === "function" ? kilde.undertekst(tsquery, q) : kilde.undertekst;
 
     const rader = await db
       .select({
         id: kilde.id,
         tittel: kilde.tittel,
-        undertekst: kilde.undertekst.as("undertekst"),
+        undertekst: undertekst.as("undertekst"),
         dato: kilde.dato.as("dato"),
         ...(kilde.nummer ? { nummer: kilde.nummer } : {}),
       })

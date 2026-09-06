@@ -17,6 +17,13 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# OCR for tekstsøk i skannede dokumenter (docs/tekstsok.md): tesseract med norsk språkdata
+# og poppler (pdftoppm) for å gjøre PDF-sider om til bilder. ~70 MB. Mangler de, hopper
+# tekstuttrekket over OCR og merker dokumentet — appen kjører videre. Skriftpakken er
+# nødvendig: uten fonter tegner pdftoppm PDF-er med ikke-innbakte skrifter som blanke sider
+# («Couldn't find a font for 'Helvetica'»), og OCR-en leser ingenting.
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-nor poppler-utils fontconfig font-liberation
+
 # Standalone-bygget tar med bare de modulene serveren faktisk bruker.
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

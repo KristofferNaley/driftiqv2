@@ -53,6 +53,19 @@ export const documents = pgTable("documents", {
    * vedtekter o.l. — protokoller med persondata bør styret tenke seg om på.
    */
   aiReadable: boolean("ai_readable").notNull().default(false),
+  /**
+   * Tekstsøk i innholdet (docs/tekstsok.md). Teksten trekkes ut av fila i en bakgrunnsjobb
+   * (`lib/tekstuttrekk.ts`) og bor på raden, ikke i en egen indekstabell — samme grunn som
+   * i `lib/sok.ts`: en kopi på raden kan ikke drifte fra dokumentet. Kappes ved
+   * `MAKS_TEKST`; det globale søkets GIN-indekser (drizzle/0055) står på denne kolonnen.
+   * Sendes ALDRI til klienten i lister/detalj — `hentDokumenter`/`hentDokument` velger kolonner.
+   */
+  contentText: text("content_text"),
+  /** «pdf» | «docx» | «ocr» | «ingen» (format uten tekst) | «feil». NULL = ikke forsøkt ennå. */
+  textSource: varchar("text_source"),
+  textExtractedAt: timestamp("text_extracted_at", { withTimezone: true }),
+  /** Hvorfor det ikke ble tekst — vises på dokumentet så styret vet at fila ikke er søkbar. */
+  textError: varchar("text_error"),
 });
 
 export type DocumentFolder = typeof documentFolders.$inferSelect;

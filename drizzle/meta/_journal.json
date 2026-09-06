@@ -386,6 +386,13 @@
       "when": 1788602799372,
       "tag": "0054_unloc",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788693776956,
+      "tag": "0055_dokumenttekst",
+      "breakpoints": true
     }
   ]
 }

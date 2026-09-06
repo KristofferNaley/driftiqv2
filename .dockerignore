@@ -1,0 +1,9 @@
+# Byggekonteksten skal være kildekoden, ikke alt som ligger i mappa. Uten denne fila
+# ble .git (40 MB) og Claude Codes worktrees under .claude/ (hele kopier av repoet)
+# kopiert inn i imaget av `COPY . .`. node_modules installeres i builder-steget fra
+# package-lock og skal ikke overskrives av vertens kopi.
+.git
+.claude
+.next
+node_modules
+uploads

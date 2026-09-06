@@ -10,7 +10,7 @@
  * dokumentene flyttes til «Annet», undertreet slettes for hånd.
  */
 
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, inArray, isNotNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -240,11 +240,19 @@ export async function slettMappe(db: Db, orgId: string, folderId: string, av: Ak
 // Dokumenter
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Kolonnene som går til klienten. `content_text` (docs/tekstsok.md) er utelatt med vilje:
+ * den kan være hundretusener av tegn per dokument, og ingen side viser den — søket leser
+ * den på serveren. `harTekst` sier det klienten trenger å vite.
+ */
+const { contentText: _contentText, ...DOK_KOLONNER } = getTableColumns(documents);
+const DOK_UTVALG = { ...DOK_KOLONNER, harTekst: sql<boolean>`(${documents.contentText} IS NOT NULL)` };
+
 export async function hentDokumenter(db: Db, orgId: string, mappe?: string) {
   const betingelser = [eq(documents.orgId, orgId)];
   if (mappe) betingelser.push(eq(documents.folder, mappe));
   return db
-    .select()
+    .select(DOK_UTVALG)
     .from(documents)
     .where(and(...betingelser))
     .orderBy(sql`${documents.documentDate} DESC NULLS LAST`, asc(documents.title));
@@ -252,7 +260,7 @@ export async function hentDokumenter(db: Db, orgId: string, mappe?: string) {
 
 export async function hentDokument(db: Db, orgId: string, docId: string) {
   const rader = await db
-    .select()
+    .select(DOK_UTVALG)
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.orgId, orgId)))
     .limit(1);

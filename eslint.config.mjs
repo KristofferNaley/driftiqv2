@@ -27,6 +27,9 @@ export default ts.config(
   // fra et minifisert React. Merk at flat config IKKE hopper over punktmapper av seg selv.
   { ignores: [
     ".next/**", "node_modules/**", "drizzle/**",
+    // Worktrees fra Claude Code (bakgrunnsoppgaver) er hele kopier av repoet med egen
+    // tsconfig — uten dette ser typescript-eslint to rotmapper og nekter å parse noe.
+    ".claude/**",
     "ds-bundle/**", "designsystem/dist/**", ".ds-sync/**", ".design-sync/**",
   ] },
   js.configs.recommended,

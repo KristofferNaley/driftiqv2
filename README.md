@@ -209,7 +209,7 @@ ikke hjemme i prod-tallene.
 | Oppgaver | komplett — inkl. QR, anonymt skjema, bilder, utskriftsark og «Info til leverandør» (generert e-post, sendbar fra appen) |
 | Avvik | komplett — inkl. vedlegg |
 | Kontrakter | komplett — første modul med filopplasting |
-| Dokumentarkiv | komplett — mapper, undermapper, speilmapper og søk |
+| Dokumentarkiv | komplett — mapper, undermapper, speilmapper og søk; innholdet i filene er søkbart (tekstuttrekk + OCR, `docs/tekstsok.md`) |
 | Leverandører | mangler portalbruker (fase 3). Digitale nøkler via Unloc: bygget, ikke prøvd mot ekte Unloc — `docs/unloc.md` |
 | Vedlikehold | komplett |
 | Rutiner | komplett |

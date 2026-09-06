@@ -69,6 +69,40 @@ export async function register(): Promise<void> {
 
   console.log(`[varsler] Planlagt: ${varsler.plan}.`);
 
+  // Tekstuttrekk (docs/tekstsok.md): nye dokumenter får søkbar tekst. Hvert 5. minutt, men
+  // kjøringsloggen får bare rader når det fantes noe å gjøre — ellers 288 tomme rader i døgnet.
+  const tekstuttrekk = JOBBER.find((j) => j.nokkel === "tekstuttrekk")!;
+  let tekstuttrekkKjorer = false;
+  cron.schedule(
+    tekstuttrekk.cron,
+    () => {
+      void (async () => {
+        // OCR på en 60-siders perm kan ta lenger enn fem minutter — ikke start en ny runde
+        // oppå den forrige (det ville ikke vært en feil, bare dobbelt arbeid og dobbel last).
+        if (tekstuttrekkKjorer) return;
+        tekstuttrekkKjorer = true;
+        try {
+          const { antallVentende, kjorTekstuttrekk } = await import("./lib/tekstuttrekk");
+          if ((await antallVentende()) === 0) return;
+          await medKjoringslogg("tekstuttrekk", async () => {
+            const r = await kjorTekstuttrekk();
+            if (r.feil.length > 0) void sendDriftsvarsel(`⚠️ Tekstuttrekk feilet for ${r.feil.length} dokument(er): ${r.feil.slice(0, 5).join("; ")}`);
+            const detalj = `${r.behandlet} dokumenter: ${r.medTekst} med tekst (${r.ocr} via OCR), ${r.uten} uten`;
+            console.log(`[tekstuttrekk] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[tekstuttrekk] Jobben feilet:", e);
+          void sendDriftsvarsel(`⚠️ Bakgrunnsjobben «tekstuttrekk» feilet: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+          tekstuttrekkKjorer = false;
+        }
+      })();
+    },
+    { timezone: tekstuttrekk.timezone },
+  );
+  console.log(`[tekstuttrekk] Planlagt: ${tekstuttrekk.plan}.`);
+
   // Regnskapskoblingen: orgene én om gangen i egen withOrg — withoutRls kun for å finne dem.
   // Fiken bremser over 4 kall/s, så ingen parallellitet. Feil per org lagres på raden og
   // varsles; jobben fortsetter med neste org.

@@ -240,6 +240,15 @@ Oppbevaring håndheves av jobben «hendelsesrydding» — grensene er konstanter
   prod-basen igjen, skal den PÅ der — basen har ekte, leverbare adresser.
 - Send aldri fra en handler direkte — `etterCommit`.
 
+### Tekstsøk i dokumenter
+
+`lib/tekstuttrekk.ts` fyller `documents.content_text` (PDF-tekstlag, .docx, ellers OCR med
+tesseract + pdftoppm fra imaget — `apk add` i Dockerfile). Kolonnen går ALDRI til klienten:
+`hentDokumenter`/`hentDokument` velger kolonner (`DOK_UTVALG`), og en ny `select()` på
+`documents` uten utvalg sender hundretusener av tegn per rad. Søkeuttrykkene for dokumenter
+speiles mellom `KILDER` i `lib/sok.ts` og `drizzle/0055` (samme regel som 0047). Ett forsøk
+per dokument — `text_extracted_at` settes også ved feil. Se `docs/tekstsok.md`.
+
 ### Bakgrunnsjobber
 
 `src/instrumentation.ts` er Next sitt eneste oppstartspunkt. Nye jobber må arve begge

@@ -109,6 +109,20 @@ export default function Dokumentdetalj({ params }: { params: Promise<{ id: strin
             tittel="Delt med AI-rådgiveren"
             hoyre={dok.aiReadable ? <span className="badge info">Ja</span> : <span className="badge muted">Nei</span>}
           />
+          {/* Tekstsøk (docs/tekstsok.md): innholdet blir søkbart i søkeboksen når teksten er trukket ut. */}
+          <Rad
+            tittel="Søkbar tekst"
+            meta={dok.textError ?? undefined}
+            hoyre={
+              dok.harTekst ? (
+                <span className="badge ok">{dok.textSource === "ocr" ? "Ja (OCR)" : "Ja"}</span>
+              ) : dok.textExtractedAt ? (
+                <span className="badge muted">Nei</span>
+              ) : (
+                <span className="badge info">Venter</span>
+              )
+            }
+          />
         </Kort>
       </div>
 

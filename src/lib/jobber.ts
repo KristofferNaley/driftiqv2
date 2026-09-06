@@ -43,6 +43,15 @@ export const JOBBER: Jobb[] = [
     kilde: "app",
   },
   {
+    nokkel: "tekstuttrekk",
+    navn: "Tekstuttrekk",
+    beskrivelse: "Trekker ut søkbar tekst (PDF, Word, OCR) fra nye dokumenter i arkivet",
+    cron: "*/5 * * * *",
+    timezone: "Europe/Oslo",
+    plan: "Hvert 5. minutt — logges bare når det fantes noe å gjøre",
+    kilde: "app",
+  },
+  {
     nokkel: "fiken-synk",
     navn: "Fiken-synk",
     beskrivelse: "Speiler bokførte kjøp fra Fiken for orger med regnskapskobling",

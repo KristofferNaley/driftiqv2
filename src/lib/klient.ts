@@ -356,6 +356,9 @@ export type Dokument = {
   // API-et returnerer hele raden; disse manglet i typen og gjorde at kallsteder som
   // trengte filikon eller opplastingsdato ikke kompilerte.
   contentType: string; uploadedAt: string; description: string | null;
+  /** Tekstsøk (docs/tekstsok.md). Selve teksten sendes aldri hit; `harTekst` sier om innholdet er søkbart. */
+  harTekst: boolean; textSource: "pdf" | "docx" | "ocr" | "ingen" | "feil" | null;
+  textExtractedAt: string | null; textError: string | null;
 };
 export type Mappe = { id: string; name: string; icon: string; parentId: string | null };
 

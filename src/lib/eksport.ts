@@ -46,10 +46,13 @@ const EKSKLUDERTE_TABELLER = new Set([
   "feedback_reports",
   "unloc_settings",
   "vendor_unloc_keys",
+  // API-nøkkelen (kryptert) — laderne og forbruket er derimot kundens data og er med.
+  "easee_settings",
 ]);
 
 /** Interne disknavn og tokens — har ingenting i et kundeuttak å gjøre. */
-const EKSKLUDERTE_KOLONNER = new Set(["org_id", "qr_token", "filename", "file_name"]);
+// `content_text` er utledet av fila (som er med i uttaket) og kan være hundretusener av tegn.
+const EKSKLUDERTE_KOLONNER = new Set(["org_id", "qr_token", "filename", "file_name", "content_text"]);
 
 /** Tegn som ikke kan stå i filnavn på Windows — uttaket skal kunne pakkes ut overalt. */
 function trygtNavn(navn: string): string {
