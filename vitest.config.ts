@@ -18,5 +18,12 @@ export default defineConfig({
     // Policyoppsett mot en kald database tar noen sekunder første gang.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Vitest speiler Vites `import.meta.env` (BASE_URL, MODE, DEV, PROD, SSR) inn i
+    // `process.env` i testarbeideren — og Vites `BASE_URL` er `base`, altså "/". Det
+    // overskrev containerens `BASE_URL=https://…` og ga `MARKED_URL === "/"` («//ikon-512.png»
+    // i webhooks-testen). `test.env` legges oppå Vites verdier, så her settes den tilbake til
+    // det containeren faktisk har; er den ikke satt, blir den tom og `urler.ts` faller
+    // tilbake til localhost — samme oppførsel som i appen.
+    env: { BASE_URL: process.env.BASE_URL ?? "" },
   },
 });

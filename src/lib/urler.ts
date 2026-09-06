@@ -13,7 +13,9 @@
  * som reserve for enkeltvert og lokal utvikling.
  */
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3008";
+// `||`, ikke `??`: compose setter `VERT_*: ${VERT_MARKED:-}` og gir tom streng, ikke
+// undefined, når variabelen mangler — og en tom `BASE_URL` skal bety «ikke satt», ikke «».
+const BASE = process.env.BASE_URL || "http://localhost:3008";
 
 const fraVert = (vert: string | undefined) => (vert ? `https://${vert}` : null);
 
