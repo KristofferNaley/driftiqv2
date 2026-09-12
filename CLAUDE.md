@@ -395,6 +395,13 @@ komponenter — endres logikken, må begge med.
   for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
   har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test
   (`ER_TESTMILJO`). Se `docs/fiken.md` «Steg 2 slik det ble».
+- **Et fornyet OAuth-token skrives aldri gjennom forespørselens transaksjon.** Easee
+  roterer refresh-tokenet ved hver fornying; `medToken()` lagret det nye paret i jobbens
+  `withOrg`, et senere kall feilet, rollbacken tok tokenet med seg — og innloggingen var
+  død for godt (08.09.2026, begge testorgene, fire netter med varsler før noen så det).
+  Bruk `lagreTokenerVarig()` i `lib/tokenlagring.ts` (egen tilkobling, committer straks).
+  Samme regel: noter aldri en feil inne i transaksjonen som skal kastes — `last_error`
+  var tom av samme grunn.
 - **Aldri svar 502 eller 504 fra API-et.** Cloudflare-tunnelen bytter ut de statusene fra
   origin med sin egen HTML-feilside; klienten finner ingen `detail` og viser «Noe gikk galt»
   uten spor i loggen (Unloc, 05.09.2026). Feil fra en tredjepart er 400 (avvist) eller 503.

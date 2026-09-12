@@ -25,7 +25,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { Db } from "../db/client";
+import { type Db, withOrg } from "../db/client";
 import { easeeChargerHours, easeeChargerUsage, easeeChargers, easeePricePlans, easeeSessions, easeeSettings, powerPrices } from "../db/schema/easee";
 import { unitOwners } from "../db/schema/okonomi";
 import { parkingLeases, parkingSpots } from "../db/schema/parking";
@@ -50,6 +50,7 @@ import {
 } from "./easee";
 import { loggHendelse } from "./hendelser";
 import { dekrypter, krypter, krypteringErKonfigurert } from "./kryptering";
+import { lagreTokenerVarig } from "./tokenlagring";
 import {
   KRAFTMODELLER,
   PRISOMRADER,
@@ -186,8 +187,14 @@ function tokenFelter(t: EaseeToken, naa: Date) {
  * fem minutter igjen — og én gang til hvis Easee likevel svarer 401 (tokenet kan være
  * ugyldiggjort før utløp). Feiler fornyingen med 4xx, er innloggingen død: meldingen ber
  * om ny tilkobling, og raden står med `last_error` til noen gjør det.
+ *
+ * Easee ROTERER refresh-tokenet ved hver fornying og avviser det gamle etterpå (kode 104
+ * «InvalidRefreshToken»). Det nye paret lagres derfor varig med én gang, utenfor `db` —
+ * feiler `fn` etterpå og transaksjonen rulles tilbake, må tokenet likevel stå. Slik
+ * mistet begge testorgene innloggingen 08.–09.09.2026 (se `lib/tokenlagring.ts`).
  */
 async function medToken<T>(db: Db, orgId: string, rad: typeof easeeSettings.$inferSelect, naa: Date, fn: (token: string) => Promise<T>): Promise<T> {
+  void db; // tokenene skrives bevisst IKKE gjennom forespørselens transaksjon — se over
   let access = dekrypter(rad.accessTokenEnc);
   let refresh = dekrypter(rad.refreshTokenEnc);
   const forny = async () => {
@@ -195,17 +202,18 @@ async function medToken<T>(db: Db, orgId: string, rad: typeof easeeSettings.$inf
     try {
       nytt = await fornyToken(access, refresh);
     } catch (e) {
-      if (e instanceof EaseeFeil && e.status >= 400 && e.status < 500) {
-        throw new EaseeFeil(401, "Easee-innloggingen er utløpt — koble til på nytt under Innstillinger → Integrasjoner");
+      // 429 er ikke en død innlogging — den skal ikke be kunden logge inn på nytt.
+      if (e instanceof EaseeFeil && e.status >= 400 && e.status < 500 && e.status !== 429) {
+        throw new EaseeFeil(401, `Easee-innloggingen er utløpt — koble til på nytt under Innstillinger → Integrasjoner (${e.message})`);
       }
       throw e;
     }
     access = nytt.accessToken;
     refresh = nytt.refreshToken || refresh;
-    await db
-      .update(easeeSettings)
-      .set(tokenFelter({ ...nytt, refreshToken: refresh }, naa))
-      .where(and(eq(easeeSettings.id, rad.id), eq(easeeSettings.orgId, orgId)));
+    const felter = tokenFelter({ ...nytt, refreshToken: refresh }, naa);
+    await lagreTokenerVarig((varig) =>
+      varig.update(easeeSettings).set(felter).where(and(eq(easeeSettings.id, rad.id), eq(easeeSettings.orgId, orgId))),
+    );
   };
   if (rad.tokenExpiresAt.getTime() - naa.getTime() < TOKEN_MARGIN_MS) await forny();
   try {
@@ -633,20 +641,36 @@ async function iVinduer<T>(fra: Date, til: Date, hent: (a: Date, b: Date) => Pro
 /** Jobben: hele synken for én org — token, laderliste, tilstand, måned, timer, økter, spot. */
 export async function synkEasee(db: Db, orgId: string, naa = new Date()) {
   const kobling = await hentRad(db, orgId);
+  const r = await medToken(db, orgId, kobling, naa, async (token) => {
+    await speilLadere(db, orgId, laderneI(await hentAnleggDetalj(token, kobling.siteId)));
+    await friskOppTilstand(db, orgId, token, kobling.siteId, naa);
+    await friskOppForbruk(db, orgId, token, naa);
+    return synkTimerOgOkter(db, orgId, token, naa);
+  });
+  const spot = await synkSpotpriserFor(db, orgId, naa);
+  await noterFeil(db, orgId, kobling.id, null, naa);
+  return { ...r, spotdager: spot };
+}
+
+/**
+ * Jobbens steg per org: synken i én transaksjon, og feilen — hvis den kommer — notert i
+ * en EGEN. Å notere den inne i den som feilet var meningsløst: `withOrg` ruller tilbake
+ * ved kast, så `last_error` forsvant sammen med resten, og Integrasjoner-kortet sto
+ * grønt i fire netter mens Discord fikk ett varsel per natt.
+ */
+export async function synkEaseeOrg(orgId: string, naa = new Date()): Promise<{ ok: true; timer: number } | { ok: false; feil: string }> {
   try {
-    const r = await medToken(db, orgId, kobling, naa, async (token) => {
-      await speilLadere(db, orgId, laderneI(await hentAnleggDetalj(token, kobling.siteId)));
-      await friskOppTilstand(db, orgId, token, kobling.siteId, naa);
-      await friskOppForbruk(db, orgId, token, naa);
-      return synkTimerOgOkter(db, orgId, token, naa);
-    });
-    const spot = await synkSpotpriserFor(db, orgId, naa);
-    await noterFeil(db, orgId, kobling.id, null, naa);
-    return { ...r, spotdager: spot };
+    const r = await withOrg(orgId, (db) => synkEasee(db, orgId, naa));
+    return { ok: true, timer: r.timer };
   } catch (e) {
-    // Feilen skal synes på Integrasjoner-kortet, ikke bare i kjøringsloggen.
-    await noterFeil(db, orgId, kobling.id, e instanceof Error ? e.message : String(e), naa);
-    throw e;
+    const feil = e instanceof Error ? e.message : String(e);
+    await withOrg(orgId, async (db) => {
+      const k = (await db.select({ id: easeeSettings.id }).from(easeeSettings).where(eq(easeeSettings.orgId, orgId)).limit(1))[0];
+      if (k) await noterFeil(db, orgId, k.id, feil, naa);
+    }).catch(() => {
+      // Noteringen skal aldri skygge for selve feilen.
+    });
+    return { ok: false, feil };
   }
 }
 

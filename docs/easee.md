@@ -174,6 +174,14 @@ brukernavn (e-post eller mobil med landkode) og passord:
   `{ accessToken, refreshToken }` når det er under fem minutter igjen (`TOKEN_MARGIN_MS`),
   og én gang til hvis Easee svarer 401 midt i (tokenet kan ugyldiggjøres før utløp —
   dokumentasjonen sier «refresh if it expires or is invalidated»).
+- **Easee roterer refresh-tokenet ved hver fornying** og avviser det gamle etterpå
+  (401, kode 104 «InvalidRefreshToken»; et *utløpt* refresh-token er kode 105
+  «RefreshTokenExpired», sett hos evcc etter ~6 dager uten kall). Det nye paret skrives
+  derfor varig med én gang, i egen tilkobling (`lib/tokenlagring.ts`) — IKKE gjennom
+  transaksjonen kallet står i. Feiler noe senere i samme synk og `withOrg` ruller
+  tilbake, må tokenet likevel stå; ellers står basen med et token Easee alt har brukt
+  opp, og innloggingen er død til kunden kobler til på nytt. Det var nøyaktig det som
+  skjedde 08.–09.09.2026 (se «Lært»).
 - Feiler fornyingen med 4xx, er innloggingen død. Fanen viser sist kjente tall med
   meldingen «Easee-innloggingen er utløpt — koble til på nytt», og Integrasjoner-kortet
   får rød status. Kontoadmin logger inn på nytt; ladere, plasskoblinger og forbruk står.
@@ -210,8 +218,15 @@ Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bear
   vises som tilstand («Lader», kWh i økten) på laderen og i timesforbruket, og kommer i
   lista når bilen kobles fra. Andre anlegg («Borettslaget Håsteinsgate 9», Easee Home
   EHDQZV55): to økter på 30 dager, 30,86 kWh siste, samsvarer med timesforbruket.
-- **Ikke sett i praksis ennå:** tokenfornying (første token var fortsatt gyldig under
-  testen) og hvor lenge refresh-tokenet lever. Testene dekker flyten mot stubb.
+- **Tokenfornying i praksis (07.–12.09.2026):** første natt (07.09) fornyet begge
+  orgene fint. Natt to feilet org 1 etter en vellykket fornying, natt tre org 2 —
+  fornyingen lå inne i jobbens `withOrg`, feilen rullet transaksjonen tilbake, og det
+  roterte tokenparet forsvant med den mens Easee alt hadde drept det gamle. Fra da av:
+  401 «Invalid refresh token» (kode 104) hver natt, ett Discord-varsel per natt, og
+  `last_error` tom fordi noteringen lå i samme transaksjon. Fiksen er varig tokenlagring
+  utenfor transaksjonen og feilnotering i egen (`synkEaseeOrg`); begge koblingene måtte
+  kobles til på nytt. Hvor lenge et *ubrukt* refresh-token lever, er fortsatt ukjent —
+  evcc så kode 105 etter ~6 dager, og den nattlige jobben holder det i live.
 
 ## Tilgang
 

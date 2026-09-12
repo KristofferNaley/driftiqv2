@@ -39,9 +39,11 @@ import {
   lagrePrisplan,
   slettPrisplan,
   synkEasee,
+  synkEaseeOrg,
 } from "../src/lib/easeekobling";
 import { type Prisplan, beregnKostnad, erNatt, gjeldendePlan, maanedsgrenser, prisForTime, spotTilOre } from "../src/lib/laderegler";
 import { opprettPlass } from "../src/lib/parkering";
+import { dekrypter } from "../src/lib/kryptering";
 import { hentSpotpriser } from "../src/lib/spotpris";
 
 let eierPool: Pool;
@@ -147,6 +149,9 @@ function stubbEasee(valg: Stubbvalg = {}) {
   const kall: Array<{ metode: string; sti: string; auth: string | undefined; kropp?: unknown }> = [];
   const gyldige = new Set(valg.gyldigeTokens ?? [TOKEN_1]);
   let fornyet = 0;
+  // Som ekte Easee (12.09.2026): refresh-tokenet ROTERES ved hver fornying, og det gamle
+  // avvises etterpå med 401 og kode 104 «InvalidRefreshToken».
+  let gyldigRefresh = REFRESH_1;
   const anlegg = valg.anlegg ?? [{ id: SITE, name: "Sameiet Ladebakken" }];
   const ladere = valg.ladere ?? [{ id: LADER_B, name: "Plass 2" }, { id: LADER_A, name: "Plass 1" }];
   const tilstand = valg.tilstand ?? {
@@ -183,13 +188,17 @@ function stubbEasee(valg: Stubbvalg = {}) {
       if (u.pathname === "/api/accounts/login") {
         if (kropp.userName !== KONTO.userName || kropp.password !== KONTO.password) return Response.json({ title: "Unauthorized" }, { status: 401 });
         gyldige.add(TOKEN_1);
+        gyldigRefresh = REFRESH_1;
         return Response.json({ accessToken: TOKEN_1, refreshToken: REFRESH_1, expiresIn: 3600, tokenType: "Bearer" });
       }
       if (u.pathname === "/api/accounts/refresh_token") {
-        if (valg.fornyingFeiler || kropp.refreshToken !== REFRESH_1) return Response.json({ title: "Unauthorized" }, { status: 401 });
+        if (valg.fornyingFeiler || kropp.refreshToken !== gyldigRefresh) {
+          return Response.json({ errorCode: 104, errorCodeName: "InvalidRefreshToken", type: null, title: "Invalid refresh token", status: 401, detail: "[Empty in production]" }, { status: 401 });
+        }
         fornyet++;
         gyldige.add(`access-token-fornyet-${fornyet}`);
-        return Response.json({ accessToken: `access-token-fornyet-${fornyet}`, refreshToken: REFRESH_1, expiresIn: 3600 });
+        gyldigRefresh = `refresh-token-fornyet-${fornyet}`;
+        return Response.json({ accessToken: `access-token-fornyet-${fornyet}`, refreshToken: gyldigRefresh, expiresIn: 3600 });
       }
       if (!auth?.startsWith("Bearer ") || !gyldige.has(auth.slice(7))) return Response.json({ title: "Unauthorized" }, { status: 401 });
 
@@ -514,8 +523,31 @@ describe("tokenfornying", () => {
     const senere = new Date(Date.now() + TILSTAND_HOLDBARHET_MS + 1000);
     const l = await i(orgId, (db) => hentLading(db, orgId, { naa: senere }));
     expect(l.feil).toMatch(/Easee-innloggingen er utløpt — koble til på nytt/);
+    expect(l.feil).toMatch(/InvalidRefreshToken/); // Easees kode skal med — 104 (brukt) og 105 (utløpt) betyr ulike ting
     expect(l.ladere.find((x) => x.chargerId === LADER_A)?.opMode).toBe(3);
     expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toMatch(/koble til på nytt/);
+  });
+
+  it("det roterte tokenet overlever at synken feiler etterpå — og feilen står på koblingen", async () => {
+    // Slik døde begge testorgene 08.–09.09.2026: fornyet inne i jobbens transaksjon, et
+    // senere kall feilet, rollback — og Easee hadde allerede drept det gamle refresh-tokenet.
+    const { orgId } = await koblet();
+    const valg: Stubbvalg = { gyldigeTokens: [], tilstandFeiler: true };
+    const { kall } = stubbEasee(valg);
+    const r1 = await synkEaseeOrg(orgId);
+    expect(r1).toMatchObject({ ok: false, feil: expect.stringMatching(/boom/) });
+    expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toMatch(/boom/);
+    expect(kall.filter((k) => k.sti === "/api/accounts/refresh_token").length).toBe(1);
+    const rad = await eier.query("SELECT refresh_token_enc FROM easee_settings WHERE org_id = $1", [orgId]);
+    expect(dekrypter(rad.rows[0].refresh_token_enc)).toBe("refresh-token-fornyet-1");
+
+    // Neste natt: Easee er frisk igjen, og det lagrede tokenet virker — ingen ny fornying, ingen innlogging.
+    valg.tilstandFeiler = false;
+    const r2 = await synkEaseeOrg(orgId);
+    expect(r2.ok).toBe(true);
+    expect(kall.filter((k) => k.sti === "/api/accounts/refresh_token").length).toBe(1);
+    expect(kall.some((k) => k.sti === "/api/accounts/login")).toBe(false);
+    expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toBeNull();
   });
 });
 

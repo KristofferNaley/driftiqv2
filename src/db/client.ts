@@ -187,7 +187,8 @@ export type RlsUnntak =
   | "qr-anonym" // anonymt, må slå opp token FØR org er kjent
   | "innlogging" // identitet og abonnementssperre, før org er kjent
   | "migrasjon" // skjemaendringer og RLS-oppsett kjøres som eier
-  | "bakgrunnsjobb"; // varsler og opprydding, på tvers av alle kunder
+  | "bakgrunnsjobb" // varsler og opprydding, på tvers av alle kunder
+  | "tokenlagring"; // et fornyet OAuth-token må overleve at forespørselens transaksjon rulles tilbake (se lib/tokenlagring.ts)
 
 /**
  * Sesjon som OMGÅR RLS. Alle disse er avhengige av applikasjonsfiltrene sine alene.

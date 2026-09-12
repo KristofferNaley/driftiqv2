@@ -155,9 +155,9 @@ export async function register(): Promise<void> {
       void (async () => {
         try {
           await medKjoringslogg("easee-synk", async () => {
-            const { withOrg, withoutRls } = await import("./db/client");
+            const { withoutRls } = await import("./db/client");
             const { easeeSettings } = await import("./db/schema/easee");
-            const { synkEasee } = await import("./lib/easeekobling");
+            const { synkEaseeOrg } = await import("./lib/easeekobling");
             const orger = await withoutRls("bakgrunnsjobb", (db) =>
               db.select({ orgId: easeeSettings.orgId }).from(easeeSettings),
             );
@@ -165,12 +165,12 @@ export async function register(): Promise<void> {
             let timer = 0;
             const feil: string[] = [];
             for (const { orgId } of orger) {
-              try {
-                const r = await withOrg(orgId, (db) => synkEasee(db, orgId));
+              const r = await synkEaseeOrg(orgId);
+              if (r.ok) {
                 ok++;
                 timer += r.timer;
-              } catch (e) {
-                feil.push(`${orgId}: ${e instanceof Error ? e.message : String(e)}`);
+              } else {
+                feil.push(`${orgId}: ${r.feil}`);
               }
             }
             if (feil.length > 0) void sendDriftsvarsel(`⚠️ Easee-synk feilet for ${feil.length} org(er): ${feil.join("; ")}`);

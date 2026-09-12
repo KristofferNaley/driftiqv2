@@ -36,6 +36,7 @@ import {
 import { loggHendelse } from "./hendelser";
 import { dekrypter, krypter, krypteringErKonfigurert } from "./kryptering";
 import { ER_TESTMILJO } from "./miljo";
+import { lagreTokenerVarig } from "./tokenlagring";
 import { isoDato, kontoIIntervall } from "./okonomiregler";
 import { normaliserOrgnr } from "./orgnr";
 
@@ -99,14 +100,16 @@ export async function gyldigToken(db: Db, orgId: string): Promise<string> {
   if (!snartUte) return dekrypter(k.accessTokenEnc);
   if (!k.refreshTokenEnc) throw new FikenFeil(401, "Tokenet er utløpt og kan ikke fornyes — koble til på nytt");
   const t = await hentToken({ grant_type: "refresh_token", refresh_token: dekrypter(k.refreshTokenEnc) });
-  await db
-    .update(fikenConnections)
-    .set({
-      accessTokenEnc: krypter(t.access_token),
-      refreshTokenEnc: t.refresh_token ? krypter(t.refresh_token) : k.refreshTokenEnc,
-      tokenExpiresAt: t.expires_in ? new Date(Date.now() + t.expires_in * 1000) : null,
-    })
-    .where(and(eq(fikenConnections.id, k.id), eq(fikenConnections.orgId, orgId)));
+  // Utenfor `db`: roterer Fiken refresh-tokenet, må det nye stå selv om resten av
+  // forespørselen rulles tilbake (lærdommen fra Easee — se `lib/tokenlagring.ts`).
+  const felter = {
+    accessTokenEnc: krypter(t.access_token),
+    refreshTokenEnc: t.refresh_token ? krypter(t.refresh_token) : k.refreshTokenEnc,
+    tokenExpiresAt: t.expires_in ? new Date(Date.now() + t.expires_in * 1000) : null,
+  };
+  await lagreTokenerVarig((varig) =>
+    varig.update(fikenConnections).set(felter).where(and(eq(fikenConnections.id, k.id), eq(fikenConnections.orgId, orgId))),
+  );
   return t.access_token;
 }
 

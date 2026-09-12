@@ -93,12 +93,21 @@ export async function easeeKall<T>(
     const tekst = await svar.text().catch(() => "");
     let melding = tekst.slice(0, 200);
     try {
+      // Easees problem-JSON: `title` er teksten, `errorCodeName` koden (104 InvalidRefreshToken,
+      // 105 RefreshTokenExpired, …). `detail` er «[Empty in production]» og sier ingenting.
       const j = JSON.parse(tekst) as { detail?: string; title?: string; message?: string; errorCodeName?: string };
-      melding = j.detail ?? j.title ?? j.message ?? j.errorCodeName ?? melding;
+      const tittel = j.title ?? j.message ?? j.errorCodeName ?? (j.detail && !j.detail.startsWith("[Empty") ? j.detail : undefined);
+      if (tittel) melding = j.errorCodeName && j.errorCodeName !== tittel ? `${tittel} (${j.errorCodeName})` : tittel;
     } catch {
       // ikke JSON — behold teksten
     }
-    if (svar.status === 401) melding = sti === "/api/accounts/login" ? "Easee avviste brukernavn eller passord" : "Easee-innloggingen er utløpt — koble til på nytt";
+    if (svar.status === 401) {
+      // Fornyingen svarer 401 både når refresh-tokenet er brukt (rotert) og når det er utløpt —
+      // Easees egen kode må med, ellers er de to umulige å skille i ettertid.
+      if (sti === "/api/accounts/login") melding = "Easee avviste brukernavn eller passord";
+      else if (sti === "/api/accounts/refresh_token") melding = `Easee avviste refresh-tokenet: ${melding || "401"}`;
+      else melding = "Easee-innloggingen er utløpt — koble til på nytt";
+    }
     if (svar.status === 403) melding = "Easee-kontoen har ikke tilgang til dette anlegget";
     if (svar.status === 429) melding = "Easee begrenser antall kall — prøv igjen om noen minutter";
     throw new EaseeFeil(svar.status, melding || `Easee svarte ${svar.status}`);
