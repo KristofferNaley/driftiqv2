@@ -28,6 +28,7 @@ import {
   eksporterRapport,
   forbrukFra,
   forbrukTil,
+  hentAnleggFor,
   hentKobling,
   hentLading,
   hentOkter,
@@ -336,6 +337,21 @@ describe("koblingen", () => {
     expect(e.status).toBe(400);
     expect(e.message).toMatch(/avviste brukernavn eller passord/);
     expect((await eier.query("SELECT 1 FROM easee_settings WHERE org_id = $1", [orgId])).rowCount).toBe(0);
+  });
+
+  it("anleggslista til dialogen: navn og adresse per anlegg, ingenting lagret", async () => {
+    const { orgId } = await oppsett();
+    stubbEasee({ anlegg: [{ id: SITE, name: "Sameiet Ladebakken" }, { id: 4712, name: "Garasjelaget" }] });
+    expect(await hentAnleggFor(KONTO)).toEqual({
+      anlegg: [
+        { id: SITE, name: "Sameiet Ladebakken", adresse: "Ladebakken 1" },
+        { id: 4712, name: "Garasjelaget", adresse: "Ladebakken 1" },
+      ],
+    });
+    expect((await eier.query("SELECT 1 FROM easee_settings WHERE org_id = $1", [orgId])).rowCount).toBe(0);
+    const e = await feilFra(() => hentAnleggFor({ ...KONTO, password: "feil" }));
+    expect(e.status).toBe(400);
+    expect(e.message).toMatch(/avviste brukernavn eller passord/);
   });
 
   it("krever valg når nøkkelen når flere anlegg — og navngir dem", async () => {

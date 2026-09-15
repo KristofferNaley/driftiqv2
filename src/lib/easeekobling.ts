@@ -225,7 +225,33 @@ async function medToken<T>(db: Db, orgId: string, rad: typeof easeeSettings.$inf
   }
 }
 
-const anleggNavn = (s: EaseeSite) => `${s.name}${s.address?.street ? `, ${s.address.street}${s.address.buildingNumber ? ` ${s.address.buildingNumber}` : ""}` : ""} (id ${s.id})`;
+const adresseTekst = (s: EaseeSite) => {
+  const a = s.address;
+  if (!a) return null;
+  const gate = a.street ? `${a.street}${a.buildingNumber ? ` ${a.buildingNumber}` : ""}` : "";
+  const sted = [a.zip, a.area].filter(Boolean).join(" ");
+  return [gate, sted].filter(Boolean).join(", ") || null;
+};
+const anleggNavn = (s: EaseeSite) => `${s.name}${adresseTekst(s) ? `, ${adresseTekst(s)}` : ""} (id ${s.id})`;
+
+export const anleggInn = koblingInn.pick({ userName: true, password: true });
+
+/**
+ * Anleggene kontoen når — til valget i tilkoblingsdialogen når det er flere. Logger inn
+ * hos Easee, leser lista og glemmer tokenet: ingenting lagres før `kobleTil`.
+ */
+export async function hentAnleggFor(data: z.infer<typeof anleggInn>) {
+  if (!krypteringErKonfigurert()) throw new ApiFeil(503, "Koblingen er ikke satt opp på serveren (mangler nøkkel for kryptering).");
+  let anlegg: EaseeSite[];
+  try {
+    const token = await loggInn(data.userName, data.password);
+    anlegg = await hentAnlegg(token.accessToken);
+  } catch (e) {
+    tilApiFeil(e);
+  }
+  if (anlegg.length === 0) throw ugyldig("Kontoen når ingen anlegg i Easee. Bruk kontoen som er site owner for anlegget.");
+  return { anlegg: anlegg.map((s) => ({ id: s.id, name: s.name, adresse: adresseTekst(s) })) };
+}
 
 /**
  * Kobler til: brukernavn og passord byttes i tokener hos Easee (passordet lagres aldri),

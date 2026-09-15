@@ -10,8 +10,10 @@ owner. Partner/operatør-modellen er bevisst IKKE rørt før dette er testet mot
 rapport» under. Etappe 3, fakturering fra Lading til Økonomi-fanen, er ikke bygget.*
 
 Styret kobler ladeanlegget til én gang under **Innstillinger → Integrasjoner** med
-brukernavn og passord for Easee-kontoen som er *site owner* for anlegget. Passordet brukes
-én gang og lagres aldri (se «Auth»). Deretter viser **Parkering → Lading**:
+brukernavn og passord for Easee-kontoen som er *site owner* for anlegget. Når kontoen
+når flere anlegg, velger styret hvilket i en dialog (`POST …/easee/anlegg` henter lista
+uten å lagre noe; `PUT …/easee` kobler til med valgt `siteId`). Passordet brukes to
+ganger i den flyten og lagres aldri (se «Auth»). Deretter viser **Parkering → Lading**:
 
 - laderne i anlegget, med tilstand fra Easee (lader / ingen bil / frakoblet / feil …),
   effekt og kWh i pågående økt;
@@ -65,8 +67,9 @@ på Easee — koblingen ligger i `easee_chargers.spot_id`.
 - **Konto** → **anlegg** («site», numerisk id) → **kurser** («circuits») → **ladere**
   (serienummer «EH…»). En site owner-konto når anleggene den eier.
 - `GET /api/accounts/profile` brukes til å bekrefte innloggingen (og vise hvilken konto den
-  hører til); `GET /api/sites` til å velge anlegg (automatisk ved ett, ellers navngir
-  feilmeldingen kandidatene); `GET /api/sites/{id}?detailed=true` gir laderne per kurs.
+  hører til); `GET /api/sites` til å velge anlegg (automatisk ved ett, ellers dialogen —
+  API-et uten `siteId` navngir kandidatene i feilmeldingen); `GET /api/sites/{id}?detailed=true`
+  gir laderne per kurs.
 - **Tilstand for hele anlegget i ett kall**: `GET /api/sites/{id}/state` gir
   `chargerState` (`chargerOpMode`, `isOnline`, `totalPower`, `sessionEnergy`,
   `lifetimeEnergy`) for alle laderne. Per-lader-endepunktene er ratebegrenset (økter: 10
@@ -197,7 +200,8 @@ Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bear
 ## Lært mot ekte Easee (06.09.2026, anlegget «Fjellstien», én Easee Home i garasje)
 
 - **Innlogging med e-post + passord virker**, og `GET /api/sites` ga ett anlegg som ble
-  valgt automatisk. Laderen kom med kursnavn («15 - Elbil») fra `panelName`.
+  valgt automatisk. Feil passord gir **400** «InvalidUserPassword» fra ekte Easee, ikke
+  401 som dokumentasjonen sier (15.09.2026) — adapteret oversetter begge. Laderen kom med kursnavn («15 - Elbil») fra `panelName`.
 - **`/api/sites/{id}/state`** svarer med `chargerState` som dokumentert: `chargerOpMode`,
   `isOnline`, `totalPower`, `sessionEnergy`, `lifetimeEnergy`, `latestPulse` — pluss
   `reasonForNoCurrent`, `errorCode`, `cableLocked`, `energyPerHour` og ~50 andre felt som

@@ -4507,6 +4507,15 @@ textarea.qr-input { resize: vertical; }
   margin: 12px 14px 0; padding: 10px 14px; border-radius: 10px; font-size: var(--fs-sm);
   background: rgba(15, 186, 129, 0.1); color: var(--accent2); border: 1px solid rgba(15, 186, 129, 0.25);
 }
+.ea-anlegg-liste { display: flex; flex-direction: column; gap: 8px; }
+.ea-anlegg {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  color: inherit; font-family: inherit; font-size: var(--fs-sm);
+}
+.ea-anlegg:hover, .ea-anlegg:focus-visible { border-color: var(--accent); outline: none; }
+.ea-anlegg:disabled { opacity: 0.6; cursor: default; }
+.ea-anlegg b { font-size: var(--fs-md); font-weight: 600; }
 .ea-fakta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .ea-fakta > div { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
 .ea-fakta-et { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }

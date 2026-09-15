@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useOkt } from "@/components/OktProvider";
 import { Feil, Kort, Tom, dato, datoTid, useOrgData } from "@/components/felles";
-import { Tekstfelt } from "@/components/skjema";
-import { easee } from "@/lib/klient";
+import { Modal, Tekstfelt } from "@/components/skjema";
+import { type EaseeAnlegg, easee } from "@/lib/klient";
 
 /**
  * Easee-kortet under Innstillinger → Integrasjoner (docs/easee.md). Brukernavn og passord
@@ -101,6 +101,7 @@ export default function EaseeKort() {
           erAdmin={erAdmin}
           kryptering={data.konfigurert.kryptering}
           jobber={jobber}
+          hentAnlegg={(d) => easee.anlegg(orgId!, d).then((r) => r.anlegg)}
           onKoble={(d) =>
             utfor(async () => {
               await easee.kobleTil(orgId!, d);
@@ -113,52 +114,95 @@ export default function EaseeKort() {
   );
 }
 
+/**
+ * Tilkoblingen i to steg: brukernavn og passord henter først anleggene kontoen når. Ett
+ * anlegg kobles rett til; flere gir en dialog der styret velger. Passordet holdes i
+ * skjemaet til valget er gjort — det sendes to ganger, men lagres aldri.
+ */
 function KobleTil({
   erAdmin,
   kryptering,
   jobber,
+  hentAnlegg,
   onKoble,
 }: {
   erAdmin: boolean;
   kryptering: boolean;
   jobber: boolean;
-  onKoble: (d: { userName: string; password: string; siteId: number | null }) => Promise<void>;
+  hentAnlegg: (d: { userName: string; password: string }) => Promise<EaseeAnlegg[]>;
+  onKoble: (d: { userName: string; password: string; siteId: number }) => Promise<void>;
 }) {
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
-  const [siteId, setSiteId] = useState("");
+  const [henter, setHenter] = useState(false);
+  const [feil, setFeil] = useState<string | null>(null);
+  const [valg, setValg] = useState<EaseeAnlegg[] | null>(null);
 
   if (!erAdmin) return <Tom tekst="Easee-koblingen settes opp av kontoadmin." />;
   if (!kryptering) return <Tom tekst="Koblingen er ikke satt opp på serveren (mangler nøkkel for kryptering av hemmeligheter)." />;
+
+  const konto = { userName: userName.trim(), password };
+
+  async function start() {
+    setFeil(null);
+    setHenter(true);
+    try {
+      const anlegg = await hentAnlegg(konto);
+      if (anlegg.length === 1) await onKoble({ ...konto, siteId: anlegg[0]!.id });
+      else setValg(anlegg);
+    } catch (e) {
+      setFeil(e instanceof Error ? e.message : "Noe gikk galt");
+    } finally {
+      setHenter(false);
+    }
+  }
+
+  const opptatt = jobber || henter;
 
   return (
     <form
       style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "14px" }}
       onSubmit={(e) => {
         e.preventDefault();
-        const id = siteId.trim() ? Number(siteId.trim()) : null;
-        void onKoble({ userName: userName.trim(), password, siteId: id && Number.isInteger(id) ? id : null });
+        void start();
       }}
     >
+      <Feil melding={feil} />
       <div className="field-note">
         Se laderne i anlegget, hvem som står på hvilken plass, og strømforbruket per måned —
         rett i parkeringsmodulen. Logg inn med Easee-kontoen som er <b>site owner</b> for
         anlegget. Passordet brukes én gang for å hente en tilgangsnøkkel fra Easee og lagres
-        aldri; nøkkelen lagres kryptert og fornyes automatisk.
+        aldri; nøkkelen lagres kryptert og fornyes automatisk. Når kontoen når flere anlegg,
+        velger du hvilket etterpå.
       </div>
       <div className="field-row">
         <Tekstfelt etikett="Brukernavn i Easee" verdi={userName} onEndre={setUserName} plassholder="e-post eller +47 912 34 567" />
         <Tekstfelt etikett="Passord" verdi={password} onEndre={setPassword} type="password" />
       </div>
-      <Tekstfelt
-        etikett="Anlegg-id"
-        verdi={siteId}
-        onEndre={setSiteId}
-        notat="Tom = det ene anlegget nøkkelen når. Når flere, sier feilmeldingen hvilke som finnes."
-      />
-      <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={jobber || !userName.trim() || !password}>
-        {jobber ? "Kobler …" : "Koble til Easee"}
+      <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={opptatt || !userName.trim() || !password}>
+        {opptatt ? "Kobler …" : "Koble til Easee"}
       </button>
+      {valg && (
+        <Modal tittel="Velg anlegg" onLukk={() => !jobber && setValg(null)} bredde={460}>
+          <div className="field-note" style={{ marginBottom: "12px" }}>
+            Kontoen når {valg.length} anlegg i Easee. Velg det laderne i dette borettslaget står i.
+          </div>
+          <div className="ea-anlegg-liste">
+            {valg.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className="ea-anlegg"
+                disabled={jobber}
+                onClick={() => void onKoble({ ...konto, siteId: a.id }).then(() => setValg(null))}
+              >
+                <b>{a.name}</b>
+                <span className="list-meta">{a.adresse ? `${a.adresse} · ` : ""}id {a.id}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
     </form>
   );
 }

@@ -1213,8 +1213,12 @@ export type Laderapport = {
 export type Ladeokt = { id: string; carConnected: string; carDisconnected: string | null; kwh: number; isComplete: boolean; kwhNatt: number | null; kostnadOre: number | null };
 export type Ladeokter = { okter: Ladeokt[]; fastleddOre: number; priset: boolean; sumOre: number };
 
+export type EaseeAnlegg = { id: number; name: string; adresse: string | null };
+
 export const easee = {
   status: (o: string) => api.hent<EaseeStatus>(org(o, "/easee")),
+  /** Anleggene kontoen når — tilkoblingen velger automatisk ved ett, ellers spør dialogen. */
+  anlegg: (o: string, d: { userName: string; password: string }) => api.send<{ anlegg: EaseeAnlegg[] }>(org(o, "/easee/anlegg"), d),
   /** Passordet sendes én gang og lagres aldri — bare tokenene Easee gir tilbake. */
   kobleTil: (o: string, d: { userName: string; password: string; siteId?: number | null }) => api.endre<EaseeStatus>(org(o, "/easee"), d),
   kobleFra: (o: string) => api.slett(org(o, "/easee")),

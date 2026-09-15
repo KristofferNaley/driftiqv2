@@ -101,11 +101,13 @@ export async function easeeKall<T>(
     } catch {
       // ikke JSON — behold teksten
     }
-    if (svar.status === 401) {
+    // Feil brukernavn/passord er 400 «InvalidUserPassword» hos ekte Easee (15.09.2026), 401 i
+    // dokumentasjonen — begge skal bli den norske meldingen.
+    if (sti === "/api/accounts/login" && (svar.status === 400 || svar.status === 401)) melding = "Easee avviste brukernavn eller passord";
+    else if (svar.status === 401) {
       // Fornyingen svarer 401 både når refresh-tokenet er brukt (rotert) og når det er utløpt —
       // Easees egen kode må med, ellers er de to umulige å skille i ettertid.
-      if (sti === "/api/accounts/login") melding = "Easee avviste brukernavn eller passord";
-      else if (sti === "/api/accounts/refresh_token") melding = `Easee avviste refresh-tokenet: ${melding || "401"}`;
+      if (sti === "/api/accounts/refresh_token") melding = `Easee avviste refresh-tokenet: ${melding || "401"}`;
       else melding = "Easee-innloggingen er utløpt — koble til på nytt";
     }
     if (svar.status === 403) melding = "Easee-kontoen har ikke tilgang til dette anlegget";
