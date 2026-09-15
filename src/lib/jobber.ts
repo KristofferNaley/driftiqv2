@@ -61,6 +61,15 @@ export const JOBBER: Jobb[] = [
     kilde: "app",
   },
   {
+    nokkel: "easee-token",
+    navn: "Easee-token",
+    beskrivelse: "Fornyer Easee-innloggingen — refresh-tokenet lever bare 24 timer",
+    cron: "45 */6 * * *",
+    timezone: "Europe/Oslo",
+    plan: "Hver 6. time (00:45, 06:45, 12:45, 18:45, Europe/Oslo)",
+    kilde: "app",
+  },
+  {
     nokkel: "fiken-synk",
     navn: "Fiken-synk",
     beskrivelse: "Speiler bokførte kjøp fra Fiken for orger med regnskapskobling",

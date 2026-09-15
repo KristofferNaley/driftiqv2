@@ -674,6 +674,37 @@ export async function synkEaseeOrg(orgId: string, naa = new Date()): Promise<{ o
   }
 }
 
+/**
+ * Holder innloggingen i live. Easees refresh-token lever i 24 timer fra det ble utstedt
+ * (målt 12.–15.09.2026: fornyet etter 11 t gikk, etter 24 t ± et sekund feilet annenhver
+ * org, døgnet etter begge). Én nattlig synk ligger derfor NØYAKTIG på grensen — denne
+ * kjøres hver 6. time og fornyer når access-tokenet (1 t) er ute, dvs. hver gang.
+ * Feil noteres på koblingen; `ny` sier om koblingen var frisk før — jobben varsler bare
+ * de nye, en død innlogging skal ikke gi fire varsler i døgnet.
+ */
+export async function fornyTokenOrg(orgId: string, naa = new Date()): Promise<{ ok: true; fornyet: boolean } | { ok: false; feil: string; ny: boolean }> {
+  let varFrisk = true;
+  try {
+    return await withOrg(orgId, async (db) => {
+      const kobling = await hentRad(db, orgId);
+      varFrisk = kobling.lastError === null;
+      const fornyet = kobling.tokenExpiresAt.getTime() - naa.getTime() < TOKEN_MARGIN_MS;
+      await medToken(db, orgId, kobling, naa, async () => undefined);
+      if (fornyet) await noterFeil(db, orgId, kobling.id, null, naa);
+      return { ok: true as const, fornyet };
+    });
+  } catch (e) {
+    const feil = e instanceof Error ? e.message : String(e);
+    await withOrg(orgId, async (db) => {
+      const k = (await db.select({ id: easeeSettings.id }).from(easeeSettings).where(eq(easeeSettings.orgId, orgId)).limit(1))[0];
+      if (k) await noterFeil(db, orgId, k.id, feil, naa);
+    }).catch(() => {
+      // Noteringen skal aldri skygge for selve feilen.
+    });
+    return { ok: false, feil, ny: varFrisk };
+  }
+}
+
 /** `?aar=2026&maaned=9` fra rapport-rutene. Bor her fordi en route.ts bare kan eksportere HTTP-metoder. */
 export function lesMaaned(req: Request): { aar: number; maaned: number } {
   const u = new URL(req.url);

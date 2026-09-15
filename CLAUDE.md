@@ -401,7 +401,8 @@ komponenter — endres logikken, må begge med.
   død for godt (08.09.2026, begge testorgene, fire netter med varsler før noen så det).
   Bruk `lagreTokenerVarig()` i `lib/tokenlagring.ts` (egen tilkobling, committer straks).
   Samme regel: noter aldri en feil inne i transaksjonen som skal kastes — `last_error`
-  var tom av samme grunn.
+  var tom av samme grunn. Og: **Easees refresh-token lever 24 timer** — jobben
+  «easee-token» fornyer hver 6. time; den nattlige synken alene lå på grensen.
 - **Aldri svar 502 eller 504 fra API-et.** Cloudflare-tunnelen bytter ut de statusene fra
   origin med sin egen HTML-feilside; klienten finner ingen `detail` og viser «Noe gikk galt»
   uten spor i loggen (Unloc, 05.09.2026). Feil fra en tredjepart er 400 (avvist) eller 503.

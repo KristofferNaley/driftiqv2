@@ -36,7 +36,7 @@ tas ut uten spor i resten av appen. Grensene:
 | HTTP-adapter | `src/lib/easee.ts` (importfri — `opModeTekst` brukes av klienten), `src/lib/spotpris.ts` (hvakosterstrommen.no) |
 | Regler | `src/lib/laderegler.ts` (importfri — prising, dag/natt, månedsgrenser; brukes av klienten også) |
 | Logikk | `src/lib/easeekobling.ts`, `src/lib/ladekjoring.ts` (kjøringen; skjema `src/db/schema/ladekjoring.ts`, `drizzle/0059`) |
-| Jobb | «easee-synk» i `lib/jobber.ts` + `instrumentation.ts` (nattlig, kl. 03:15) |
+| Jobb | «easee-synk» (nattlig, kl. 03:15) og «easee-token» (hver 6. time) i `lib/jobber.ts` + `instrumentation.ts` |
 | Ruter | `src/app/api/organizations/[orgId]/easee/**`, `…/okonomi/ladekjoringer/**`, `…/okonomi/regnskap` |
 | Klient | `easee`-blokken nederst i `src/lib/klient.ts` |
 | UI | `src/app/(app)/innstillinger/EaseeKort.tsx`, `src/components/EaseeLading.tsx`, `src/app/(app)/okonomi/Ladekjoringer.tsx` (fanen «Lading»), `.ea-`-blokken i `globals.css` |
@@ -44,7 +44,7 @@ tas ut uten spor i resten av appen. Grensene:
 | Koblinger inn i resten | `<EaseeKort />` i Integrasjoner; `<EaseeLading />` er hele Lading-fanen i `parkering/page.tsx` (fanen viser plassene med ladepunkt uten kobling); `easee_settings` i `EKSKLUDERTE_TABELLER` i `lib/eksport.ts`; `kobleLaderTilPlass` setter `hasCharger`/`chargerLabel` på plassen (data, ikke skjema); `parking_spots.unit_id` (plass → seksjon, brukes av rapporten, men hører til parkering og blir stående) |
 
 Ingen egen modul (rutene gates med `modul: "parkering"`), ingen env-variabel, ingen
-webhooks. Én bakgrunnsjobb («easee-synk», se under). Tokenene krypteres med samme nøkkel som Fiken-tokens
+webhooks. To bakgrunnsjobber («easee-synk» og «easee-token», se under). Tokenene krypteres med samme nøkkel som Fiken-tokens
 (`FIKEN_TOKEN_KEY` via `lib/kryptering.ts`). `parking_spots` har ingen kolonne som peker
 på Easee — koblingen ligger i `easee_chargers.spot_id`.
 
@@ -185,9 +185,12 @@ brukernavn (e-post eller mobil med landkode) og passord:
 - Feiler fornyingen med 4xx, er innloggingen død. Fanen viser sist kjente tall med
   meldingen «Easee-innloggingen er utløpt — koble til på nytt», og Integrasjoner-kortet
   får rød status. Kontoadmin logger inn på nytt; ladere, plasskoblinger og forbruk står.
-- Hvor lenge et refresh token lever hos Easee er ikke dokumentert. Går det ut mellom
-  besøk, er det punktet over som fanger det. Blir det et problem i praksis, er en nattlig
-  fornying (jobb i `instrumentation.ts`) svaret — ikke å lagre passordet.
+- **Refresh-tokenet lever 24 timer** fra det ble utstedt (ikke dokumentert; målt
+  12.–15.09.2026, se «Lært»). Jobben «easee-token» fornyer derfor hver 6. time
+  (`fornyTokenOrg`) — access-tokenet er da alltid ute, så hver kjøring roterer paret.
+  Den varsler bare NYE feil (koblingen var frisk før); den nattlige synken varsler som
+  før. Én nattlig fornying alene lå nøyaktig på 24-timersgrensen og tapte annenhver org.
+  Løsningen er fortsatt aldri å lagre passordet.
 
 Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bearer`).
 
@@ -225,8 +228,13 @@ Headeren lages ett sted: `autorisasjon()` i `lib/easee.ts` (`Authorization: Bear
   401 «Invalid refresh token» (kode 104) hver natt, ett Discord-varsel per natt, og
   `last_error` tom fordi noteringen lå i samme transaksjon. Fiksen er varig tokenlagring
   utenfor transaksjonen og feilnotering i egen (`synkEaseeOrg`); begge koblingene måtte
-  kobles til på nytt. Hvor lenge et *ubrukt* refresh-token lever, er fortsatt ukjent —
-  evcc så kode 105 etter ~6 dager, og den nattlige jobben holder det i live.
+  kobles til på nytt.
+- **Refresh-tokenet lever 24 timer (12.–15.09.2026).** Etter fiksen over: natt én
+  (tokener 11 t gamle) fornyet begge; natt to feilet orgen hvis token var utstedt
+  01:15:00 og gikk for den fra 01:15:02 — jobben starter 01:15:00, altså nøyaktig 24 t
+  — natt tre feilet også den siste. Easee svarer 104 «InvalidRefreshToken», ikke 105,
+  også når det er alderen som er grunnen. Derfor «easee-token» hver 6. time. Hvor lenge
+  et token lever *uten* rotering vet vi ikke mer om enn evccs ~6 dager til kode 105.
 
 ## Tilgang
 

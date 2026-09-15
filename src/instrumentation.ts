@@ -188,6 +188,50 @@ export async function register(): Promise<void> {
   );
   console.log(`[easee-synk] Planlagt: ${easeeSynk.plan}.`);
 
+  // Easees refresh-token lever 24 timer; den nattlige synken alene lå nøyaktig på grensen
+  // og mistet innloggingen annenhver natt (12.–15.09.2026). Denne fornyer hver 6. time.
+  // Bare NYE feil varsles — en død innlogging skal ikke gi fire varsler i døgnet.
+  const easeeToken = JOBBER.find((j) => j.nokkel === "easee-token")!;
+  cron.schedule(
+    easeeToken.cron,
+    () => {
+      void (async () => {
+        try {
+          const { withoutRls } = await import("./db/client");
+          const { easeeSettings } = await import("./db/schema/easee");
+          const { fornyTokenOrg } = await import("./lib/easeekobling");
+          const orger = await withoutRls("bakgrunnsjobb", (db) =>
+            db.select({ orgId: easeeSettings.orgId }).from(easeeSettings),
+          );
+          if (orger.length === 0) return;
+          await medKjoringslogg("easee-token", async () => {
+            let fornyet = 0;
+            const feil: string[] = [];
+            const nye: string[] = [];
+            for (const { orgId } of orger) {
+              const r = await fornyTokenOrg(orgId);
+              if (r.ok) {
+                if (r.fornyet) fornyet++;
+              } else {
+                feil.push(`${orgId}: ${r.feil}`);
+                if (r.ny) nye.push(`${orgId}: ${r.feil}`);
+              }
+            }
+            if (nye.length > 0) void sendDriftsvarsel(`⚠️ Easee-innloggingen døde for ${nye.length} org(er): ${nye.join("; ")}`);
+            const detalj = `${fornyet} av ${orger.length} fornyet${feil.length > 0 ? `, ${feil.length} feilet` : ""}`;
+            console.log(`[easee-token] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[easee-token] Jobben feilet:", e);
+          void sendDriftsvarsel(`⚠️ Bakgrunnsjobben «easee-token» feilet: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      })();
+    },
+    { timezone: easeeToken.timezone },
+  );
+  console.log(`[easee-token] Planlagt: ${easeeToken.plan}.`);
+
   const rydding = JOBBER.find((j) => j.nokkel === "hendelsesrydding")!;
 
   cron.schedule(

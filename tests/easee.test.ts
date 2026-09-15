@@ -38,6 +38,7 @@ import {
   kobleTil,
   lagrePrisplan,
   slettPrisplan,
+  fornyTokenOrg,
   synkEasee,
   synkEaseeOrg,
 } from "../src/lib/easeekobling";
@@ -548,6 +549,29 @@ describe("tokenfornying", () => {
     expect(kall.filter((k) => k.sti === "/api/accounts/refresh_token").length).toBe(1);
     expect(kall.some((k) => k.sti === "/api/accounts/login")).toBe(false);
     expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toBeNull();
+  });
+
+  it("easee-token holder innloggingen i live: fornyer når access-tokenet er ute, og varsler bare nye feil", async () => {
+    // Refresh-tokenet lever 24 t hos Easee — jobben hver 6. time er det som holder det i live.
+    const { orgId, kall } = await koblet();
+    kall.length = 0;
+    const senere = new Date(Date.now() + 3600 * 1000 + 1000);
+    expect(await fornyTokenOrg(orgId, senere)).toEqual({ ok: true, fornyet: true });
+    expect(kall.map((k) => k.sti)).toEqual(["/api/accounts/refresh_token"]); // ingen datahenting, ingen innlogging
+    const rad = await eier.query("SELECT token_expires_at, refresh_token_enc FROM easee_settings WHERE org_id = $1", [orgId]);
+    expect(new Date(rad.rows[0].token_expires_at).getTime()).toBe(senere.getTime() + 3600 * 1000);
+    expect(dekrypter(rad.rows[0].refresh_token_enc)).toBe("refresh-token-fornyet-1");
+    // Rett etterpå er tokenet friskt — ingen ny fornying.
+    expect(await fornyTokenOrg(orgId, senere)).toEqual({ ok: true, fornyet: false });
+    expect(kall.length).toBe(1);
+
+    // Innloggingen dør: første gang er feilen ny (varsles), andre gang ikke.
+    stubbEasee({ gyldigeTokens: [], fornyingFeiler: true });
+    const mye = new Date(senere.getTime() + 3600 * 1000 + 1000);
+    const f1 = await fornyTokenOrg(orgId, mye);
+    expect(f1).toMatchObject({ ok: false, ny: true, feil: expect.stringMatching(/InvalidRefreshToken/) });
+    expect((await i(orgId, (db) => hentKobling(db, orgId))).kobling?.lastError).toMatch(/koble til på nytt/);
+    expect(await fornyTokenOrg(orgId, mye)).toMatchObject({ ok: false, ny: false });
   });
 });
 
