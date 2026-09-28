@@ -35,16 +35,16 @@ docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npx tsc --noEmit &&
 ```
 
 ```bash
-# Testsuiten (vitest, 400+ tester). Krever ekte Postgres og kjøres derfor i containeren —
-# men FØRST etter --build, ellers tester du forrige image.
-docker compose up -d --build && docker compose exec app npm run test
+# Testsuiten (vitest, 650+ tester). Krever ekte Postgres og kjøres derfor i containeren —
+# men FØRST etter --build, ellers tester du forrige image. Kun i testklonen (se «Tester»).
+docker compose -p driftiqv2-test up -d --build && docker compose -p driftiqv2-test exec app npm run test
 ```
 
 - `next lint` finnes ikke i Next 16 — oppsettet ligger i `eslint.config.mjs`, skrevet for å
   fange nøyaktig det bygget ikke fanger: `no-undef` og `rules-of-hooks` som `error`,
   DOM-globalene (`MouseEvent`, `HTMLInputElement`, `navigator`, …) listet eksplisitt.
-- Appen kjører på **3008**, bundet til localhost — Cloudflare-tunnelen når containeren via
-  `edge`-nettet. **Dette er produksjon.** Databasen er `driftiq_v2` på den sentrale
+- Prod-appen kjører på **3008**, bundet til localhost — Cloudflare-tunnelen når containeren
+  via `edge`-nettet. Databasen er `driftiq_v2` på den sentrale
   Postgres 18-serveren (verten «postgres» på `edge`-nettet) — ikke en del av stacken.
 - **Testmiljøet (siden 03.09.2026)** er en egen klone i `/root/driftiqv2-test` på samme
   vert: compose-prosjekt `driftiqv2-test`, port 3009, egen base `driftiq_v2_test` med egen
@@ -57,9 +57,7 @@ docker compose up -d --build && docker compose exec app npm run test
   etterpå: vask bort alt som ikke er demo, slett `jwks`-raden (kryptert med prods
   `BETTER_AUTH_SECRET`; ellers velter API-laget med «Failed to decrypt private key»), og
   sett `org_webhooks.active = false` — kundenes Teams/Discord-webhooks har ingen miljøvakt
-  slik e-posten har, og varselsjobben ville postet testvarsler i kundens kanal. En vakt i
-  `lib/webhooks.ts` etter mønster av `EPOST_TILLATTE_DOMENER` er riktig varig løsning, og
-  et seed-skript (`scripts/seed-test.ts`) er riktig erstatning for dump-seeding.
+  slik e-posten har, og varselsjobben ville postet testvarsler i kundens kanal.
 - `docker compose up -d --build` — deploy krever alltid `--build`; standalone-bygget bakes
   inn i imaget, og et `git pull` alene endrer ingenting for det som kjører.
 - E-postoppsettet verifiseres med `scripts/test-epost.ts` (sjekker nøkkel, avsender og
@@ -70,15 +68,17 @@ docker compose up -d --build && docker compose exec app npm run test
 Testene kjører mot **samme database som appen de kjøres i**. Kjør dem i testmiljøet
 (`docker compose -p driftiqv2-test exec app npm run test` i `/root/driftiqv2-test`), aldri i
 prod-klonen — der er basen produksjonsbasen, og en test som feiler midt i `afterEach`
-etterlater sine egne rader hos kundene. Testbasen er en kopi av prod, så regelen under om
-å aldri røre rader testen ikke selv har opprettet gjelder der også.
+etterlater sine egne rader hos kundene. Regelen under om å aldri røre rader testen ikke
+selv har opprettet gjelder også i testbasen — demo-orgene og agent-brukeren brukes til
+UI-testing og skal overleve en testkjøring.
 Derfor `fileParallelism: false` i `vitest.config.ts`: filene rydder med `DELETE` og ville
 sett hverandres data parallelt. Ingenting hoppes over uten DB; uten `DATABASE_URL` krasjer
 alt.
 
 Konvensjon for en ny testfil (se `tests/avvik.test.ts` som mal):
 
-1. Blokkommentar øverst: hvilken v1-testfil dette er port av, og tyngdepunktet.
+1. Blokkommentar øverst: hvilken v1-testfil dette er port av (eller «Ingen v1-forgjenger»
+   og hva den er bygget fra, som `tests/easee.test.ts`), og tyngdepunktet.
 2. Test **lib-funksjonene direkte** (`src/lib/<modul>.ts`). API-laget testes kun i
    `tests/api.test.ts`, som importerer de ekte rutehandlerne via `@`-aliaset.
 3. `eierPool` (skjemaeier, BYPASSRLS) til oppsett/opprydding; `withOrg()` for det som testes
@@ -112,7 +112,8 @@ org-kontekst er en tom liste uten feilmelding — v1s vanligste bug. Her er den 
 kompileringsfeil i stedet.
 
 - `RlsUnntak` er en lukket union (`"plattformpanel" | "leverandorportal" | "qr-anonym" |
-  "innlogging" | "migrasjon" | "bakgrunnsjobb"`). Ny bruk uten navngitt grunn kompilerer ikke.
+  "innlogging" | "migrasjon" | "bakgrunnsjobb" | "tokenlagring"`). Ny bruk uten navngitt
+  grunn kompilerer ikke.
 - Nøstet `withOrg` mot en **annen** org kaster `KryssendeOrgKontekst` — én forespørsel skal
   aldri røre to borettslag i samme transaksjon.
 - **Applikasjonsfiltrene beholdes likevel**: `.where(eq(x.orgId, orgId))` skal stå i hver
@@ -181,7 +182,7 @@ Ingen rutehandler skrives for hånd — en `route.ts` er 3–6 linjer med
   rører `UNNTATT`-tabeller. Legg aldri en org-eid tabell i auth-skjemaet.
 - JWT-plugin med JWKS på `/api/auth/jwks` ble lagt inn for at v1s FastAPI skulle validere
   v2-sesjoner i overgangen. v1 er nede, og ingenting annet i v2 bruker den (sjekket
-  01.09.2026) — kandidat for fjerning, sammen med `jwks`-tabellen.
+  01.09.2026) — ikke bygg noe nytt oppå den.
 
 ### Registerfiler — mønsteret bak
 
@@ -236,8 +237,8 @@ Oppbevaring håndheves av jobben «hendelsesrydding» — grensene er konstanter
 - Tom `RESEND_API_KEY` = ingenting sendes, alt går videre — et manglende varsel skal aldri
   velte en handling brukeren utførte.
 - **Domenevakten (`EPOST_TILLATTE_DOMENER`)** er AV når variabelen ikke er satt, med vilje:
-  prod skal ikke avhenge av at noen husker den. Settes det opp et testmiljø med kopi av
-  prod-basen igjen, skal den PÅ der — basen har ekte, leverbare adresser.
+  prod skal ikke avhenge av at noen husker den. I testmiljøet står den PÅ — og må stå PÅ i
+  ethvert miljø som har (hatt) en kopi av prod-basen med ekte, leverbare adresser.
 - Send aldri fra en handler direkte — `etterCommit`.
 
 ### Tekstsøk i dokumenter
@@ -276,8 +277,34 @@ ikke en garanti».
 testsuite — begrunnelse i `src/db/client.ts`). Regelen håndheves i stedet slik: alt
 klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `oppgaveregler.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
-`orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`. Ikke gi dem server-importer: verken tsc
-eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i bygget.
+`orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`, `regnskap.ts`,
+`okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`. Ikke gi dem
+server-importer: verken tsc eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i
+bygget.
+
+### Integrasjoner
+
+Hver integrasjon er én fjernbar pakke med en **lukket hviteliste** over kall; grensene,
+funnene fra ekte kjøring og fjerningsoppskriften står i eget notat. Les notatet før du
+rører integrasjonen.
+
+- **Fiken / regnskap** — `docs/fiken.md`. Regnskapssystemet er aldri en fast streng:
+  `lib/regnskap.ts` (importfri) navngir systemene, `hentRegnskap()` i
+  `lib/regnskapskobling.ts` sier hva orgen er koblet til, og `Fakturaadapter` er kontrakten
+  et nytt system (Tripletex) implementerer. UI sier «Send til {navn}» / «regnskapet», ikke
+  «Fiken». API-nøkkel-modus finnes kun i test (`ER_TESTMILJO`).
+- **Easee (lading i parkeringsmodulen)** — `docs/easee.md`. KUN lesing pluss innlogging og
+  tokenfornying; DriftIQ styrer aldri en lader. Passordet lagres aldri, bare tokenene.
+  Prising er ren utregning i den importfrie `lib/laderegler.ts`; en spottime uten pris er
+  aldri stille 0.
+- **Unloc (digitale nøkler)** — `docs/unloc.md`. Ikke prøvd mot ekte Unloc ennå; formen på
+  jobbresultatet er antatt fra dokumentasjonen.
+- **Integrasjonshemmeligheter** krypteres med `FIKEN_TOKEN_KEY` (64 hex) — nøkkelen er felles
+  for alle integrasjoner, navnet er historisk. Prod skal ha sin egen, aldri testens (per
+  28.09.2026 er den ikke satt i prod).
+
+Øvrige notater: `docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
+`docs/fdv.md`, `docs/mcp-servere.md`.
 
 ## Frontend
 
@@ -370,31 +397,6 @@ komponenter — endres logikken, må begge med.
 - **`sum()` på integer gir bigint, og node-postgres returnerer bigint som STRENG.**
   «806205013 tokens» var 80 620 og 5 013 limt sammen med `+`. Typene lyver — gjennom
   `Number()` før aritmetikk.
-- **Unloc (digitale nøkler)** er bygget som én fjernbar pakke — grensene og
-  fjerningsoppskriften står i `docs/unloc.md`. Ikke prøvd mot ekte Unloc ennå (ingen
-  credentials); nøkkelopprettelse er asynkron (202 + jobb), og formen på jobbresultatet er
-  antatt fra dokumentasjonen. Hemmeligheten krypteres med `FIKEN_TOKEN_KEY` — nøkkelen er
-  felles for integrasjonshemmeligheter, navnet er historisk.
-- **Easee (lading i parkeringsmodulen)** er bygget som samme fjernbare pakke — grensene og
-  fjerningsoppskriften i `docs/easee.md`. Hvitelista er innlogging, tokenfornying og
-  ellers KUN lesing; DriftIQ styrer aldri en lader. Kunden logger inn med Easee-kontoen
-  (site owner); **passordet lagres aldri**, bare tokenene (kryptert), fornyet av
-  `medToken()` før utløp og ved 401. Tilstanden for hele anlegget hentes i ett kall
-  (`/api/sites/{id}/state`) fordi per-lader-endepunktene er ratebegrenset. Verifisert mot
-  ekte anlegg 06.09.2026 — funnene («inneværende måned krever `to` = 1. i neste måned»
-  m.m.) står i notatet. Prising (Norgespris/spot, nettleie dag/natt, fastledd) er ren
-  utregning i den importfrie `lib/laderegler.ts`; grunnlaget er timesforbruk hentet av
-  jobben «easee-synk». En spottime uten pris er aldri stille 0. Fakturagrunnlaget er
-  ladekjøringen (`lib/ladekjoring.ts`, Økonomi → Lading).
-- **Regnskapssystemet er aldri en fast streng.** `lib/regnskap.ts` (importfri) navngir
-  systemene; `hentRegnskap()` i `lib/regnskapskobling.ts` sier hva orgen er koblet til,
-  og `Fakturaadapter` er kontrakten et nytt system (Tripletex) implementerer. Kjøringer
-  og UI sier «Send til {navn}» / «regnskapet» — ikke «Fiken». Fiken-adapteret for
-  faktura er `lib/fikenfaktura.ts`; skrivekallene står i hvitelista i `lib/fiken.ts`.
-- **Regnskapskoblingen** krever `FIKEN_TOKEN_KEY` (64 hex, krypterer kundenes tokens) og
-  for OAuth `FIKEN_CLIENT_ID`/`FIKEN_CLIENT_SECRET` — alle koblet i compose. Testmiljøet
-  har egen tokennøkkel; prod må få sin egen. API-nøkkel-modus finnes kun i test
-  (`ER_TESTMILJO`). Se `docs/fiken.md` «Steg 2 slik det ble».
 - **Et fornyet OAuth-token skrives aldri gjennom forespørselens transaksjon.** Easee
   roterer refresh-tokenet ved hver fornying; `medToken()` lagret det nye paret i jobbens
   `withOrg`, et senere kall feilet, rollbacken tok tokenet med seg — og innloggingen var
@@ -440,9 +442,8 @@ datert oppføring i loggen, og `versjon`-propen står fortsatt på 1.0.0 selv om
 gått videre. `CHANGELOG.md` er den interne loggen; bare **utgitt** arbeid får et nummer,
 patch er standard.
 
-Den **kundevendte** loggen finnes ennå ikke — verken fil eller changelog-rute. Den skulle
-kommet med prod-overtakelsen og er dermed forfalt; når den lages gjelder v1-regelen: to
-logger med samme versjonsnummer.
+Den **kundevendte** loggen finnes ennå ikke. Når den lages, gjelder v1-regelen: to logger
+med samme versjonsnummer.
 
 ## Ved endringer
 
@@ -453,6 +454,25 @@ glemt branch lot prod bygge gammel kode i ukevis i v1. Det gir to plikter:
   `git pull`; alt i `origin/main` blir med neste deploy. Uferdig arbeid kan ligge som
   lokale commits; push når du er komfortabel med at det havner ute.
 - **Hold `main` byggbar.** Ikke push en tilstand der `docker compose up --build` ryker.
+
+### Dokumentasjon følger koden
+
+Oppdateres i **samme commit** som endringen, som `CHANGELOG.md`:
+
+- Ny felle eller regel som ikke er åpenbar fra koden: her, under riktig seksjon,
+  med dato og hva som skjedde.
+- Integrasjon eller modul med egne grenser: `docs/<tema>.md` (mønster:
+  `docs/easee.md`), lenket herfra.
+- Stack, oppsett, deploy, arkitekturbegrunnelse: `README.md`.
+- Teknisk valg der et åpenbart alternativ ble forkastet (ny avhengighet eller
+  tjeneste, endring i RLS, auth, e-post, jobber): datert oppføring i
+  `docs/beslutninger.md` med hva, hvorfor og alternativene.
+- Utdatert tekst du ser, rettes eller slettes i samme slengen.
+
+Før commit: si hvilke docs-filer som er endret, eller «Ingen docs-endring: <grunn>».
+
+**Denne fila er ingen backlog.** Setninger som «riktig varig løsning er …» eller
+«kandidat for fjerning» blir en sak i backloggen; her står bare regelen.
 
 **Spør når du er usikker** på om noe skal pushes, deployes eller versjonsnummereres —
 det er billigere enn å rulle tilbake noe som ligger i prod.
