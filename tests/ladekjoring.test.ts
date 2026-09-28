@@ -43,7 +43,7 @@ const kari: Aktor = { navn: "Kari Styreleder", brukerId: null };
 beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
   eier = await eierPool.connect();
-  process.env.FIKEN_TOKEN_KEY ??= "ab".repeat(32);
+  process.env.INTEGRASJON_NOKKEL ??= "ab".repeat(32);
 });
 
 afterAll(async () => {

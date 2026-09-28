@@ -38,7 +38,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Regnskapskoblingen (Fiken). Tokennøkkelen krypterer kundenes tokens i basen;
       # client id/secret er OAuth-appen «DriftIQ» hos Fiken. Se docs/fiken.md.
-      FIKEN_TOKEN_KEY: ${FIKEN_TOKEN_KEY:-}
+      INTEGRASJON_NOKKEL: ${INTEGRASJON_NOKKEL:-}
       FIKEN_CLIENT_ID: ${FIKEN_CLIENT_ID:-}
       FIKEN_CLIENT_SECRET: ${FIKEN_CLIENT_SECRET:-}
       # Driftsvarsler til Discord (oppstart, feilede bakgrunnsjobber). Tom = av.

@@ -30,7 +30,7 @@ beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
   eier = await eierPool.connect();
   // Testene trenger en krypteringsnøkkel — samme form som i .env, men aldri den ekte.
-  process.env.FIKEN_TOKEN_KEY ??= "ab".repeat(32);
+  process.env.INTEGRASJON_NOKKEL ??= "ab".repeat(32);
 });
 
 afterAll(async () => {

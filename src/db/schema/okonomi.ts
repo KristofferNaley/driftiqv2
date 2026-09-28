@@ -259,7 +259,7 @@ export const supplierInvoices = pgTable("supplier_invoices", {
 /**
  * Regnskapskoblingen per org — Fiken først (adapteret i `lib/fiken.ts`).
  *
- * Én rad per org, ALDRI token i `organizations`. Tokens er kryptert med `FIKEN_TOKEN_KEY`
+ * Én rad per org, ALDRI token i `organizations`. Tokens er kryptert med `INTEGRASJON_NOKKEL`
  * (`lib/kryptering.ts`); basen alene gir ikke tilgang til kundens regnskap. `auth_mode`
  * «api_key» finnes bare i testmiljøet (personlig nøkkel mot demoforetaket) — Fikens vilkår
  * forbyr personlig nøkkel i en tredjepartsapp, så prod tillater kun «oauth».

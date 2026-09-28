@@ -299,9 +299,10 @@ rører integrasjonen.
   aldri stille 0.
 - **Unloc (digitale nøkler)** — `docs/unloc.md`. Ikke prøvd mot ekte Unloc ennå; formen på
   jobbresultatet er antatt fra dokumentasjonen.
-- **Integrasjonshemmeligheter** krypteres med `FIKEN_TOKEN_KEY` (64 hex) — nøkkelen er felles
-  for alle integrasjoner, navnet er historisk. Prod skal ha sin egen, aldri testens (per
-  28.09.2026 er den ikke satt i prod).
+- **Integrasjonshemmeligheter** krypteres med `INTEGRASJON_NOKKEL` (64 hex, felles for alle
+  integrasjoner) — i `.env`, aldri i databasen, ellers gir en databasedump både token og
+  nøkkel. Prod skal ha sin egen, aldri testens. Byttes eller mistes den, må hver kunde koble
+  til på nytt.
 
 Øvrige notater: `docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
 `docs/fdv.md`, `docs/mcp-servere.md`.

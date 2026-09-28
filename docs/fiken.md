@@ -352,7 +352,7 @@ Følger mønstrene i CLAUDE.md; det som er spesielt for Fiken står i kursiv.
   (lese/skrive), `connectedBy`, `lastSyncAt`, `lastSyncError`. Én rad per org — *aldri
   token i `organizations`*. Speilede data (`fiken_purchases`, `fiken_ehf_documents`) er
   org-eide tabeller med `fikenId` + `orgId` som unik nøkkel. *Token-kryptering er nytt i
-  v2: nøkkel i env (`FIKEN_TOKEN_KEY`), koblet gjennom `docker-compose.yaml`.*
+  v2: nøkkel i env (`INTEGRASJON_NOKKEL`, het `FIKEN_TOKEN_KEY` før 28.09.2026), koblet gjennom `docker-compose.yaml`.*
 - **OAuth-flyt**: `orgadmin` starter koblingen fra orginnstillinger; callback-ruten på
   `app.driftiq.no/api/okonomi/fiken/callback` (registrert i Fiken-appen) bytter kode mot
   token og skriver raden i `withOrg`. `state` bærer `orgId` signert, ellers kan en
@@ -452,7 +452,7 @@ ikke avtalt mot faktisk per avtale.
   `/purchases`, `/accountBalances`). Skrivekallene i steg 3 legges til der, synlig i diffen;
   `tests/fiken.test.ts` låser lista. Sekvensielle kall, aldri `Promise.all` mot Fiken.
 - **Koblingen** `lib/fikenkobling.ts` + tabellene `fiken_connections` (én rad per org, tokens
-  kryptert med AES-256-GCM, nøkkel `FIKEN_TOKEN_KEY`) og `fiken_purchases` (speil, nøkkel
+  kryptert med AES-256-GCM, nøkkel `INTEGRASJON_NOKKEL`) og `fiken_purchases` (speil, nøkkel
   org + fikenId, linjer som JSON). Begge i RLS-registeret. `hentKobling()` returnerer aldri
   tokenet. Frakobling sletter speilet og logges.
 - **To koblingsmåter:** OAuth (`/api/organizations/{org}/okonomi/fiken/start` → Fiken →
@@ -468,7 +468,7 @@ ikke avtalt mot faktisk per avtale.
 - **«Faktisk» i budsjettet** kommer fra Fiken når koblingen finnes (kjøpslinjer i året,
   summert per kontointervall) og fra godkjente fakturaer ellers — aldri begge.
   `BudsjettDetalj.faktiskKilde` sier hvilken; budsjettfanen viser det som merke.
-- **Miljø:** `FIKEN_TOKEN_KEY` (64 hex), `FIKEN_CLIENT_ID`, `FIKEN_CLIENT_SECRET` er koblet
+- **Miljø:** `INTEGRASJON_NOKKEL` (64 hex), `FIKEN_CLIENT_ID`, `FIKEN_CLIENT_SECRET` er koblet
   gjennom docker-compose.yaml. Testmiljøet har egen tokennøkkel i `.env`; prod må få sin
   egen før koblingen tas i bruk der. OAuth-appen hos Fiken må ha redirect-URI
   `https://<app-vert>/api/okonomi/fiken/callback` for hvert miljø.

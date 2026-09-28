@@ -45,7 +45,7 @@ const CRED = { clientId: "b0bf99dd-f79e-4571-b94b-09f3dd80f8f9", clientSecret: "
 beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
   eier = await eierPool.connect();
-  process.env.FIKEN_TOKEN_KEY ??= "ab".repeat(32);
+  process.env.INTEGRASJON_NOKKEL ??= "ab".repeat(32);
 });
 
 afterAll(async () => {

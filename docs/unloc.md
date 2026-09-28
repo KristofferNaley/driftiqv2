@@ -36,7 +36,7 @@ Derfor skal alt kunne tas ut igjen uten spor i resten av appen. Grensene:
 
 Ingen egen modul, ingen env-variabel, ingen bakgrunnsjobb, ingen webhooks. Rutene gates
 med `modul: "leverandorer"`; hemmeligheten krypteres med samme nøkkel som Fiken-tokens
-(`FIKEN_TOKEN_KEY` via `lib/kryptering.ts` — navnet er historisk, nøkkelen er felles for
+(`INTEGRASJON_NOKKEL` via `lib/kryptering.ts` — felles for
 integrasjonshemmeligheter).
 
 ### Slik fjernes den

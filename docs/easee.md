@@ -47,7 +47,7 @@ tas ut uten spor i resten av appen. Grensene:
 
 Ingen egen modul (rutene gates med `modul: "parkering"`), ingen env-variabel, ingen
 webhooks. To bakgrunnsjobber («easee-synk» og «easee-token», se under). Tokenene krypteres med samme nøkkel som Fiken-tokens
-(`FIKEN_TOKEN_KEY` via `lib/kryptering.ts`). `parking_spots` har ingen kolonne som peker
+(`INTEGRASJON_NOKKEL` via `lib/kryptering.ts`). `parking_spots` har ingen kolonne som peker
 på Easee — koblingen ligger i `easee_chargers.spot_id`.
 
 ### Slik fjernes den
