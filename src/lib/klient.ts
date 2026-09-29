@@ -12,6 +12,7 @@
 
 import type { MinAktivitet } from "./aktivitetsslag";
 import type { Driftslogg } from "./driftsloggslag";
+import type { Felt, Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
 
 export class ApiKlientFeil extends Error {
   constructor(
@@ -1236,4 +1237,197 @@ export const easee = {
   oppdater: (o: string) => api.send<EaseeLading>(org(o, "/easee/lading"), {}),
   kobleTilPlass: (o: string, laderId: string, spotId: string | null) =>
     api.lapp<EaseeLader>(org(o, `/easee/chargers/${laderId}`), { spotId }),
+};
+
+// ---------------------------------------------------------------------------------------
+// Oppslagstavla (docs/oppslagstavle.md)
+// ---------------------------------------------------------------------------------------
+
+export type Oppslag = {
+  id: string;
+  kind: Oppslagstype;
+  title: string;
+  body: string | null;
+  category: Kategori | null;
+  originalName: string | null;
+  showFrom: string;
+  showUntil: string;
+  allScreens: boolean;
+  screenIds: string[];
+  displaySeconds: number;
+  createdBy: string;
+  createdAt: string;
+  status: Status;
+};
+
+export type OppslagInn = {
+  tittel: string;
+  tekst?: string | null;
+  kategori?: Kategori | null;
+  fra: string;
+  til: string;
+  alleSkjermer: boolean;
+  skjermIder: string[];
+  sekunder: number;
+};
+
+export type Tavlekontakt = {
+  id: string;
+  navn: string;
+  rolle: string | null;
+  telefon: string | null;
+  epost: string | null;
+  harBilde: boolean;
+  bildeVersjon: string | null;
+};
+
+export type KontaktInn = { navn: string; rolle: string | null; telefon: string | null; epost: string | null };
+
+export type Tavlehendelse = {
+  id: string;
+  title: string;
+  eventDate: string;
+  eventTime: string | null;
+  place: string | null;
+  createdBy: string;
+};
+
+export type Skjerm = {
+  id: string;
+  navn: string;
+  adresse: string | null;
+  retning: Retning;
+  felt: Felt[];
+  sistSett: string | null;
+  paaNett: boolean;
+  koblet: string;
+};
+
+export type Tavleutseende = {
+  background: string;
+  accent: string;
+  offlineMode: "siste" | "melding";
+  harLogo: boolean;
+};
+
+export const oppslagstavle = {
+  oppslag: (o: string) => api.hent<Oppslag[]>(org(o, "/oppslagstavle/oppslag")),
+  nyttTekstoppslag: (o: string, d: OppslagInn) => api.send<Oppslag>(org(o, "/oppslagstavle/oppslag"), d),
+  /** Bildet og feltene i ett kall — et oppslag skal aldri stå uten bildet sitt. */
+  nyttBildeoppslag: (o: string, d: OppslagInn, fil: File) => {
+    const f = new FormData();
+    f.set("data", JSON.stringify(d));
+    f.set("fil", fil);
+    return api.lastOpp<Oppslag>(org(o, "/oppslagstavle/oppslag"), f);
+  },
+  endreOppslag: (o: string, id: string, d: OppslagInn) => api.endre<Oppslag>(org(o, `/oppslagstavle/oppslag/${id}`), d),
+  slettOppslag: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/oppslag/${id}`)),
+  /** Til `<img src>` — cookien følger med, så bildet går gjennom de samme gatene. */
+  bildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/oppslag/${id}/fil`)}`,
+
+  hendelser: (o: string) => api.hent<Tavlehendelse[]>(org(o, "/oppslagstavle/hendelser")),
+  nyHendelse: (o: string, d: { tittel: string; dato: string; tid: string | null; sted: string | null }) =>
+    api.send<Tavlehendelse>(org(o, "/oppslagstavle/hendelser"), d),
+  slettHendelse: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/hendelser/${id}`)),
+
+  skjermer: (o: string) => api.hent<Skjerm[]>(org(o, "/oppslagstavle/skjermer")),
+  koble: (o: string, d: { kode: string; navn: string; adresse: string | null; retning: Retning }) =>
+    api.send<Skjerm>(org(o, "/oppslagstavle/skjermer"), d),
+  endreSkjerm: (o: string, id: string, d: { navn: string; adresse: string | null; retning: Retning; felt: Felt[] }) =>
+    api.endre<Skjerm>(org(o, `/oppslagstavle/skjermer/${id}`), d),
+  slettSkjerm: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/skjermer/${id}`)),
+  forhandsvisning: (o: string, id: string) =>
+    api.hent<Skjerminnhold>(org(o, `/oppslagstavle/skjermer/${id}/innhold`)),
+
+  kontakter: (o: string) => api.hent<Tavlekontakt[]>(org(o, "/oppslagstavle/kontakter")),
+  /** Bildet er valgfritt og sendes i samme kall som feltene. */
+  nyKontakt: (o: string, d: KontaktInn, fil: File | null) => {
+    const f = new FormData();
+    f.set("data", JSON.stringify(d));
+    if (fil) f.set("fil", fil);
+    return api.lastOpp<Tavlekontakt>(org(o, "/oppslagstavle/kontakter"), f);
+  },
+  endreKontakt: (o: string, id: string, d: KontaktInn) =>
+    api.endre<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}`), d),
+  slettKontakt: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/kontakter/${id}`)),
+  flyttKontakt: (o: string, id: string, retning: "opp" | "ned") =>
+    api.send<Tavlekontakt[]>(org(o, `/oppslagstavle/kontakter/${id}/flytt`), { retning }),
+  settKontaktbilde: (o: string, id: string, fil: File) => {
+    const f = new FormData();
+    f.set("fil", fil);
+    return api.lastOpp<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}/bilde`), f);
+  },
+  fjernKontaktbilde: (o: string, id: string) =>
+    request<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}/bilde`), { method: "DELETE" }),
+  kontaktbildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/kontakter/${id}/bilde`)}`,
+
+  utseende: (o: string) => api.hent<Tavleutseende>(org(o, "/oppslagstavle/utseende")),
+  lagreUtseende: (o: string, d: Omit<Tavleutseende, "harLogo">) =>
+    api.endre<Tavleutseende>(org(o, "/oppslagstavle/utseende"), d),
+  lastOppLogo: (o: string, fil: File) => {
+    const f = new FormData();
+    f.set("fil", fil);
+    return api.lastOpp<Tavleutseende>(org(o, "/oppslagstavle/utseende/logo"), f);
+  },
+  slettLogo: (o: string) => request<Tavleutseende>(org(o, "/oppslagstavle/utseende/logo"), { method: "DELETE" }),
+  logoSti: (o: string) => `/api${org(o, "/oppslagstavle/utseende/logo")}`,
+};
+
+/**
+ * Selve skjermen (`/skjerm`). Egen fetch og ikke `request()`: skjermen har ingen sesjon,
+ * og en 401 betyr «fjernet i appen — vis koblingskoden igjen», ikke «send til innlogging».
+ */
+async function skjermkall<T>(sti: string, token: string | null, init: RequestInit = {}): Promise<T> {
+  const svar = await fetch(`/api/skjerm${sti}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  const data = await svar.json().catch(() => null);
+  if (!svar.ok) throw new ApiKlientFeil(svar.status, data?.detail ?? "Noe gikk galt");
+  return data as T;
+}
+
+export const skjermklient = {
+  startKobling: () => skjermkall<{ kode: string; hemmelighet: string; utloper: string }>("/kobling", null, { method: "POST" }),
+  koblingsstatus: (hemmelighet: string) =>
+    skjermkall<{ status: "venter" | "utlopt" } | { status: "koblet"; token: string }>("/kobling/status", null, {
+      method: "POST",
+      body: JSON.stringify({ hemmelighet }),
+    }),
+  innhold: (token: string) => skjermkall<Skjerminnhold>("/innhold", token),
+  /** Bilder må hentes med tokenet i headeren — `<img src>` kan ikke sende det. */
+  fil: async (sti: string, token: string): Promise<Blob> => {
+    const svar = await fetch(`/api/skjerm${sti}`, { headers: { authorization: `Bearer ${token}` } });
+    if (!svar.ok) throw new ApiKlientFeil(svar.status, "Kunne ikke hente bildet");
+    return svar.blob();
+  },
+};
+
+// ---------------------------------------------------------------------------------------
+// BIR — tømmedager til oppslagstavla (docs/bir.md). Fjernbar pakke.
+// ---------------------------------------------------------------------------------------
+
+export type BirTreff = { id: string; navn: string; sted: string | null; eiendom: string | null };
+
+export type BirStatus = {
+  birId: string;
+  navn: string;
+  eiendom: string | null;
+  koblet: string;
+  sistHentet: string | null;
+  feil: string | null;
+  datoer: Array<{ fraksjon: string; etikett: string; dato: string }>;
+} | null;
+
+export const bir = {
+  status: (o: string) => api.hent<BirStatus>(org(o, "/oppslagstavle/bir")),
+  sok: (o: string, q: string) => api.hent<BirTreff[]>(org(o, `/oppslagstavle/bir/sok?q=${encodeURIComponent(q)}`)),
+  koble: (o: string, t: BirTreff) =>
+    api.endre<BirStatus>(org(o, "/oppslagstavle/bir"), { id: t.id, navn: t.navn, eiendom: t.eiendom }),
+  hentNaa: (o: string) => api.send<BirStatus>(org(o, "/oppslagstavle/bir/synk"), {}),
+  kobleFra: (o: string) => api.slett(org(o, "/oppslagstavle/bir")),
 };

@@ -188,6 +188,7 @@ export type RlsUnntak =
   | "innlogging" // identitet og abonnementssperre, før org er kjent
   | "migrasjon" // skjemaendringer og RLS-oppsett kjøres som eier
   | "bakgrunnsjobb" // varsler og opprydding, på tvers av alle kunder
+  | "skjerm" // oppslagstavla: skjermens enhetstoken slås opp FØR org er kjent (lib/oppslagstavle.ts)
   | "tokenlagring"; // et fornyet OAuth-token må overleve at forespørselens transaksjon rulles tilbake (se lib/tokenlagring.ts)
 
 /**

@@ -112,8 +112,8 @@ org-kontekst er en tom liste uten feilmelding — v1s vanligste bug. Her er den 
 kompileringsfeil i stedet.
 
 - `RlsUnntak` er en lukket union (`"plattformpanel" | "leverandorportal" | "qr-anonym" |
-  "innlogging" | "migrasjon" | "bakgrunnsjobb" | "tokenlagring"`). Ny bruk uten navngitt
-  grunn kompilerer ikke.
+  "innlogging" | "migrasjon" | "bakgrunnsjobb" | "tokenlagring" | "skjerm"`). Ny bruk uten
+  navngitt grunn kompilerer ikke.
 - Nøstet `withOrg` mot en **annen** org kaster `KryssendeOrgKontekst` — én forespørsel skal
   aldri røre to borettslag i samme transaksjon.
 - **Applikasjonsfiltrene beholdes likevel**: `.where(eq(x.orgId, orgId))` skal stå i hver
@@ -153,8 +153,8 @@ Ingen rutehandler skrives for hånd — en `route.ts` er 3–6 linjer med
   `{"type":"Buffer",…}` (skjedde med alle tre nedlastingene samtidig).
 - `plattformRute` kjører i `withoutRls("plattformpanel")` uten org-kontekst — rører den en
   org-eid tabell, er det en stille tenantlekkasje.
-- Anonyme QR-ruter (`src/app/api/qr/`) bruker ingen wrapper, men **må** gå gjennom
-  `tilSvar(e)` for samme feilform.
+- Anonyme QR-ruter (`src/app/api/qr/`) og skjermrutene (`src/app/api/skjerm/`) bruker ingen
+  wrapper, men **må** gå gjennom `tilSvar(e)` for samme feilform (filer via `somSvar`).
 
 ### Tilgang
 
@@ -278,7 +278,8 @@ testsuite — begrunnelse i `src/db/client.ts`). Regelen håndheves i stedet sli
 klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `oppgaveregler.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
 `orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`, `regnskap.ts`,
-`okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`. Ikke gi dem
+`okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`,
+`oppslagstavleregler.ts`, `avfallsregler.ts`. Ikke gi dem
 server-importer: verken tsc eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i
 bygget.
 
@@ -299,12 +300,16 @@ rører integrasjonen.
   aldri stille 0.
 - **Unloc (digitale nøkler)** — `docs/unloc.md`. Ikke prøvd mot ekte Unloc ennå; formen på
   jobbresultatet er antatt fra dokumentasjonen.
+- **BIR (tømmedager på oppslagstavla)** — `docs/bir.md`. Ingen dokumentert API: søket er
+  JSON, kalenderen er HTML-skraping. En tolkning som ikke kjenner igjen siden KASTER (tom
+  liste = «ingen tømming»); en feilet henting noteres og returnerer, så gamle datoer står.
 - **Integrasjonshemmeligheter** krypteres med `INTEGRASJON_NOKKEL` (64 hex, felles for alle
   integrasjoner) — i `.env`, aldri i databasen, ellers gir en databasedump både token og
   nøkkel. Prod skal ha sin egen, aldri testens. Byttes eller mistes den, må hver kunde koble
   til på nytt.
 
-Øvrige notater: `docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
+Øvrige notater: `docs/oppslagstavle.md` (infoskjermene; skjermens anonyme token-inngang),
+`docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
 `docs/fdv.md`, `docs/mcp-servere.md`.
 
 ## Frontend
@@ -337,7 +342,8 @@ komponenter — endres logikken, må begge med.
 - **`useOrgData<T>(hent, avhengigheter)`** er standard datahenting per org — den eier
   `orgId`-avhengigheten selv.
 - **`src/lib/klient.ts` er eneste sted for API-kall** — ingen `fetch` i sider/komponenter
-  (unntak: de offentlige QR-sidene, som er utenfor sesjon). Nye endepunkter får typedef og
+  (unntak: de offentlige QR-sidene, som er utenfor sesjon). Skjermen på `/skjerm` har sin
+  egen `skjermklient` der — en 401 betyr «koblet fra», ikke «send til innlogging». Nye endepunkter får typedef og
   legges i modulobjektene (`oppgaver.hent(…)`), ikke som håndskrevne stier. 401 håndteres
   sentralt; feilmeldinger er alltid norske via `{ detail }`.
 - Detaljvisninger er i økende grad **fanemodal over lista** (`?apen=<id>`), ikke egen side

@@ -4604,6 +4604,162 @@ textarea.qr-input { resize: vertical; }
 }
 .ea-skjema-del { font-size: var(--fs-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; }
 
+/* ═══ Oppslagstavla (docs/oppslagstavle.md) ═══════════════════════════════════════════════
+ * Adminsiden: innholdslista til venstre, forhåndsvisningen til høyre — under hverandre på
+ * smal skjerm. Selve tavla (`.ot-skjerm`) måles i `--u` = 1 % av tavlas bredde, ikke i
+ * `--fs-*`: den skal se lik ut på en 55-tommer og i forhåndsvisningen. Unntaket fra
+ * token-regelen gjelder bare innenfor `.ot-skjerm`. */
+.ot-oppsett { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.ot-oppsett.liggende { grid-template-columns: minmax(0, 1fr) 520px; }
+.ot-forhand { position: sticky; top: 0; display: flex; flex-direction: column; gap: 10px; }
+.ot-ramme { background: #05070b; border-radius: 14px; padding: 10px; }
+@media (max-width: 1100px) {
+  .ot-oppsett, .ot-oppsett.liggende { grid-template-columns: minmax(0, 1fr); }
+  .ot-forhand { position: static; max-width: 520px; }
+}
+.ot-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.ot-chip {
+  border: 1px solid var(--border); background: var(--surface2); color: var(--muted);
+  border-radius: 999px; padding: 4px 11px; font: inherit; font-size: var(--fs-label); cursor: pointer;
+}
+.ot-chip.valgt { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.ot-typer { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.ot-type {
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text); font: inherit;
+  border-radius: 10px; padding: 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+}
+.ot-type.valgt { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
+.ot-type b { font-size: var(--fs-sm); }
+.ot-type span { color: var(--muted); }
+.ot-to { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+.ot-skjermkort {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
+  border-radius: 10px; padding: 12px 14px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+}
+.ot-skjermkort.valgt { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ot-skjermkort b { font-size: var(--fs-sm); }
+.ot-skjermkort span { color: var(--muted); }
+.ot-prikk { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+.ot-prikk.ok { background: var(--accent2); }
+.ot-prikk.nede { background: var(--warn); }
+.ot-farger { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.ot-farger label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; }
+.ot-farger input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: 6px; background: none; padding: 2px; cursor: pointer; }
+.ot-logo-forh {
+  width: 48px; height: 48px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2);
+  display: grid; place-items: center; overflow: hidden; flex-shrink: 0; font-weight: 800; color: var(--muted);
+}
+.ot-logo-forh img { max-width: 100%; max-height: 100%; }
+.ot-kontakt-mini {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--muted); flex-shrink: 0;
+  display: grid; place-items: center; overflow: hidden; font-size: var(--fs-label); font-weight: 700;
+}
+.ot-kontakt-mini img { width: 100%; height: 100%; object-fit: cover; }
+.ot-kodefelt input { font-family: ui-monospace, Menlo, monospace; font-size: var(--fs-lg); letter-spacing: 0.18em; text-transform: uppercase; }
+
+.ot-skjerm {
+  --u: 1cqw;
+  container-type: inline-size; position: relative; aspect-ratio: 9 / 16; width: 100%;
+  background: var(--s-bg); color: var(--s-fg); border-radius: 6px; overflow: hidden;
+  display: flex; flex-direction: column; font-family: var(--font-sans); line-height: 1.3;
+}
+.ot-skjerm.liggende { aspect-ratio: 16 / 9; --u: 0.5625cqw; }
+.ot-skjerm * { box-sizing: border-box; }
+/* På veggen: hele vinduet, uansett forhold — retningen er valgt i appen, ikke målt. */
+.ot-vegg { position: fixed; inset: 0; background: #000; display: grid; place-items: center; overflow: hidden; }
+.ot-vegg .ot-skjerm { border-radius: 0; width: min(100vw, calc(100vh * 9 / 16)); }
+.ot-vegg .ot-skjerm.liggende { width: min(100vw, calc(100vh * 16 / 9)); }
+.ot-topp { display: flex; justify-content: space-between; align-items: center; padding: calc(var(--u) * 6) calc(var(--u) * 6) calc(var(--u) * 4); flex-shrink: 0; }
+.ot-id { display: flex; align-items: center; gap: calc(var(--u) * 3); min-width: 0; }
+.ot-logo {
+  width: calc(var(--u) * 11); height: calc(var(--u) * 11); border-radius: calc(var(--u) * 2); flex-shrink: 0;
+  background: var(--s-accent); color: var(--s-onacc); display: grid; place-items: center; overflow: hidden;
+  font-weight: 800; font-size: calc(var(--u) * 4.2);
+}
+.ot-logo img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.ot-adr { font-size: calc(var(--u) * 3); color: var(--s-muted); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; min-width: 0; }
+.ot-adr b { display: block; color: var(--s-fg); font-size: calc(var(--u) * 5.6); letter-spacing: -0.01em; text-transform: none; margin-top: calc(var(--u) * 0.6); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ot-klokke { text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.ot-klokke .c { font-size: calc(var(--u) * 9); font-weight: 600; line-height: 1; }
+.ot-klokke .d { font-size: calc(var(--u) * 3); color: var(--s-muted); margin-top: calc(var(--u) * 1); }
+.ot-kropp { flex: 1; min-height: 0; display: grid; gap: calc(var(--u) * 3); padding: 0 calc(var(--u) * 6); }
+.ot-kropp > * { min-height: 0; min-width: 0; overflow: hidden; }
+.ot-hero {
+  grid-area: hero; display: flex; flex-direction: column; background: var(--s-panel); border-radius: calc(var(--u) * 3);
+  padding: calc(var(--u) * 5); border-left: calc(var(--u) * 1.4) solid var(--s-accent);
+}
+.ot-hero.viktig { border-left-color: var(--s-red); }
+.ot-hero.arrangement { border-left-color: var(--s-sun); }
+.ot-hero.media { padding: calc(var(--u) * 3); }
+.ot-tag { font-size: calc(var(--u) * 2.8); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--s-accent-t); flex-shrink: 0; }
+.ot-hero.viktig .ot-tag { color: var(--s-red); }
+.ot-hero.arrangement .ot-tag { color: var(--s-sun); }
+.ot-hero h3 {
+  font-size: calc(var(--u) * 7.2); line-height: 1.08; margin: calc(var(--u) * 2) 0; font-weight: 800; letter-spacing: -0.02em;
+  text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex-shrink: 0;
+}
+.ot-hero p { font-size: calc(var(--u) * 3.8); line-height: 1.4; margin: 0; color: var(--s-fg2); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.ot-hero h3.bildetekst { font-size: calc(var(--u) * 3.8); font-weight: 600; -webkit-line-clamp: 2; margin: calc(var(--u) * 2) calc(var(--u) * 1) 0; }
+.ot-bilde { flex: 1; min-height: 0; width: 100%; object-fit: cover; border-radius: calc(var(--u) * 2); display: block; background: var(--s-line); }
+.ot-prikker { display: flex; gap: calc(var(--u) * 1.4); margin-top: auto; padding-top: calc(var(--u) * 2.5); flex-shrink: 0; }
+.ot-prikker i { width: calc(var(--u) * 4); height: calc(var(--u) * 0.9); border-radius: calc(var(--u) * 1); background: var(--s-line); }
+.ot-prikker i.pa { background: var(--s-fg); }
+.ot-kort { background: var(--s-panel); border-radius: calc(var(--u) * 3); padding: calc(var(--u) * 4); }
+.ot-sone-kalender { grid-area: kal; }
+.ot-sone-avfall {
+  grid-area: avf; display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: calc(var(--u) * 1.2) calc(var(--u) * 5); padding: calc(var(--u) * 2.5) calc(var(--u) * 4);
+}
+.ot-sone-avfall .ot-h { margin: 0; }
+.ot-tomming { font-size: calc(var(--u) * 3.2); white-space: nowrap; display: flex; gap: calc(var(--u) * 1.5); align-items: baseline; }
+.ot-tomming span { color: var(--s-muted); font-variant-numeric: tabular-nums; }
+.ot-tomming.snart span { color: var(--s-sun); font-weight: 700; }
+.ot-sone-kontakt { grid-area: kon; display: flex; flex-direction: column; justify-content: flex-start; }
+/* Liggende: sidekolonnen er lav, så kortene får mindre luft — ellers klippes e-posten. */
+.liggende .ot-kort { padding: calc(var(--u) * 3) calc(var(--u) * 4); }
+.liggende .ot-sone-avfall { padding: calc(var(--u) * 2) calc(var(--u) * 4); }
+.ot-h { font-size: calc(var(--u) * 2.6); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--s-muted); margin-bottom: calc(var(--u) * 2); }
+.ot-hendelse { display: grid; grid-template-columns: calc(var(--u) * 10) minmax(0, 1fr); gap: calc(var(--u) * 2.5); align-items: center; padding: calc(var(--u) * 1.6) 0; border-top: 1px solid var(--s-line); }
+.ot-hendelse:first-of-type { border-top: 0; }
+.ot-dato { text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.ot-dato b { display: block; font-size: calc(var(--u) * 5); font-weight: 600; }
+.ot-dato span { font-size: calc(var(--u) * 2.4); color: var(--s-muted); text-transform: uppercase; }
+.ot-hendelse .x { font-size: calc(var(--u) * 3.4); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ot-hendelse .y { font-size: calc(var(--u) * 2.8); color: var(--s-muted); }
+.ot-ph { font-size: calc(var(--u) * 3.6); color: var(--s-accent-t); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ot-tom { font-size: calc(var(--u) * 3); color: var(--s-muted); }
+.ot-person { display: flex; align-items: center; gap: calc(var(--u) * 3.5); min-height: 0; }
+.ot-portrett { width: calc(var(--u) * 12); height: calc(var(--u) * 12); border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--s-line); }
+.ot-navn { font-size: calc(var(--u) * 3.8); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ot-navn span { font-weight: 400; color: var(--s-fg2); }
+.ot-person .ot-ph { font-size: calc(var(--u) * 3.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ot-prikker-side { margin: 0 0 0 auto; padding: 0; flex-direction: column; align-self: center; }
+.ot-prikker-side i { width: calc(var(--u) * 0.9); height: calc(var(--u) * 3); }
+.ot-fot {
+  flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+  padding: calc(var(--u) * 3) calc(var(--u) * 6) calc(var(--u) * 3.5); font-size: calc(var(--u) * 2.5); color: var(--s-muted);
+}
+.ot-merke { display: flex; align-items: center; gap: calc(var(--u) * 1.4); opacity: 0.75; font-weight: 600; color: var(--s-fg); }
+.ot-merke i {
+  width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); border-radius: calc(var(--u) * 0.8); background: #1f5fd1; color: #fff;
+  display: grid; place-items: center; font-style: normal; font-size: calc(var(--u) * 1.7); font-weight: 800;
+}
+.ot-midt { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: calc(var(--u) * 4); padding: calc(var(--u) * 8); }
+.ot-midt h3 { font-size: calc(var(--u) * 7); margin: 0; font-weight: 800; }
+.ot-midt p { font-size: calc(var(--u) * 3.6); line-height: 1.4; margin: 0; color: var(--s-fg2); max-width: calc(var(--u) * 80); }
+.ot-lbl { font-size: calc(var(--u) * 2.6); text-transform: uppercase; letter-spacing: 0.14em; color: var(--s-muted); margin-bottom: calc(var(--u) * 1.5); }
+.ot-kode { font-family: ui-monospace, Menlo, monospace; font-size: calc(var(--u) * 11); letter-spacing: 0.12em; font-weight: 600; color: var(--s-sun); }
+.ot-meta { font-size: calc(var(--u) * 2.8); color: var(--s-muted); }
+.ot-utennett {
+  position: absolute; left: calc(var(--u) * 6); right: calc(var(--u) * 6); bottom: calc(var(--u) * 8.5);
+  background: var(--s-bg); border: 1px solid var(--s-sun); border-radius: calc(var(--u) * 1.6);
+  padding: calc(var(--u) * 1.6) calc(var(--u) * 3); font-size: calc(var(--u) * 2.8); display: flex; gap: calc(var(--u) * 2); align-items: center;
+}
+.ot-utennett i { width: calc(var(--u) * 2); height: calc(var(--u) * 2); border-radius: 50%; background: var(--s-sun); flex-shrink: 0; }
+.ot-fade { animation: ot-inn 0.5s ease; }
+@keyframes ot-inn { from { opacity: 0.25; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ot-fade { animation: none; } }
+
 @media print {
   .sidebar, .topbar, .app-subnav, .btn, .sjekkpunkt-handlinger, .sp-fjern,
   .vr-bunn, .vr-leggtil, .vr-valg, .print-skjul,

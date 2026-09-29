@@ -29,6 +29,7 @@ export const ALLE_MODULER = [
   "leverandorer",
   "brukere",
   "okonomi",
+  "oppslagstavle",
 ] as const;
 
 export type ModulNokkel = (typeof ALLE_MODULER)[number];
@@ -51,6 +52,7 @@ export const AV_SOM_STANDARD: ReadonlySet<ModulNokkel> = new Set([
   "ai_radgiver",
   "rutiner",
   "okonomi",
+  "oppslagstavle",
 ]);
 
 /**
@@ -116,6 +118,7 @@ export const MENY: Readonly<Partial<Record<ModulNokkel, Menypunkt>>> = {
   avvik: { sti: "/avvik", etikett: "Avvik", gruppe: "Daglig drift", ikon: "TriangleAlert" },
   driftslogg: { sti: "/driftslogg", etikett: "Driftslogg", gruppe: "Daglig drift", ikon: "NotebookPen" },
   ai_radgiver: { sti: "/ai-radgiver", etikett: "AI-rådgiver", gruppe: "Daglig drift", ikon: "Sparkles" },
+  oppslagstavle: { sti: "/oppslagstavle", etikett: "Oppslagstavle", gruppe: "Daglig drift", ikon: "Tv" },
 
   arshjul: { sti: "/arshjul", etikett: "Årshjul", gruppe: "Planlegging og HMS", ikon: "CalendarDays" },
   vedlikehold: { sti: "/vedlikehold", etikett: "Vedlikehold", gruppe: "Planlegging og HMS", ikon: "Wrench" },

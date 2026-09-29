@@ -212,8 +212,10 @@ function erFilsvar(v: unknown): v is Filsvar {
  *
  * `Content-Disposition: attachment` med filnavnet er ikke pynt — uten den arver nedlastingen
  * URL-ens siste ledd, altså «file», uten filendelse.
+ *
+ * Eksportert for de anonyme skjermrutene (`/api/skjerm/`), som leverer filer uten `orgRute`.
  */
-function somSvar(resultat: unknown, status: number): Response {
+export function somSvar(resultat: unknown, status: number): Response {
   if (!erFilsvar(resultat)) return Response.json(resultat, { status });
 
   return new Response(new Uint8Array(resultat.innhold), {

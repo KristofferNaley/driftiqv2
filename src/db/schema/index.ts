@@ -39,3 +39,5 @@ export * from "./okonomi";
 export * from "./unloc";
 export * from "./easee";
 export * from "./ladekjoring";
+export * from "./oppslagstavle";
+export * from "./bir";

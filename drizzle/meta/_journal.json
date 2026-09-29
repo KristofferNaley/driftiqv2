@@ -421,6 +421,27 @@
       "when": 1788723357360,
       "tag": "0059_ladekjoring",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790710256505,
+      "tag": "0060_oppslagstavle",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790711662834,
+      "tag": "0061_oppslagstavle_kontakter",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790712567505,
+      "tag": "0062_bir",
+      "breakpoints": true
     }
   ]
 }

@@ -71,6 +71,11 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Regnskapskoblingen: krypterte tokens og speilede kjøp. En kunde skal aldri kunne lese
   // en annen kundes regnskap — heller ikke gjennom en glemt org-filter i en synkjobb.
   "fiken_connections", "fiken_purchases",
+  // Oppslagstavla (docs/oppslagstavle.md). Skjermene, oppslagene, kalenderen og utseendet —
+  // alle med egen org_id. Skjermen selv leser via `withOrg` etter at tokenet er slått opp.
+  "board_screens", "board_posts", "board_events", "board_settings", "board_contacts",
+  // BIR-tømmedager (docs/bir.md) — fjernbar pakke; valgt BIR-oppføring og hentede datoer.
+  "bir_settings", "bir_pickups",
 ];
 
 /**
@@ -157,6 +162,9 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   account: "Better Auth: innloggingsmetoder knyttet til global bruker",
   verification: "Better Auth: engangstokens, slås opp uten org-kontekst",
   jwks: "Better Auth: nøkkelpar for JWT-signering, ingen kundedata",
+  // Koblingskoden en ny skjerm viser. Opprettes av en anonym skjerm før den tilhører noen
+  // org, så det finnes ingen org_id å filtrere på. Raden bærer bare kode, hash og utløp.
+  board_pairings: "oppslagstavle: koblingskode før skjermen tilhører en org, ingen org_id",
   two_factor: "Better Auth: TOTP-hemmelighet, verifiseres før org-kontekst finnes",
   // Innloggingshendelser er brukernivå, ikke org-eid — en bruker i to lag skal ikke få
   // innloggingene sine eksponert for begge styrene. Leses kun av plattformpanelet.

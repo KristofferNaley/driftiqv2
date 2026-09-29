@@ -52,7 +52,8 @@ const EKSKLUDERTE_TABELLER = new Set([
 
 /** Interne disknavn og tokens — har ingenting i et kundeuttak å gjøre. */
 // `content_text` er utledet av fila (som er med i uttaket) og kan være hundretusener av tegn.
-const EKSKLUDERTE_KOLONNER = new Set(["org_id", "qr_token", "filename", "file_name", "content_text"]);
+// `device_token_hash`: oppslagstavlas skjermer — en hash er ingen tilgang, men hører ikke hjemme i et uttak.
+const EKSKLUDERTE_KOLONNER = new Set(["org_id", "qr_token", "filename", "file_name", "content_text", "device_token_hash"]);
 
 /** Tegn som ikke kan stå i filnavn på Windows — uttaket skal kunne pakkes ut overalt. */
 function trygtNavn(navn: string): string {

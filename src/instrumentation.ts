@@ -188,6 +188,47 @@ export async function register(): Promise<void> {
   );
   console.log(`[easee-synk] Planlagt: ${easeeSynk.plan}.`);
 
+  // Tømmedager fra BIR (docs/bir.md): orgene én om gangen i egen withOrg — withoutRls kun
+  // for å finne dem. En feil lagres på koblingen (datoene står) og samles i ett driftsvarsel.
+  const birSynk = JOBBER.find((j) => j.nokkel === "bir-synk")!;
+  cron.schedule(
+    birSynk.cron,
+    () => {
+      void (async () => {
+        try {
+          await medKjoringslogg("bir-synk", async () => {
+            const { withOrg, withoutRls } = await import("./db/client");
+            const { birSettings } = await import("./db/schema/bir");
+            const { synkBir } = await import("./lib/birkobling");
+            const orger = await withoutRls("bakgrunnsjobb", (db) =>
+              db.select({ orgId: birSettings.orgId }).from(birSettings),
+            );
+            let ok = 0;
+            const feil: string[] = [];
+            for (const { orgId } of orger) {
+              try {
+                const r = await withOrg(orgId, (db) => synkBir(db, orgId));
+                if (r.ok) ok++;
+                else feil.push(`${orgId}: ${r.feil}`);
+              } catch (e) {
+                feil.push(`${orgId}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }
+            if (feil.length > 0) void sendDriftsvarsel(`⚠️ BIR-synk feilet for ${feil.length} org(er): ${feil.join("; ")}`);
+            const detalj = `${ok} av ${orger.length} orger synkronisert`;
+            console.log(`[bir-synk] Ferdig — ${detalj}.`);
+            return detalj;
+          });
+        } catch (e) {
+          console.error("[bir-synk] Jobben feilet:", e);
+          void sendDriftsvarsel(`⚠️ Bakgrunnsjobben «bir-synk» feilet: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      })();
+    },
+    { timezone: birSynk.timezone },
+  );
+  console.log(`[bir-synk] Planlagt: ${birSynk.plan}.`);
+
   // Easees refresh-token lever 24 timer; den nattlige synken alene lå nøyaktig på grensen
   // og mistet innloggingen annenhver natt (12.–15.09.2026). Denne fornyer hver 6. time.
   // Bare NYE feil varsles — en død innlogging skal ikke gi fire varsler i døgnet.
