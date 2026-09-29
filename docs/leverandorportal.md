@@ -103,7 +103,10 @@ lagres før borettslaget aktivt gir tilgang.
 ## Åpne spørsmål
 
 - Auth: eget Better Auth-oppsett for portalen, eller samme med kontotype-felt? (Egen vert
-  gir uansett egen cookie; spørsmålet er datamodellen.)
+  gir uansett egen cookie; spørsmålet er datamodellen.) **Forslag 20.09.2026**
+  (`docs/mobilapp.md`, «Styret og leverandører i samme app»): ingen av delene — samme
+  `users`-tabell, og hva du er utledes av koblingene (org-medlemskap og/eller medlemskap i
+  leverandørkonto). Grantens «omfang» bør dele type med `docs/modultilgang.md`.
 - Skal vaktmesteren kunne se rutinebeskrivelser/sjekklister, eller kun tildelte oppgaver?
 - Varsling: e-post til leverandøren ved ny tildeling? (Gjenbruk `epost.ts`-rammen.)
 - ~~Prising~~ **Avklart 26.08.2026**: å registrere dokumentasjon for et borettslag koster
