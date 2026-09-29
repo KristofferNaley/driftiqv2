@@ -82,9 +82,10 @@ export const JOBBER: Jobb[] = [
     nokkel: "bir-synk",
     navn: "BIR-synk",
     beskrivelse: "Henter tømmedager fra BIR til oppslagstavla for orger som er koblet til BIR",
-    cron: "40 2 * * *",
+    // Ukentlig holder: kalenderen fra BIR dekker tre måneder, og «Hent nå» finnes i appen.
+    cron: "40 2 * * 1",
     timezone: "Europe/Oslo",
-    plan: "Hver natt kl. 02:40 (Europe/Oslo)",
+    plan: "Mandager kl. 02:40 (Europe/Oslo)",
     kilde: "app",
   },
   // Vertsjobbene går i vertens LOKALTID (satt til Europe/Oslo 14.08.2026 — cron må

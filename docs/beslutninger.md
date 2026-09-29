@@ -45,7 +45,8 @@ går ut på dato; profilen er fasiten, og den som går ut av styret skal forsvin
 
 **Hvorfor:** Salget starter mot boligselskap i Bergen, og BIR har ikke noe dokumentert API.
 Nettsiden er eneste åpne kilde. Lagring gir en tavle som står når bir.no er nede eller har
-endret seg, og holder belastningen på BIR til ett kall per borettslag per døgn.
+endret seg, og holder belastningen på BIR til ett kall per borettslag per uke (først hver
+natt; ukentlig holder fordi kalenderen dekker tre måneder — flyttes en dag, er «Hent nå» der).
 
 **Alternativer:**
 - *Hente live fra skjermen eller per forespørsel.* Forkastet: hver skjerm hvert minutt mot en

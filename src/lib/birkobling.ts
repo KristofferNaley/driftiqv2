@@ -4,7 +4,7 @@
  *
  * ## Skjermen spør aldri BIR
  *
- * Datoene hentes ved kobling, med «Hent nå» og av den nattlige jobben «bir-synk», og lagres
+ * Datoene hentes ved kobling, med «Hent nå» og av den ukentlige jobben «bir-synk», og lagres
  * i `bir_pickups`. Skjermen leser tabellen. Da står tavla også når bir.no er nede eller har
  * endret nettsiden: de sist kjente datoene vises til de er passert.
  *

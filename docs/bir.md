@@ -8,7 +8,8 @@ dokumentert API; integrasjonen bruker de samme flatene som bir.no. BIR er ikke s
 
 Styret (nivå redigering) søker opp borettslaget hos BIR og velger oppføringen (Oppslagstavle →
 Innhold → «Tømmedager fra BIR», eller «Nytt innhold» → Tømmedager). DriftIQ henter tømmekalenderen ved kobling, med «Hent nå»
-og hver natt kl. 02:40 (jobben «bir-synk»), og lagrer datoene. Skjermen viser neste tømming
+og hver mandag kl. 02:40 (jobben «bir-synk» — ukentlig holder, kalenderen dekker tre
+måneder; endret fra hver natt 29.09.2026), og lagrer datoene. Skjermen viser neste tømming
 per fraksjon, med egne fraksjonsmerker (farge + ikon, `AVFALL_MERKE` — ikke BIRs grafikk), i
 den innebygde blokken `tommedager`. Den plasseres i en sone per skjerm, og hoppes over når
 orgen ikke er koblet. Skjermen spør aldri BIR selv.
@@ -72,7 +73,7 @@ utsnitt (29.09.2026).
 
 - **Spør BIR.** Nettsiden er ikke et API vi har avtale om. BIR-appen henter samme data et
   sted fra; et ordentlig API (eller en tillatelse) bør på plass før dette selges bredt.
-  Belastningen er ett kall per koblet borettslag per natt.
+  Belastningen er ett kall per koblet borettslag per uke.
 - Andre renovasjonsselskap (utenfor BIR-kommunene) får samme form: en adapter som gir
   `Tommedag[]`, og samme `bir_pickups`-lignende lagring. Da bør tabellene få et nøytralt
   navn — ikke gjør det før selskap nummer to finnes.

@@ -87,7 +87,7 @@ export function BirKort({
           ))}
           <div className="card-body" style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
             <span className="field-note">
-              Hentes hver natt. Slå på «Tømmedager» under hver skjerm for å vise dem.
+              Hentes fra BIR hver mandag natt. Trykk «Hent nå» hvis BIR har flyttet en tømmedag.
             </span>
             {erAdmin && orgId && (
               <button

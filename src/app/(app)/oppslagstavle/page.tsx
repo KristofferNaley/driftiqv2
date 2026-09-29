@@ -441,7 +441,7 @@ function OppslagSkjema({
               ["hendelse", "Kalender", "Hendelse i kalenderfeltet"],
               ["vaer", "Vær", "Varsel fra MET Norway (yr) for et sted"],
               ["avganger", "Avganger", "Sanntid fra Entur for en eller to holdeplasser"],
-              ["tommedager", "Tømmedager", "Hentes fra BIR hver natt"],
+              ["tommedager", "Tømmedager", "Hentes fra BIR hver uke"],
             ] as const
           ).map(([n, t, b]) => (
             <button type="button" key={n} className={`ot-type${type === n ? " valgt" : ""}`} onClick={() => setType(n)}>
