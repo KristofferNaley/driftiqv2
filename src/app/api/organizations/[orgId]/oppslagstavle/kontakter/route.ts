@@ -8,7 +8,7 @@ export const GET = orgRute({
 });
 
 /**
- * Multipart: feltene i `data` (JSON), bildet valgfritt i `fil`. Orgadmin — det er
+ * Multipart: `{ brukerId, visTelefon, visEpost }` i `data` (JSON), bildet valgfritt i `fil`. Orgadmin — det er
  * personopplysninger som publiseres på veggen i oppgangen.
  */
 export const POST = orgRute({

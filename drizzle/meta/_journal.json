@@ -442,6 +442,20 @@
       "when": 1790712567505,
       "tag": "0062_bir",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790715579368,
+      "tag": "0063_oppslagstavle_maler",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790715591774,
+      "tag": "0064_oppslagstavle_rydd",
+      "breakpoints": true
     }
   ]
 }

@@ -279,7 +279,7 @@ klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `oppgaveregler.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
 `orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`, `regnskap.ts`,
 `okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`,
-`oppslagstavleregler.ts`, `avfallsregler.ts`. Ikke gi dem
+`oppslagstavleregler.ts`, `avfallsregler.ts`, `tavlemaler.ts`, `vaerregler.ts`. Ikke gi dem
 server-importer: verken tsc eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i
 bygget.
 
@@ -303,6 +303,11 @@ rører integrasjonen.
 - **BIR (tømmedager på oppslagstavla)** — `docs/bir.md`. Ingen dokumentert API: søket er
   JSON, kalenderen er HTML-skraping. En tolkning som ikke kjenner igjen siden KASTER (tom
   liste = «ingen tømming»); en feilet henting noteres og returnerer, så gamle datoer står.
+- **Entur og MET/yr (avganger og vær på oppslagstavla)** — `docs/entur-yr.md`. Åpne API-er;
+  vilkårene krever `ET-Client-Name`, identifiserende `User-Agent`, `Expires`/`If-Modified-Since`
+  og kreditering av MET på skjermen. Svarene holdes i MINNET (30 s / til `Expires`) — ellers
+  gir hver skjerm hvert minutt et kall — og en tjeneste som feiler gir forrige svar eller en
+  blokk som forsvinner, aldri en feil til skjermen.
 - **Integrasjonshemmeligheter** krypteres med `INTEGRASJON_NOKKEL` (64 hex, felles for alle
   integrasjoner) — i `.env`, aldri i databasen, ellers gir en databasedump både token og
   nøkkel. Prod skal ha sin egen, aldri testens. Byttes eller mistes den, må hver kunde koble
@@ -422,6 +427,11 @@ komponenter — endres logikken, må begge med.
   `unit_fee_rates.monthly_amount`); resten av appen bruker hele kroner (`contracts.annualSum`,
   `parking_leases.pricePerMonth`). Konverteringen bor i `lib/okonomiregler.ts` (`tilOre`/
   `kroner`) — gang aldri med 100 andre steder. Se `docs/fiken.md` «Steg 1 slik det ble».
+- **drizzle-kit spør interaktivt når en tabell får nye kolonner OG mister gamle i samme
+  generering** («er dette en omdøping?») — og kan ikke svare i Docker uten TTY; kommandoen
+  bare feiler. Del det i to migrasjoner: først legg til (behold de gamle), så fjern. Trenger
+  fjerningen å rydde data først (f.eks. rader som bryter en ny `NOT NULL`), legges SQL-en inn
+  øverst i den genererte fila (mønster: `drizzle/0064_oppslagstavle_rydd.sql`). 29.09.2026.
 - `timestamp` uten sone leses av node-postgres som lokaltid — auth-tabellene er lagt om
   til `timestamptz`; bruk det på nye tidskolonner.
 - **Liste og detalj skal ha like joins.** `hentOppgaver` joinet leverandør, `hentOppgave`

@@ -74,6 +74,7 @@ export const DIREKTE_TABELLER: readonly string[] = [
   // Oppslagstavla (docs/oppslagstavle.md). Skjermene, oppslagene, kalenderen og utseendet —
   // alle med egen org_id. Skjermen selv leser via `withOrg` etter at tokenet er slått opp.
   "board_screens", "board_posts", "board_events", "board_settings", "board_contacts",
+  "board_blocks",
   // BIR-tømmedager (docs/bir.md) — fjernbar pakke; valgt BIR-oppføring og hentede datoer.
   "bir_settings", "bir_pickups",
 ];

@@ -67,8 +67,13 @@ export function BirKort({ erAdmin, onEndret }: { erAdmin: boolean; onEndret: () 
             )}
           </div>
           {status.datoer.length === 0 && <Tom tekst="Ingen kommende tømmedager fra BIR." />}
-          {status.datoer.slice(0, 8).map((d) => (
-            <Rad key={`${d.fraksjon}-${d.dato}`} tittel={d.etikett} meta={dato(d.dato)} />
+          {/* Neste dato per fraksjon, med antallet bak — hele lista ble en vegg av rader. */}
+          {nestePerFraksjon(status.datoer).map((d) => (
+            <Rad
+              key={d.fraksjon}
+              tittel={d.etikett}
+              meta={`Neste ${dato(d.dato)}${d.flere > 0 ? ` · ${d.flere} til hentet` : ""}`}
+            />
           ))}
           <div className="card-body" style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
             <span className="field-note">
@@ -129,4 +134,14 @@ export function BirKort({ erAdmin, onEndret }: { erAdmin: boolean; onEndret: () 
       ))}
     </Kort>
   );
+}
+
+function nestePerFraksjon(datoer: NonNullable<Awaited<ReturnType<typeof bir.status>>>["datoer"]) {
+  const ut = new Map<string, { fraksjon: string; etikett: string; dato: string; flere: number }>();
+  for (const d of datoer) {
+    const f = ut.get(d.fraksjon);
+    if (f) f.flere++;
+    else ut.set(d.fraksjon, { ...d, flere: 0 });
+  }
+  return [...ut.values()];
 }

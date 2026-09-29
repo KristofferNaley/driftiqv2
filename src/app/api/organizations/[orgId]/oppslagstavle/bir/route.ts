@@ -10,13 +10,13 @@ export const GET = orgRute({
 });
 
 export const PUT = orgRute({
-  nivaa: "admin",
+  nivaa: "redigering",
   modul: "oppslagstavle",
   handler: async ({ db, orgId, bruker, req }) => kobleBir(db, orgId, aktorFor(bruker), await lesKropp(req, birValg)),
 });
 
 export const DELETE = orgRute({
-  nivaa: "admin",
+  nivaa: "redigering",
   modul: "oppslagstavle",
   status: 204,
   handler: ({ db, orgId, bruker }) => kobleFraBir(db, orgId, aktorFor(bruker)),

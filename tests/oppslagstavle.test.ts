@@ -19,7 +19,7 @@ import {
   flyttKontakt,
   hentKontakter,
   kontaktbildeForSkjerm,
-  kontaktInn,
+  endreKontakt,
   oppslagInn,
   opprettKontakt,
   slettKontakt,
@@ -35,7 +35,6 @@ import {
   startKobling,
 } from "../src/lib/oppslagstavle";
 import {
-  lesFelt,
   normaliserKode,
   oppslagStatus,
   osloIDag,
@@ -48,6 +47,7 @@ let eierPool: Pool;
 let eier: PoolClient;
 const ryddOrg: string[] = [];
 const ryddKoder: string[] = [];
+const ryddBrukere: string[] = [];
 
 beforeAll(async () => {
   eierPool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -71,9 +71,13 @@ afterEach(async () => {
     await eier.query("DELETE FROM board_screens WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM board_settings WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM board_contacts WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM board_blocks WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM audit_events WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM user_org_memberships WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM organizations WHERE id = $1", [id]);
   }
+  // Etter orgene: kontaktene (og medlemskapene) som peker på brukerne er borte da.
+  for (const id of ryddBrukere.splice(0)) await eier.query("DELETE FROM users WHERE id = $1", [id]);
 });
 
 async function nyOrg(navn = "Tavlelaget"): Promise<string> {
@@ -318,7 +322,23 @@ describe("visningstid og redigering", () => {
 });
 
 describe("kontaktpersoner", () => {
-  const kari = { navn: "Kari Nilsen", rolle: "Styreleder", telefon: "900 00 000", epost: null };
+  /** En DriftIQ-bruker med medlemskap i orgen. Ryddes av `afterEach` via `ryddBrukere`. */
+  async function nyBruker(orgId: string | null, navn: string, telefon: string | null, tittel: string | null = null) {
+    const id = randomUUID();
+    await eier.query(
+      `INSERT INTO users (id, name, email, phone, role, active, email_verified, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,'member',true,true,now(),now())`,
+      [id, navn, `${id}@driftiq.test`, telefon],
+    );
+    ryddBrukere.push(id);
+    if (orgId) {
+      await eier.query(
+        "INSERT INTO user_org_memberships (id, user_id, org_id, role, title) VALUES ($1,$2,$3,'visning',$4)",
+        [randomUUID(), id, orgId, tittel],
+      );
+    }
+    return id;
+  }
 
   it("uten kontaktpersoner viser skjermen borettslagets egen kontaktinfo", async () => {
     const orgId = await nyOrg();
@@ -329,29 +349,84 @@ describe("kontaktpersoner", () => {
     expect(innhold.org.telefon).toBe("22 22 22 22");
   });
 
+  it("navn, telefon og rolle kommer ferskt fra profil og medlemskap", async () => {
+    const orgId = await nyOrg();
+    const { token } = await kobletSkjerm(orgId);
+    const kari = await nyBruker(orgId, "Kari Nilsen", "900 00 000", "Styreleder");
+    await withOrg(orgId, (db) => opprettKontakt(db, orgId, { brukerId: kari, visTelefon: true, visEpost: false }, null));
+    await eier.query("UPDATE users SET phone = '911 11 111' WHERE id = $1", [kari]);
+    expect((await innholdForSkjerm(medToken(token))).kontakter).toMatchObject([
+      { navn: "Kari Nilsen", rolle: "Styreleder", telefon: "911 11 111", epost: null },
+    ]);
+  });
+
+  it("skjult telefon og e-post sendes aldri til skjermen", async () => {
+    const orgId = await nyOrg();
+    const { token } = await kobletSkjerm(orgId);
+    const ola = await nyBruker(orgId, "Ola", "922 22 222");
+    const k = await withOrg(orgId, (db) => opprettKontakt(db, orgId, { brukerId: ola, visTelefon: false, visEpost: false }, null));
+    const paaSkjermen = (await innholdForSkjerm(medToken(token))).kontakter[0]!;
+    expect(paaSkjermen.telefon).toBeNull();
+    expect(paaSkjermen.epost).toBeNull();
+    expect(JSON.stringify(await innholdForSkjerm(medToken(token)))).not.toContain("922 22 222");
+    // Styret ser fortsatt hva profilen har, og kan slå det på.
+    await withOrg(orgId, (db) => endreKontakt(db, orgId, k.id, { visTelefon: true, visEpost: true }));
+    expect((await innholdForSkjerm(medToken(token))).kontakter[0]).toMatchObject({ telefon: "922 22 222", epost: `${ola}@driftiq.test` });
+  });
+
+  it("bare medlemmer av orgen kan velges, og hver person bare én gang", async () => {
+    const orgId = await nyOrg();
+    const annen = await nyOrg();
+    const fremmed = await nyBruker(annen, "Fremmed", "933 33 333");
+    const feil = await feilFra(() =>
+      withOrg(orgId, (db) => opprettKontakt(db, orgId, { brukerId: fremmed, visTelefon: true, visEpost: true }, null)),
+    );
+    expect(feil.status).toBe(400);
+    const kari = await nyBruker(orgId, "Kari", null);
+    await withOrg(orgId, (db) => opprettKontakt(db, orgId, { brukerId: kari, visTelefon: true, visEpost: false }, null));
+    const dobbel = await feilFra(() =>
+      withOrg(orgId, (db) => opprettKontakt(db, orgId, { brukerId: kari, visTelefon: true, visEpost: false }, null)),
+    );
+    expect(dobbel.message).toMatch(/allerede/);
+  });
+
+  it("en som ikke lenger er medlem eller er deaktivert, forsvinner fra veggen", async () => {
+    const orgId = await nyOrg();
+    const { token } = await kobletSkjerm(orgId);
+    const a = await nyBruker(orgId, "Går ut", "1");
+    const b = await nyBruker(orgId, "Deaktivert", "2");
+    await withOrg(orgId, async (db) => {
+      await opprettKontakt(db, orgId, { brukerId: a, visTelefon: true, visEpost: false }, null);
+      await opprettKontakt(db, orgId, { brukerId: b, visTelefon: true, visEpost: false }, null);
+    });
+    await eier.query("DELETE FROM user_org_memberships WHERE user_id = $1", [a]);
+    await eier.query("UPDATE users SET active = false WHERE id = $1", [b]);
+    expect((await innholdForSkjerm(medToken(token))).kontakter).toEqual([]);
+  });
+
   it("kontaktpersonene kommer i valgt rekkefølge", async () => {
     const orgId = await nyOrg();
     const { token } = await kobletSkjerm(orgId);
-    const forste = await withOrg(orgId, (db) => opprettKontakt(db, orgId, kari, null));
-    const andre = await withOrg(orgId, (db) =>
-      opprettKontakt(db, orgId, { navn: "Ola", rolle: "Vaktmester", telefon: null, epost: "ola@x.no" }, null),
+    const forste = await withOrg(orgId, async (db) =>
+      opprettKontakt(db, orgId, { brukerId: await nyBruker(orgId, "Kari", "1"), visTelefon: true, visEpost: false }, null),
     );
-    expect((await innholdForSkjerm(medToken(token))).kontakter.map((k) => k.navn)).toEqual(["Kari Nilsen", "Ola"]);
+    const andre = await withOrg(orgId, async (db) =>
+      opprettKontakt(db, orgId, { brukerId: await nyBruker(orgId, "Ola", "2"), visTelefon: true, visEpost: false }, null),
+    );
+    expect((await innholdForSkjerm(medToken(token))).kontakter.map((k) => k.navn)).toEqual(["Kari", "Ola"]);
     await withOrg(orgId, (db) => flyttKontakt(db, orgId, andre.id, "opp"));
     expect((await innholdForSkjerm(medToken(token))).kontakter.map((k) => k.id)).toEqual([andre.id, forste.id]);
     await withOrg(orgId, (db) => slettKontakt(db, orgId, andre.id));
     expect((await withOrg(orgId, (db) => hentKontakter(db, orgId))).map((k) => k.id)).toEqual([forste.id]);
   });
 
-  it("en kontaktperson må ha telefon eller e-post", () => {
-    expect(kontaktInn.safeParse({ navn: "Uten", telefon: "", epost: "" }).success).toBe(false);
-  });
-
   it("skjermen får aldri et annet borettslags kontaktbilde", async () => {
     const a = await nyOrg();
     const b = await nyOrg();
     const skjermA = await kobletSkjerm(a);
-    const kontaktB = await withOrg(b, (db) => opprettKontakt(db, b, kari, null));
+    const kontaktB = await withOrg(b, async (db) =>
+      opprettKontakt(db, b, { brukerId: await nyBruker(b, "Kari", "1"), visTelefon: true, visEpost: false }, null),
+    );
     await eier.query("UPDATE board_contacts SET file_name = $1 WHERE id = $2", [`${randomUUID()}.jpg`, kontaktB.id]);
     const feil = await feilFra(() => kontaktbildeForSkjerm(medToken(skjermA.token), kontaktB.id));
     expect(feil.message).toBe("Kontaktperson ikke funnet");
@@ -365,11 +440,6 @@ describe("regler", () => {
     expect(oppslagStatus({ showFrom: "2026-09-01", showUntil: "2026-09-28" }, "2026-09-29")).toBe("utlopt");
   });
 
-  it("kontakt er alltid med, og en ødelagt feltliste gir alle felt", () => {
-    expect(lesFelt(JSON.stringify(["kalender"]))).toEqual(["kalender", "kontakt"]);
-    expect(lesFelt("{ødelagt")).toEqual(["oppslag", "kalender", "avfall", "kontakt"]);
-    expect(lesFelt(null)).toEqual(["oppslag", "kalender", "avfall", "kontakt"]);
-  });
 
   it("koden normaliseres før oppslag", () => {
     expect(normaliserKode(" k7m-4qx ")).toBe("K7M4QX");

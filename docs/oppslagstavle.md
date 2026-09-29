@@ -13,9 +13,11 @@ et enhetstoken den får ved kobling. Tilleggsmodul (`oppslagstavle`, av som stan
 
 | Del | Hvor |
 |---|---|
-| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_events`, `board_settings`, `board_contacts` (DIREKTE), `board_pairings` (UNNTATT) |
+| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_events`, `board_settings`, `board_contacts`, `board_blocks` (DIREKTE), `board_pairings` (UNNTATT) |
 | Logikk | `src/lib/oppslagstavle.ts` |
 | Regler, typer, palett (importfri) | `src/lib/oppslagstavleregler.ts` |
+| Maler og soner (importfri) | `src/lib/tavlemaler.ts` |
+| Vær- og avgangsblokker | `src/lib/tavleblokker.ts` — se `docs/entur-yr.md` |
 | Styrets API | `/api/organizations/{orgId}/oppslagstavle/…` via `orgRute` |
 | Skjermens API (anonymt) | `/api/skjerm/kobling`, `/kobling/status`, `/innhold`, `/fil/{postId}`, `/logo` |
 | Adminside | `src/app/(app)/oppslagstavle/page.tsx` |
@@ -49,22 +51,51 @@ periode, skjermer, tid); typen og bildet står fast — et nytt bilde er et nytt
 Typene viktig/informasjon/arrangement styrer BARE merkelapp og kantfarge
 (`KATEGORI_BESKRIVELSE` forklarer dem i skjemaet), ikke rekkefølge eller tid.
 
+### Maler, soner og blokker
+
+Hva som står HVOR, bestemmes per skjerm: en **mal** (`MALER` i `lib/tavlemaler.ts`, 5–6 per
+retning) deler skjermen i soner `a`–`d` pluss en **stripe** nederst med høyde etter
+innholdet. Hver sone har null eller flere **blokker**; flere roterer (`SONE_SEKUNDER`), og
+stripen viser alle side om side i kompakt form. Lagres som `board_screens.layout` og
+`board_screens.zones` (`{ sone: [nøkkel, …] }`); `null` ⇒ malens standard.
+
+Blokkene er enten **innebygde** (`oppslag`, `kalender`, `kontakt`, `tommedager` — faste
+nøkler, ingen rad) eller **egne** med innstillinger i `board_blocks` (vær og avganger,
+nøkkel `blokk:<id>`, `docs/entur-yr.md`). Hva som VISES lages under Innhold; hvor det vises
+velges under Skjermer. `lesSoner` renser bort ukjente nøkler og soner malen ikke har, og en
+slettet blokk fjernes fra alle skjermenes soner.
+
+En blokk uten data (tømmedager uten BIR, vær MET ikke har svart på) hoppes over i rotasjonen;
+en sone uten noe å vise står tom. Skjermen henter bare data for blokker som står i en sone.
+
+**Skalering** (`board_screens.scale`, 60–130 %, standard 85) ganges inn i `--u`, så tekst og
+luft krymper sammen. Tavla måles i prosent av bredden — 4K og Full HD ser like ut; skalering
+er for leseavstand og hvor mye som får plass.
+
 ### Kontaktpersoner
 
-`board_contacts`: navn, rolle, telefon/e-post (minst én) og valgfritt bilde. De roterer i
-kontaktfeltet (`KONTAKT_SEKUNDER`) i rekkefølgen styret setter. Uten kontaktpersoner viser
-skjermen borettslagets egne felt (`organizations.phone`/`contactEmail`, som bare DriftIQ
-redigerer). Personopplysninger på en offentlig vegg — orgadmin legger inn, og skjemaet sier
-at personen må ha sagt ja. Bildet hentes av skjermen med tokenet; nøkkelen i skjermens
-bildebuffer har med `bildeVersjon`, ellers ville et byttet bilde aldri blitt hentet på nytt.
+`board_contacts` peker på en **DriftIQ-bruker** i orgen (`user_id`) — ingen manuelle
+kontakter. Navn, telefon og e-post leses ferskt fra profilen, rollen fra medlemskapets
+tittel (endres under Brukere). Per person velger orgadmin om telefon og/eller e-post skal
+vises (`show_phone`/`show_email`); det som er skjult, fjernes på serveren
+(`kontakterForSkjerm`) og ligger aldri i svaret til skjermen. En som ikke lenger er medlem,
+eller er deaktivert, faller ut av veggen av seg selv.
+
+De roterer i rekkefølgen styret setter (`KONTAKT_SEKUNDER`). Uten kontaktpersoner viser
+skjermen borettslagets egne felt (`organizations.phone`/`contactEmail`). Bildet er valgfritt
+og lastes opp her (ikke fra profilen); skjermens bildebuffer har `bildeVersjon` i nøkkelen,
+ellers ville et byttet bilde aldri blitt hentet på nytt.
 
 ### Det som er lett å gjøre feil
 
 - **Forhåndsvisningen og skjermen deler både komponent og data** (`byggSkjerminnhold`). Lag
   aldri en egen «forhåndsvisnings-spørring» — da viser appen noe annet enn veggen.
-- **Faste soner**: plassen avhenger av hvilke felt som er på, aldri av innholdets lengde.
-  Lange oppslag klippes (`line-clamp`). Tavla måles i `--u` (1 % av bredden), ikke
-  `--fs-*` — unntaket gjelder bare innenfor `.ot-skjerm`.
+- **Faste soner**: plassen avhenger av malen, aldri av innholdets lengde. Lange oppslag
+  klippes (`line-clamp`). Tavla måles i `--u` (1 % av bredden × skalering), ikke `--fs-*` —
+  unntaket gjelder bare innenfor `.ot-skjerm`.
+- En skjerm som har lagret innhold fra FØR en endring i `Skjerminnhold`, viser det etter
+  omstart uten nett. Nye felt må derfor tåle å mangle i klienten (`kontakter = []`,
+  `skjerm.mal ?? standard`) — ellers er det en hvit skjerm i oppgangen til nettet er tilbake.
 - **«Alle skjermer» er et flagg** (`all_screens`), ikke en liste — nye skjermer skal arve
   oppslag som gjelder hele borettslaget.
 - **Skjermen har egen `localStorage`** (token + siste innhold, så den starter med oppslag

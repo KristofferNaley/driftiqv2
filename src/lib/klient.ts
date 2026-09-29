@@ -12,7 +12,7 @@
 
 import type { MinAktivitet } from "./aktivitetsslag";
 import type { Driftslogg } from "./driftsloggslag";
-import type { Felt, Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
+import type { Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
 
 export class ApiKlientFeil extends Error {
   constructor(
@@ -1271,17 +1271,21 @@ export type OppslagInn = {
   sekunder: number;
 };
 
+/** Navn, telefon og e-post er fra brukerprofilen; rollen er medlemskapets tittel. */
 export type Tavlekontakt = {
   id: string;
+  brukerId: string;
   navn: string;
   rolle: string | null;
   telefon: string | null;
   epost: string | null;
+  visTelefon: boolean;
+  visEpost: boolean;
   harBilde: boolean;
   bildeVersjon: string | null;
 };
 
-export type KontaktInn = { navn: string; rolle: string | null; telefon: string | null; epost: string | null };
+export type Kontaktkandidat = { id: string; navn: string; telefon: string | null; epost: string; tittel: string | null };
 
 export type Tavlehendelse = {
   id: string;
@@ -1297,7 +1301,9 @@ export type Skjerm = {
   navn: string;
   adresse: string | null;
   retning: Retning;
-  felt: Felt[];
+  mal: string;
+  soner: Record<string, string[]>;
+  skala: number;
   sistSett: string | null;
   paaNett: boolean;
   koblet: string;
@@ -1333,7 +1339,11 @@ export const oppslagstavle = {
   skjermer: (o: string) => api.hent<Skjerm[]>(org(o, "/oppslagstavle/skjermer")),
   koble: (o: string, d: { kode: string; navn: string; adresse: string | null; retning: Retning }) =>
     api.send<Skjerm>(org(o, "/oppslagstavle/skjermer"), d),
-  endreSkjerm: (o: string, id: string, d: { navn: string; adresse: string | null; retning: Retning; felt: Felt[] }) =>
+  endreSkjerm: (
+    o: string,
+    id: string,
+    d: { navn: string; adresse: string | null; retning: Retning; skala: number; mal: string; soner: Record<string, string[]> },
+  ) =>
     api.endre<Skjerm>(org(o, `/oppslagstavle/skjermer/${id}`), d),
   slettSkjerm: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/skjermer/${id}`)),
   forhandsvisning: (o: string, id: string) =>
@@ -1341,13 +1351,14 @@ export const oppslagstavle = {
 
   kontakter: (o: string) => api.hent<Tavlekontakt[]>(org(o, "/oppslagstavle/kontakter")),
   /** Bildet er valgfritt og sendes i samme kall som feltene. */
-  nyKontakt: (o: string, d: KontaktInn, fil: File | null) => {
+  kontaktkandidater: (o: string) => api.hent<Kontaktkandidat[]>(org(o, "/oppslagstavle/kontakter/kandidater")),
+  nyKontakt: (o: string, d: { brukerId: string; visTelefon: boolean; visEpost: boolean }, fil: File | null) => {
     const f = new FormData();
     f.set("data", JSON.stringify(d));
     if (fil) f.set("fil", fil);
     return api.lastOpp<Tavlekontakt>(org(o, "/oppslagstavle/kontakter"), f);
   },
-  endreKontakt: (o: string, id: string, d: KontaktInn) =>
+  endreKontakt: (o: string, id: string, d: { visTelefon: boolean; visEpost: boolean }) =>
     api.endre<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}`), d),
   slettKontakt: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/kontakter/${id}`)),
   flyttKontakt: (o: string, id: string, retning: "opp" | "ned") =>
@@ -1430,4 +1441,33 @@ export const bir = {
     api.endre<BirStatus>(org(o, "/oppslagstavle/bir"), { id: t.id, navn: t.navn, eiendom: t.eiendom }),
   hentNaa: (o: string) => api.send<BirStatus>(org(o, "/oppslagstavle/bir/synk"), {}),
   kobleFra: (o: string) => api.slett(org(o, "/oppslagstavle/bir")),
+};
+
+// ---------------------------------------------------------------------------------------
+// Innholdsblokker på oppslagstavla — vær (MET/yr) og avganger (Entur). docs/entur-yr.md
+// ---------------------------------------------------------------------------------------
+
+export type Holdeplasstreff = { id: string; navn: string; sted: string | null; moduser: string[] };
+export type Stedstreff = { tekst: string; lat: number; lon: number };
+
+export type VaerKonfig = { sted: string; lat: number; lon: number; visning: "timer" | "dager" };
+export type AvgangerKonfig = { holdeplasser: Array<{ id: string; navn: string }> };
+
+export type Tavleblokk =
+  | { id: string; nokkel: string; type: "vaer"; navn: string; konfig: VaerKonfig | null }
+  | { id: string; nokkel: string; type: "avganger"; navn: string; konfig: AvgangerKonfig | null };
+
+export type BlokkInn =
+  | { type: "vaer"; navn: string; konfig: VaerKonfig }
+  | { type: "avganger"; navn: string; konfig: AvgangerKonfig };
+
+export const tavleblokker = {
+  liste: (o: string) => api.hent<Tavleblokk[]>(org(o, "/oppslagstavle/blokker")),
+  ny: (o: string, d: BlokkInn) => api.send<Tavleblokk>(org(o, "/oppslagstavle/blokker"), d),
+  endre: (o: string, id: string, d: BlokkInn) => api.endre<Tavleblokk>(org(o, `/oppslagstavle/blokker/${id}`), d),
+  slett: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/blokker/${id}`)),
+  sokHoldeplass: (o: string, q: string) =>
+    api.hent<Holdeplasstreff[]>(org(o, `/oppslagstavle/blokker/sok/holdeplass?q=${encodeURIComponent(q)}`)),
+  sokSted: (o: string, q: string) =>
+    api.hent<Stedstreff[]>(org(o, `/oppslagstavle/blokker/sok/sted?q=${encodeURIComponent(q)}`)),
 };

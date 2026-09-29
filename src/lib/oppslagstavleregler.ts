@@ -30,37 +30,9 @@ export const RETNINGER = ["staende", "liggende"] as const;
 export type Retning = (typeof RETNINGER)[number];
 export const RETNING_ETIKETT: Record<Retning, string> = { staende: "Stående", liggende: "Liggende" };
 
-/**
- * Feltene en skjerm kan vise. «Kontakt» er alltid på — beboeren skal alltid finne styret.
- * «Arbeid i bygget» kommer senere (docs/oppslagstavle.md). Tømmedager krever BIR-kobling (docs/bir.md).
- */
-export const FELT = ["oppslag", "kalender", "avfall", "kontakt"] as const;
-export type Felt = (typeof FELT)[number];
-export const FELT_INFO: Record<Felt, { navn: string; beskrivelse: string; alltidPa?: boolean }> = {
-  oppslag: { navn: "Oppslag", beskrivelse: "Tekst og bilder roterer i det store feltet" },
-  kalender: { navn: "Kalender", beskrivelse: "De neste hendelsene" },
-  avfall: {
-    navn: "Tømmedager",
-    beskrivelse: "Neste tømming per avfallstype fra BIR — vises når borettslaget er koblet til BIR",
-  },
-  kontakt: {
-    navn: "Kontakt styret",
-    beskrivelse: "Kontaktpersonene roterer; uten kontaktpersoner vises borettslagets telefon og e-post",
-    alltidPa: true,
-  },
-};
-
-/** Tolker `board_screens.fields`. Ugyldig eller tomt ⇒ alle felt — en skjerm skal aldri bli blank. */
-export function lesFelt(lagret: string | null | undefined): Felt[] {
-  let liste: unknown = null;
-  try {
-    liste = lagret ? JSON.parse(lagret) : null;
-  } catch {
-    liste = null;
-  }
-  const valgt = Array.isArray(liste) ? FELT.filter((f) => liste.includes(f)) : [...FELT];
-  return FELT.filter((f) => valgt.includes(f) || FELT_INFO[f].alltidPa);
-}
+/** Skalering per skjerm, i prosent. 85 er standard — 100 ble for stort på en vegg i nærheten. */
+export const SKALERINGER = [60, 70, 75, 80, 85, 90, 100, 110, 120, 130] as const;
+export const STANDARD_SKALERING = 85;
 
 /** Sekunder hvert oppslag står før neste, som styret kan velge mellom. */
 export const VISNINGSTIDER = [5, 8, 10, 15, 20, 30, 45, 60] as const;
@@ -181,7 +153,16 @@ export function skjermpalett(background: string, accent: string): Record<string,
 
 /** Svaret på `/api/skjerm/innhold` — og på forhåndsvisningen i appen. Samme form begge steder. */
 export type Skjerminnhold = {
-  skjerm: { id: string; navn: string; adresse: string | null; retning: Retning; felt: Felt[] };
+  skjerm: {
+    id: string;
+    navn: string;
+    adresse: string | null;
+    retning: Retning;
+    skala: number;
+    /** Malen (`MALER` i tavlemaler.ts) og hvilke blokknøkler som står i hvilken sone. */
+    mal: string;
+    soner: Record<string, string[]>;
+  };
   org: { navn: string; initialer: string; telefon: string | null; epost: string | null };
   utseende: { background: string; accent: string; harLogo: boolean; offlineMode: "siste" | "melding" };
   oppslag: Array<{
@@ -203,9 +184,39 @@ export type Skjerminnhold = {
     /** Endres når bildet byttes — skjermen bruker den som nøkkel i bildebufferen sin. */
     bildeVersjon: string | null;
   }>;
+  /** Data for de egne blokkene (vær, avganger) som står på skjermen, per `blokk:<id>`. */
+  blokker: Record<string, Blokkdata>;
   /** Neste tømming per fraksjon (BIR). `null` = ikke koblet, og feltet skjules. */
   avfall: Array<{ fraksjon: string; etikett: string; dato: string }> | null;
   hendelser: Array<{ id: string; tittel: string; dato: string; tid: string | null; sted: string | null }>;
   /** ISO-tidspunkt da serveren svarte — skjermen viser det når den går uten nett. */
   hentet: string;
 };
+
+/** Værvarselet slik tavla bruker det (fra MET/yr, tolket i lib/yr.ts). */
+export type Varsel = {
+  naa: { temp: number; symbol: string | null };
+  timer: Array<{ tid: string; temp: number; symbol: string | null; nedbor: number | null }>;
+  dager: Array<{ dato: string; maks: number; min: number; symbol: string | null; nedbor: number }>;
+};
+
+export type Blokkdata =
+  | {
+      type: "vaer";
+      navn: string;
+      sted: string;
+      visning: "timer" | "dager";
+      /** `null` = MET har ikke svart på seks timer; blokken viser da ingenting. */
+      varsel: Varsel | null;
+    }
+  | {
+      type: "avganger";
+      navn: string;
+      holdeplasser: Array<{
+        navn: string;
+        avganger: Array<{ linje: string; modus: string; mot: string; tid: string; sanntid: boolean; innstilt: boolean }>;
+      }>;
+    };
+
+/** Sekunder hver blokk står når flere deler en sone. Oppslagene roterer innenfor sin egen tid. */
+export const SONE_SEKUNDER = 15;

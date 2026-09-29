@@ -24,7 +24,9 @@ import { and, asc, desc, eq, gte, lte, lt } from "drizzle-orm";
 import { z } from "zod";
 import { withOrg, withoutRls, type Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
+import { userOrgMemberships, users } from "../db/schema/users";
 import {
+  boardBlocks,
   boardContacts,
   boardEvents,
   boardPairings,
@@ -36,20 +38,22 @@ import {
 import { ApiFeil, ikkeFunnet, ugyldig, type Filsvar } from "./api";
 import type { Aktor } from "./aktor";
 import { tommedagerForSkjerm } from "./birkobling";
+import { blokkdataForSkjerm } from "./tavleblokker";
+import { INNEBYGDE_BLOKKER, blokkNokkel, finnMal, lesSoner } from "./tavlemaler";
 import { loggHendelse } from "./hendelser";
 import { filSti, lagreFil, slettFil } from "./lagring";
 import {
-  FELT,
   KATEGORIER,
   KODE_ALFABET,
   KODE_LENGDE,
   NEDE_ETTER_SEKUNDER,
   RETNINGER,
+  SKALERINGER,
   STANDARD_SEKUNDER,
+  STANDARD_SKALERING,
   STANDARD_UTSEENDE,
   VISNINGSTIDER,
   erHexfarge,
-  lesFelt,
   normaliserKode,
   oppslagStatus,
   osloIDag,
@@ -289,19 +293,33 @@ export async function slettHendelse(db: Db, orgId: string, id: string) {
 // Skjermer
 // ---------------------------------------------------------------------------------------
 
-function skjermUt(s: BoardScreen, naa = new Date()) {
+/**
+ * `gyldige` er blokknøklene som finnes i orgen (innebygde + `blokk:<id>`). Soner som peker
+ * på en slettet blokk, renses her — ved lesing, så en glemt opprydding aldri når veggen.
+ */
+function skjermUt(s: BoardScreen, gyldige: ReadonlySet<string>, naa = new Date()) {
   const sistSett = s.lastSeenAt;
   const paaNett = sistSett !== null && naa.getTime() - sistSett.getTime() < NEDE_ETTER_SEKUNDER * 1000;
+  const retning = (RETNINGER as readonly string[]).includes(s.orientation) ? (s.orientation as Retning) : "staende";
+  const mal = finnMal(s.layout, retning);
   return {
     id: s.id,
     navn: s.name,
     adresse: s.address,
-    retning: (RETNINGER as readonly string[]).includes(s.orientation) ? (s.orientation as Retning) : "staende",
-    felt: lesFelt(s.fields),
+    retning,
+    mal: mal.id,
+    soner: lesSoner(s.zones, mal, gyldige),
+    skala: s.scale,
     sistSett: sistSett?.toISOString() ?? null,
     paaNett,
     koblet: s.createdAt.toISOString(),
   };
+}
+
+/** Blokknøklene som kan stå i en sone i denne orgen. */
+async function gyldigeBlokker(db: Db, orgId: string): Promise<Set<string>> {
+  const egne = await db.select({ id: boardBlocks.id }).from(boardBlocks).where(eq(boardBlocks.orgId, orgId));
+  return new Set<string>([...INNEBYGDE_BLOKKER, ...egne.map((b) => blokkNokkel(b.id))]);
 }
 
 export async function hentSkjermer(db: Db, orgId: string) {
@@ -310,7 +328,8 @@ export async function hentSkjermer(db: Db, orgId: string) {
     .from(boardScreens)
     .where(eq(boardScreens.orgId, orgId))
     .orderBy(asc(boardScreens.createdAt));
-  return rader.map((s) => skjermUt(s));
+  const gyldige = await gyldigeBlokker(db, orgId);
+  return rader.map((s) => skjermUt(s, gyldige));
 }
 
 const skjermFelter = {
@@ -323,7 +342,13 @@ export const koblingInn = z.object({ kode: z.string(), ...skjermFelter });
 
 export const skjermEndring = z.object({
   ...skjermFelter,
-  felt: z.array(z.enum(FELT)),
+  mal: z.string().max(40),
+  soner: z.record(z.string().max(20), z.array(z.string().max(80)).max(8)),
+  skala: z
+    .number()
+    .int()
+    .refine((n) => (SKALERINGER as readonly number[]).includes(n), "Ugyldig skalering")
+    .default(STANDARD_SKALERING),
 });
 
 /**
@@ -349,7 +374,9 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
       name: d.navn,
       address: d.adresse || null,
       orientation: d.retning,
-      fields: JSON.stringify(FELT),
+      // Standardmalen og -fordelingen for retningen; `zones: null` ⇒ malens standard.
+      layout: finnMal(null, d.retning).id,
+      zones: null,
       // Plassholder til skjermen henter sitt ekte token: hashen av et token ingen har fått,
       // så raden kan ikke brukes av noen fram til da.
       deviceTokenHash: hash(randomBytes(32).toString("base64url")),
@@ -365,7 +392,7 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
     entitetId: id,
     hendelse: `Koblet til skjermen «${d.navn}»`,
   });
-  return skjermUt(skjerm!);
+  return skjermUt(skjerm!, await gyldigeBlokker(db, orgId));
 }
 
 export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<typeof skjermEndring>) {
@@ -375,12 +402,16 @@ export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<
       name: d.navn,
       address: d.adresse || null,
       orientation: d.retning,
-      fields: JSON.stringify(d.felt),
+      // En mal for den andre retningen byttes til standardmalen av `finnMal`, og sonene
+      // renses mot malen — lagres rent, så det som står i basen er det som vises.
+      layout: finnMal(d.mal, d.retning).id,
+      zones: JSON.stringify(lesSoner(JSON.stringify(d.soner), finnMal(d.mal, d.retning), await gyldigeBlokker(db, orgId))),
+      scale: d.skala,
     })
     .where(and(eq(boardScreens.id, id), eq(boardScreens.orgId, orgId)))
     .returning();
   if (!rad) throw ikkeFunnet("Skjerm");
-  return skjermUt(rad);
+  return skjermUt(rad, await gyldigeBlokker(db, orgId));
 }
 
 /** Fjerner skjermen og dermed tokenet — skjermen faller tilbake til koblingsbildet. */
@@ -402,25 +433,17 @@ export async function slettSkjerm(db: Db, orgId: string, av: Aktor, id: string) 
 // Kontaktpersoner
 // ---------------------------------------------------------------------------------------
 
-export const kontaktInn = z
-  .object({
-    navn: z.string().trim().min(1, "Skriv navnet").max(60, "Maks 60 tegn"),
-    rolle: z.string().trim().max(40, "Maks 40 tegn").nullish(),
-    telefon: z.string().trim().max(30, "Maks 30 tegn").nullish(),
-    epost: z.string().trim().max(80, "Maks 80 tegn").nullish(),
-  })
-  .refine((d) => d.telefon || d.epost, { message: "Oppgi telefon eller e-post", path: ["telefon"] });
-export type KontaktInn = z.infer<typeof kontaktInn>;
-
-const kontaktUt = (k: typeof boardContacts.$inferSelect) => ({
-  id: k.id,
-  navn: k.name,
-  rolle: k.role,
-  telefon: k.phone,
-  epost: k.email,
-  harBilde: Boolean(k.fileName),
-  bildeVersjon: k.fileName?.slice(0, 8) ?? null,
+/**
+ * En kontaktperson er en DriftIQ-bruker i orgen. Styret velger bare HVEM og hva som skal
+ * vises — navn, telefon og e-post kommer fra profilen, rollen fra medlemskapets tittel.
+ */
+export const kontaktInn = z.object({
+  brukerId: z.string().min(1),
+  visTelefon: z.boolean(),
+  visEpost: z.boolean(),
 });
+export const kontaktEndring = kontaktInn.omit({ brukerId: true });
+export type KontaktInn = z.infer<typeof kontaktInn>;
 
 async function kontaktRader(db: Db, orgId: string) {
   return db
@@ -430,8 +453,69 @@ async function kontaktRader(db: Db, orgId: string) {
     .orderBy(asc(boardContacts.sortOrder), asc(boardContacts.createdAt));
 }
 
+/**
+ * Kontaktene med FERSKE profildata. Brukere som ikke lenger er medlem av orgen, eller er
+ * deaktivert, faller ut — en som har flyttet ut av styret skal ikke stå på veggen.
+ */
 export async function hentKontakter(db: Db, orgId: string) {
-  return (await kontaktRader(db, orgId)).map(kontaktUt);
+  const rader = await db
+    .select({
+      k: boardContacts,
+      navn: users.name,
+      telefon: users.phone,
+      epost: users.email,
+      tittel: userOrgMemberships.title,
+    })
+    .from(boardContacts)
+    .innerJoin(users, and(eq(users.id, boardContacts.userId), eq(users.active, true)))
+    .innerJoin(userOrgMemberships, and(eq(userOrgMemberships.userId, users.id), eq(userOrgMemberships.orgId, orgId)))
+    .where(eq(boardContacts.orgId, orgId))
+    .orderBy(asc(boardContacts.sortOrder), asc(boardContacts.createdAt));
+  return rader.map((r) => ({
+    id: r.k.id,
+    brukerId: r.k.userId,
+    navn: r.navn,
+    rolle: r.tittel?.trim() || null,
+    telefon: r.telefon,
+    epost: r.epost,
+    visTelefon: r.k.showPhone,
+    visEpost: r.k.showEmail,
+    harBilde: Boolean(r.k.fileName),
+    bildeVersjon: r.k.fileName?.slice(0, 8) ?? null,
+  }));
+}
+
+/**
+ * Det skjermen får. Telefon og e-post som ikke er slått på, fjernes HER — de skal aldri
+ * ligge i svaret til en anonym skjerm, heller ikke skjult i klienten.
+ */
+export async function kontakterForSkjerm(db: Db, orgId: string) {
+  return (await hentKontakter(db, orgId)).map((k) => ({
+    id: k.id,
+    navn: k.navn,
+    rolle: k.rolle,
+    telefon: k.visTelefon ? k.telefon : null,
+    epost: k.visEpost ? k.epost : null,
+    harBilde: k.harBilde,
+    bildeVersjon: k.bildeVersjon,
+  }));
+}
+
+/** Medlemmene orgadmin kan velge blant, med det profilen har av kontaktinfo. */
+export async function kontaktkandidater(db: Db, orgId: string) {
+  const rader = await db
+    .select({ id: users.id, navn: users.name, telefon: users.phone, epost: users.email, tittel: userOrgMemberships.title })
+    .from(userOrgMemberships)
+    .innerJoin(users, and(eq(users.id, userOrgMemberships.userId), eq(users.active, true)))
+    .where(eq(userOrgMemberships.orgId, orgId))
+    .orderBy(asc(users.name));
+  return rader.map((r) => ({ ...r, tittel: r.tittel?.trim() || null }));
+}
+
+async function enKontaktUt(db: Db, orgId: string, id: string) {
+  const k = (await hentKontakter(db, orgId)).find((x) => x.id === id);
+  if (!k) throw ikkeFunnet("Kontaktperson");
+  return k;
 }
 
 async function enKontakt(db: Db, orgId: string, id: string) {
@@ -448,51 +532,51 @@ const lagreBilde = (db: Db, orgId: string, fil: File, erstatter: number | null) 
   lagreFil(db, orgId, MAPPE, fil, { typer: BILDETYPER, maksStorrelse: MAKS_LOGO, erstatter });
 
 export async function opprettKontakt(db: Db, orgId: string, d: KontaktInn, fil: File | null) {
-  const lagret = fil ? await lagreBilde(db, orgId, fil, null) : null;
+  // Bare medlemmer av DENNE orgen — ellers kunne en id gjettet fra en annen org gitt navn
+  // og telefonnummer til en fremmed på veggen.
+  const kandidat = (await kontaktkandidater(db, orgId)).find((k) => k.id === d.brukerId);
+  if (!kandidat) throw ugyldig("Brukeren er ikke medlem av borettslaget");
   const eksisterende = await kontaktRader(db, orgId);
-  const [rad] = await db
-    .insert(boardContacts)
-    .values({
-      id: randomUUID(),
-      orgId,
-      name: d.navn,
-      role: d.rolle || null,
-      phone: d.telefon || null,
-      email: d.epost || null,
-      fileName: lagret?.filnavn ?? null,
-      contentType: lagret?.contentType ?? null,
-      fileSize: lagret?.storrelse ?? null,
-      sortOrder: eksisterende.length,
-    })
-    .returning();
-  return kontaktUt(rad!);
+  if (eksisterende.some((k) => k.userId === d.brukerId)) throw ugyldig(`${kandidat.navn} er allerede lagt til`);
+  const lagret = fil ? await lagreBilde(db, orgId, fil, null) : null;
+  const id = randomUUID();
+  await db.insert(boardContacts).values({
+    id,
+    orgId,
+    userId: d.brukerId,
+    showPhone: d.visTelefon,
+    showEmail: d.visEpost,
+    fileName: lagret?.filnavn ?? null,
+    contentType: lagret?.contentType ?? null,
+    fileSize: lagret?.storrelse ?? null,
+    sortOrder: eksisterende.length,
+  });
+  return enKontaktUt(db, orgId, id);
 }
 
-export async function endreKontakt(db: Db, orgId: string, id: string, d: KontaktInn) {
+export async function endreKontakt(db: Db, orgId: string, id: string, d: z.infer<typeof kontaktEndring>) {
   await enKontakt(db, orgId, id);
-  const [rad] = await db
+  await db
     .update(boardContacts)
-    .set({ name: d.navn, role: d.rolle || null, phone: d.telefon || null, email: d.epost || null })
-    .where(and(eq(boardContacts.id, id), eq(boardContacts.orgId, orgId)))
-    .returning();
-  return kontaktUt(rad!);
+    .set({ showPhone: d.visTelefon, showEmail: d.visEpost })
+    .where(and(eq(boardContacts.id, id), eq(boardContacts.orgId, orgId)));
+  return enKontaktUt(db, orgId, id);
 }
 
 /** Bytter bildet, eller fjerner det når `fil` er null. Det gamle slettes fra disk. */
 export async function settKontaktbilde(db: Db, orgId: string, id: string, fil: File | null) {
   const gammel = await enKontakt(db, orgId, id);
   const lagret = fil ? await lagreBilde(db, orgId, fil, gammel.fileSize) : null;
-  const [rad] = await db
+  await db
     .update(boardContacts)
     .set({
       fileName: lagret?.filnavn ?? null,
       contentType: lagret?.contentType ?? null,
       fileSize: lagret?.storrelse ?? null,
     })
-    .where(and(eq(boardContacts.id, id), eq(boardContacts.orgId, orgId)))
-    .returning();
+    .where(and(eq(boardContacts.id, id), eq(boardContacts.orgId, orgId)));
   if (gammel.fileName) await slettFil(orgId, MAPPE, gammel.fileName);
-  return kontaktUt(rad!);
+  return enKontaktUt(db, orgId, id);
 }
 
 /** Flytter en kontaktperson ett hakk opp eller ned i rotasjonen. */
@@ -599,14 +683,22 @@ function initialer(navn: string): string {
  * Alt én skjerm skal vise akkurat nå. Brukes av skjermen selv og av forhåndsvisningen i
  * appen — samme funksjon, så forhåndsvisningen kan ikke vise noe annet enn veggen.
  */
-export async function byggSkjerminnhold(db: Db, orgId: string, skjermId: string): Promise<Skjerminnhold> {
+export async function byggSkjerminnhold(
+  db: Db,
+  orgId: string,
+  skjermId: string,
+  /** `false` fra tilgangssjekken for bilder: den trenger ikke avganger og vær fra nettet. */
+  medEksterne = true,
+): Promise<Skjerminnhold> {
   const [skjerm] = await db
     .select()
     .from(boardScreens)
     .where(and(eq(boardScreens.id, skjermId), eq(boardScreens.orgId, orgId)))
     .limit(1);
   if (!skjerm) throw ikkeFunnet("Skjerm");
-  const s = skjermUt(skjerm);
+  const s = skjermUt(skjerm, await gyldigeBlokker(db, orgId));
+  // Bare det som faktisk står i en sone, hentes — en skjerm uten kalender spør ikke etter den.
+  const iBruk = new Set(Object.values(s.soner).flat());
 
   const [org] = await db
     .select({ navn: organizations.name, telefon: organizations.phone, epost: organizations.contactEmail })
@@ -615,7 +707,7 @@ export async function byggSkjerminnhold(db: Db, orgId: string, skjermId: string)
     .limit(1);
 
   const iDag = osloIDag();
-  const oppslag = s.felt.includes("oppslag")
+  const oppslag = iBruk.has("oppslag")
     ? await db
         .select()
         .from(boardPosts)
@@ -623,7 +715,7 @@ export async function byggSkjerminnhold(db: Db, orgId: string, skjermId: string)
         .orderBy(desc(boardPosts.showFrom), desc(boardPosts.createdAt))
     : [];
 
-  const hendelser = s.felt.includes("kalender")
+  const hendelser = iBruk.has("kalender")
     ? await db
         .select()
         .from(boardEvents)
@@ -635,7 +727,15 @@ export async function byggSkjerminnhold(db: Db, orgId: string, skjermId: string)
   const utseende = await hentUtseende(db, orgId);
 
   return {
-    skjerm: { id: s.id, navn: s.navn, adresse: s.adresse, retning: s.retning, felt: s.felt },
+    skjerm: {
+      id: s.id,
+      navn: s.navn,
+      adresse: s.adresse,
+      retning: s.retning,
+      skala: s.skala,
+      mal: s.mal,
+      soner: s.soner,
+    },
     org: {
       navn: org?.navn ?? "",
       initialer: initialer(org?.navn ?? "?"),
@@ -654,8 +754,9 @@ export async function byggSkjerminnhold(db: Db, orgId: string, skjermId: string)
         harFil: Boolean(p.fileName),
         sekunder: p.displaySeconds,
       })),
-    kontakter: s.felt.includes("kontakt") ? await hentKontakter(db, orgId) : [],
-    avfall: s.felt.includes("avfall") ? await tommedagerForSkjerm(db, orgId) : null,
+    kontakter: iBruk.has("kontakt") ? await kontakterForSkjerm(db, orgId) : [],
+    avfall: iBruk.has("tommedager") ? await tommedagerForSkjerm(db, orgId) : null,
+    blokker: medEksterne ? await blokkdataForSkjerm(db, orgId, iBruk) : {},
     hendelser: hendelser.map((h) => ({
       id: h.id,
       tittel: h.title,
@@ -758,7 +859,7 @@ export async function innholdForSkjerm(req: Request): Promise<Skjerminnhold> {
 export async function filForSkjerm(req: Request, postId: string): Promise<Filsvar> {
   const s = await skjermFraToken(req);
   return withOrg(s.orgId, async (db) => {
-    const innhold = await byggSkjerminnhold(db, s.orgId, s.id);
+    const innhold = await byggSkjerminnhold(db, s.orgId, s.id, false);
     if (!innhold.oppslag.some((p) => p.id === postId && p.harFil)) throw ikkeFunnet("Bilde");
     return hentOppslagFil(db, s.orgId, postId);
   });

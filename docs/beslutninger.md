@@ -9,6 +9,31 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 29.09.2026 — Oppslagstavla: maler med soner, eksterne data i minnet, kontakter fra brukerne
+
+**Hva:** (1) Hver skjerm velger en mal med faste soner, og styret plasserer blokker i
+sonene — i stedet for én layout der felt slås av og på. (2) Avganger (Entur) og vær (MET) er
+blokker med egne innstillinger i `board_blocks`, og svarene holdes i minnet på serveren
+(`docs/entur-yr.md`). (3) Kontaktpersonene er DriftIQ-brukere med vis/skjul per felt, ikke
+manuelle oppføringer.
+
+**Hvorfor:** Styret ville bestemme hva som står hvor, uten at tavla kan bli uleselig. Vær og
+avganger er per sted/holdeplass, og en org trenger flere. Kontaktinfo skrevet inn for hånd
+går ut på dato; profilen er fasiten, og den som går ut av styret skal forsvinne av seg selv.
+
+**Alternativer:**
+- *Fritt rutenett med dra og slipp.* Forkastet: mye mer å bygge, og lett å lage noe
+  uleselig på en vegg. Malene dekker behovet med fem–seks valg per retning.
+- *Alt i én rotasjon i det store feltet.* Forkastet: avganger og vær må kunne leses i
+  forbifarten, ikke hvert tredje minutt.
+- *Lagre avganger og vær i basen (som BIR).* Forkastet: avganger er sanntid og foreldes på
+  sekunder, og MET krever at vi følger deres `Expires` — et minnelager per prosess er
+  enklest og riktigst så lenge appen kjører som én instans.
+- *METs egne værikoner.* Forkastet: ~80 SVG-er å hente og vedlikeholde; lucide har det som
+  trengs, og fila med symbolkoder er importfri og testet.
+- *Manuelle kontakter ved siden av brukerne.* Forkastet på eiers ønske: to kilder til samme
+  opplysning er det som driver fra hverandre.
+
 ## 29.09.2026 — BIR-tømmedager hentes ved skraping av bir.no, lagret og hentet om natta
 
 **Hva:** Tømmedagene til oppslagstavla hentes fra BIRs nettside (JSON-søk + HTML-kalender,

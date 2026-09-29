@@ -6,11 +6,12 @@ dokumentert API; integrasjonen bruker de samme flatene som bir.no. BIR er ikke s
 
 ## Hva det gjør
 
-Orgadmin søker opp borettslaget hos BIR og velger oppføringen (Oppslagstavle → Skjermer og
-utseende → «Tømmedager fra BIR»). DriftIQ henter tømmekalenderen ved kobling, med «Hent nå»
+Styret (nivå redigering) søker opp borettslaget hos BIR og velger oppføringen (Oppslagstavle →
+Innhold → «Tømmedager fra BIR», eller «Nytt innhold» → Tømmedager). DriftIQ henter tømmekalenderen ved kobling, med «Hent nå»
 og hver natt kl. 02:40 (jobben «bir-synk»), og lagrer datoene. Skjermen viser neste tømming
-per fraksjon i feltet «Tømmedager» — det slås på per skjerm, og er skjult når orgen ikke er
-koblet. Skjermen spør aldri BIR selv.
+per fraksjon, med egne fraksjonsmerker (farge + ikon, `AVFALL_MERKE` — ikke BIRs grafikk), i
+den innebygde blokken `tommedager`. Den plasseres i en sone per skjerm, og hoppes over når
+orgen ikke er koblet. Skjermen spør aldri BIR selv.
 
 ## Hvorfor styret VELGER oppføringen
 
@@ -57,15 +58,15 @@ utsnitt (29.09.2026).
 | UI | `src/app/(app)/oppslagstavle/BirKort.tsx`, `.ot-avfall`/`.ot-sone-avfall` i `globals.css` |
 | Jobb | «bir-synk» i `lib/jobber.ts` og `instrumentation.ts` |
 | Tester | `tests/bir.test.ts`, `tests/fixtures/bir-toemmekalender.html` |
-| Koblinger inn i resten | `tommedagerForSkjerm` i `byggSkjerminnhold` (lib/oppslagstavle.ts); `"avfall"` i `FELT` og `avfall` i `Skjerminnhold` (oppslagstavleregler.ts); avfallssonen i `Tavleskjerm.tsx`; `<BirKort />` i oppslagstavle-siden |
+| Koblinger inn i resten | `tommedagerForSkjerm` i `byggSkjerminnhold` (lib/oppslagstavle.ts); `"tommedager"` i `INNEBYGDE_BLOKKER` (tavlemaler.ts) og `avfall` i `Skjerminnhold` (oppslagstavleregler.ts); `Tommedager` i `Tavleskjerm.tsx`; `<BirKort />` i oppslagstavle-siden og «Nytt innhold» |
 
 ### Slik fjernes den
 
 1. Ny migrasjon som dropper `bir_pickups` og `bir_settings`.
 2. Slett filene over; fjern tabellnavnene fra `rls/tables.ts`, linja i `schema/index.ts`,
    `bir`-blokken i `klient.ts`, jobben i `jobber.ts`/`instrumentation.ts`.
-3. Fjern koblingene inn i resten (siste rad i tabellen). `lesFelt` ignorerer ukjente
-   feltnøkler, så lagrede skjermer med `"avfall"` virker videre.
+3. Fjern koblingene inn i resten (siste rad i tabellen). `lesSoner` ignorerer ukjente
+   blokknøkler, så lagrede skjermer med `"tommedager"` i en sone virker videre.
 
 ## Åpent
 

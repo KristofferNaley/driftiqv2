@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -28,8 +28,19 @@ export const boardScreens = pgTable(
     address: varchar("address"),
     /** «staende» | «liggende» — se `RETNINGER` i lib/oppslagstavleregler.ts. */
     orientation: varchar("orientation").notNull().default("staende"),
-    /** JSON-liste over feltene som vises (`FELT`). Ukjente nøkler ignoreres ved lesing. */
-    fields: text("fields"),
+    /**
+     * Skalering i prosent (`SKALERINGER`). Tavla måles i prosent av bredden, så 4K og Full HD
+     * ser like ut — dette er for leseavstand og hvor mye som får plass, ikke oppløsning.
+     */
+    scale: integer("scale").notNull().default(85),
+    /** Malen skjermen deles etter (`MALER` i lib/tavlemaler.ts). Ukjent mal ⇒ standardmalen. */
+    layout: varchar("layout"),
+    /**
+     * JSON `{ sone: [blokknøkkel, …] }` — hvilke blokker som står i hvilken sone. Flere i
+     * samme sone roterer. `null` ⇒ malens standardfordeling. Nøkler til slettede blokker
+     * ignoreres ved lesing (`lesSoner`).
+     */
+    zones: text("zones"),
     deviceTokenHash: varchar("device_token_hash").notNull().unique(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     pairedBy: varchar("paired_by").notNull(),
@@ -113,12 +124,12 @@ export const boardEvents = pgTable(
 );
 
 /**
- * Kontaktpersonene i kontaktfeltet — de roterer, så beboeren ser hvem i styret de kan
- * ringe. Bildet er valgfritt. Ingen rader ⇒ skjermen viser borettslagets egen telefon og
- * e-post (`organizations.phone`/`contactEmail`).
+ * Kontaktpersonene i kontaktfeltet: DriftIQ-brukere i orgen, valgt av orgadmin. De roterer,
+ * så beboeren ser hvem i styret de kan ringe. Ingen rader ⇒ skjermen viser borettslagets
+ * egen telefon og e-post (`organizations.phone`/`contactEmail`).
  *
- * Dette er personopplysninger på en vegg i oppgangen. Styret legger dem inn selv, og
- * sletting fjerner også bildet fra disk.
+ * Personopplysninger på en vegg i oppgangen: telefon og e-post vises bare når de er slått
+ * på per person (`showPhone`/`showEmail`). Bildet er valgfritt; sletting fjerner det fra disk.
  */
 export const boardContacts = pgTable(
   "board_contacts",
@@ -127,18 +138,49 @@ export const boardContacts = pgTable(
     orgId: varchar("org_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    name: varchar("name").notNull(),
-    /** «Styreleder», «Vaktmester» … */
-    role: varchar("role"),
-    phone: varchar("phone"),
-    email: varchar("email"),
+    /**
+     * DriftIQ-brukeren. Navn, telefon og e-post leses FERSKT fra profilen og rollen fra
+     * medlemskapets tittel — ingen kopi som går ut på dato. Slettes brukeren, forsvinner
+     * kontakten fra veggen.
+     */
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    showPhone: boolean("show_phone").notNull().default(true),
+    showEmail: boolean("show_email").notNull().default(false),
     fileName: varchar("file_name"),
     contentType: varchar("content_type"),
     fileSize: integer("file_size"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("board_contacts_org_idx").on(t.orgId)],
+  (t) => [index("board_contacts_org_idx").on(t.orgId), uniqueIndex("board_contacts_bruker").on(t.orgId, t.userId)],
+);
+
+/**
+ * En innholdsblokk med egne innstillinger — vær for et sted, avganger fra en eller to
+ * holdeplasser. Oppslag, kalender, kontakt og tømmedager er innebygde blokker med faste
+ * nøkler og har ingen rad her (`INNEBYGDE_BLOKKER`).
+ *
+ * `config` er JSON, validert med Zod-skjemaet for typen i lib/tavleblokker.ts ved hver
+ * skriving og lesing — en ødelagt rad blir en tom blokk, ikke en krasj på veggen.
+ */
+export const boardBlocks = pgTable(
+  "board_blocks",
+  {
+    id: varchar("id").primaryKey(),
+    orgId: varchar("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    /** «vaer» | «avganger» — `BLOKKTYPER`. */
+    kind: varchar("kind").notNull(),
+    name: varchar("name").notNull(),
+    config: text("config").notNull(),
+    createdBy: varchar("created_by").notNull(),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("board_blocks_org_idx").on(t.orgId)],
 );
 
 /**
@@ -164,3 +206,4 @@ export type BoardScreen = typeof boardScreens.$inferSelect;
 export type BoardPost = typeof boardPosts.$inferSelect;
 export type BoardEvent = typeof boardEvents.$inferSelect;
 export type BoardContact = typeof boardContacts.$inferSelect;
+export type BoardBlock = typeof boardBlocks.$inferSelect;

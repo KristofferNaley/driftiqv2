@@ -17,21 +17,32 @@ import {
 import { useOkt } from "@/components/OktProvider";
 import { Tavleskjerm } from "@/components/Tavleskjerm";
 import { BirKort } from "./BirKort";
-import { oppslagstavle, type Oppslag, type Skjerm, type Tavlekontakt, type Tavleutseende } from "@/lib/klient";
+import { BLOKKTYPE_NAVN, BlokkListe, BlokkSkjema } from "./Blokker";
+import { SoneOppsett } from "./SoneOppsett";
 import {
-  FELT,
-  FELT_INFO,
+  bir,
+  oppslagstavle,
+  tavleblokker,
+  type Oppslag,
+  type Skjerm,
+  type Tavleblokk,
+  type Tavlekontakt,
+  type Tavleutseende,
+} from "@/lib/klient";
+import { INNEBYGDE_BLOKKER, INNEBYGD_NAVN } from "@/lib/tavlemaler";
+import {
   FORVALG,
   KATEGORI_BESKRIVELSE,
   KATEGORI_ETIKETT,
   KATEGORIER,
   RETNING_ETIKETT,
   RETNINGER,
+  SKALERINGER,
   STANDARD_SEKUNDER,
+  STANDARD_SKALERING,
   STATUS_ETIKETT,
   VISNINGSTIDER,
   osloIDag,
-  type Felt,
   type Kategori,
   type Retning,
   type Status,
@@ -40,9 +51,10 @@ import {
 /**
  * Oppslagstavla — det styret legger ut her, vises på skjermene i bygget innen ett minutt.
  *
- * To faner: Innhold (oppslag og kalender, for alle med redigering) og Skjermer (kobling,
- * felt og utseende, for orgadmin). Forhåndsvisningen står til høyre på begge og er den
- * samme komponenten som skjermen på veggen tegner — med de samme dataene fra serveren.
+ * To faner: Innhold (oppslag, kalender, vær, avganger, tømmedager og kontaktpersoner — alt
+ * som skal VISES) og Skjermer (kobling, mal og soner per skjerm, utseende — HVOR det vises,
+ * for orgadmin). Forhåndsvisningen står til høyre på begge og er den samme komponenten som
+ * skjermen på veggen tegner, med de samme dataene fra serveren.
  */
 type Fane = "innhold" | "skjermer";
 
@@ -59,9 +71,20 @@ export default function Oppslagstavle() {
       oppslagstavle.skjermer(o),
       oppslagstavle.utseende(o),
       oppslagstavle.kontakter(o),
+      tavleblokker.liste(o),
+      bir.status(o),
     ]),
   );
-  const [oppslag, hendelser, skjermer, utseende, kontakter] = data ?? [[], [], [], null, []];
+  const [oppslag, hendelser, skjermer, utseende, kontakter, blokker, birStatus] = data ?? [[], [], [], null, [], [], null];
+  // Det som kan plasseres i en sone: de innebygde blokkene og orgens egne.
+  const plasserbare = [
+    ...INNEBYGDE_BLOKKER.map((n) => ({
+      nokkel: n as string,
+      navn: INNEBYGD_NAVN[n],
+      merknad: n === "tommedager" && !birStatus ? "Ikke koblet til BIR — vises ikke før det er gjort" : undefined,
+    })),
+    ...blokker.map((b) => ({ nokkel: b.nokkel, navn: `${BLOKKTYPE_NAVN[b.type]}: ${b.navn}` })),
+  ];
 
   const [valgtSkjerm, setValgtSkjerm] = useState<string | null>(null);
   const skjerm = skjermer.find((s) => s.id === valgtSkjerm) ?? skjermer[0] ?? null;
@@ -75,6 +98,7 @@ export default function Oppslagstavle() {
   /** «nytt» = tomt skjema; et oppslag = redigering av det. */
   const [redigerer, setRedigerer] = useState<Oppslag | "nytt" | null>(null);
   const [kobler, setKobler] = useState(false);
+  const [blokkRedigering, setBlokkRedigering] = useState<Tavleblokk | null>(null);
 
   return (
     <Layout
@@ -110,6 +134,7 @@ export default function Oppslagstavle() {
         <div className={`ot-oppsett${skjerm?.retning === "liggende" ? " liggende" : ""}`}>
           <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
             {fane === "innhold" ? (
+              <>
               <Innhold
                 orgId={orgId}
                 oppslag={oppslag}
@@ -119,6 +144,18 @@ export default function Oppslagstavle() {
                 onEndret={oppdater}
                 onRediger={setRedigerer}
               />
+              {orgId && (
+                <BlokkListe
+                  orgId={orgId}
+                  blokker={blokker}
+                  kanRedigere={kanRedigere}
+                  onRediger={setBlokkRedigering}
+                  onEndret={oppdater}
+                />
+              )}
+              <BirKort erAdmin={kanRedigere} onEndret={oppdater} />
+              {orgId && <Kontaktpersoner orgId={orgId} kontakter={kontakter} erAdmin={erAdmin} onEndret={oppdater} />}
+              </>
             ) : (
               <Skjermer
                 orgId={orgId}
@@ -126,7 +163,7 @@ export default function Oppslagstavle() {
                 valgt={skjerm}
                 onVelg={setValgtSkjerm}
                 utseende={utseende}
-                kontakter={kontakter}
+                plasserbare={plasserbare}
                 erAdmin={erAdmin}
                 onEndret={oppdater}
               />
@@ -154,6 +191,24 @@ export default function Oppslagstavle() {
             oppdater();
           }}
         />
+      )}
+      {blokkRedigering && orgId && (
+        <Modal
+          tittel={`Endre ${BLOKKTYPE_NAVN[blokkRedigering.type].toLowerCase()}`}
+          onLukk={() => setBlokkRedigering(null)}
+          bredde={720}
+        >
+          <BlokkSkjema
+            orgId={orgId}
+            type={blokkRedigering.type}
+            eksisterende={blokkRedigering}
+            onAvbryt={() => setBlokkRedigering(null)}
+            onLagret={() => {
+              setBlokkRedigering(null);
+              oppdater();
+            }}
+          />
+        </Modal>
       )}
       {kobler && orgId && (
         <KobleSkjerm
@@ -303,7 +358,7 @@ function Innhold({
   );
 }
 
-type Innholdstype = "tekst" | "bilde" | "hendelse";
+type Innholdstype = "tekst" | "bilde" | "hendelse" | "vaer" | "avganger" | "tommedager";
 
 /**
  * Nytt innhold, eller redigering av et oppslag. Ved redigering står typen fast — et nytt
@@ -326,6 +381,7 @@ function OppslagSkjema({
   const omToUker = osloIDag(new Date(Date.now() + 14 * 86_400_000));
   const e = eksisterende;
   const [type, setType] = useState<Innholdstype>(e?.kind ?? "tekst");
+  const erBlokk = type === "vaer" || type === "avganger" || type === "tommedager";
   const [tittel, setTittel] = useState(e?.title ?? "");
   const [tekst, setTekst] = useState(e?.body ?? "");
   const [kategori, setKategori] = useState<Kategori>(e?.category ?? "info");
@@ -360,14 +416,16 @@ function OppslagSkjema({
 
   return (
     <Modal tittel={e ? "Endre oppslag" : "Nytt innhold"} onLukk={onLukk} bredde={720}>
-      <form onSubmit={lagre} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-        {!e && (
+      {!e && (
         <div className="ot-typer">
           {(
             [
               ["tekst", "Tekst", "Oppslag med overskrift og tekst"],
               ["bilde", "Bilde", "JPG, PNG eller WebP med bildetekst"],
               ["hendelse", "Kalender", "Hendelse i kalenderfeltet"],
+              ["vaer", "Vær", "Varsel fra MET Norway (yr) for et sted"],
+              ["avganger", "Avganger", "Sanntid fra Entur for en eller to holdeplasser"],
+              ["tommedager", "Tømmedager", "Hentes fra BIR hver natt"],
             ] as const
           ).map(([n, t, b]) => (
             <button type="button" key={n} className={`ot-type${type === n ? " valgt" : ""}`} onClick={() => setType(n)}>
@@ -376,7 +434,25 @@ function OppslagSkjema({
             </button>
           ))}
         </div>
-        )}
+      )}
+      {(type === "vaer" || type === "avganger") && (
+        <BlokkSkjema key={type} orgId={orgId} type={type} eksisterende={null} onAvbryt={onLukk} onLagret={onLagret} />
+      )}
+      {type === "tommedager" && (
+        <>
+          <BirKort erAdmin onEndret={() => {}} />
+          <div className="field-note">
+            Tømmedagene er én blokk for hele borettslaget. Plasser den på skjermene under «Skjermer og utseende».
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" className="btn btn-primary" onClick={onLagret}>
+              Ferdig
+            </button>
+          </div>
+        </>
+      )}
+      {!erBlokk && (
+      <form onSubmit={lagre} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
         {type === "hendelse" ? (
           <>
@@ -466,6 +542,7 @@ function OppslagSkjema({
           sendEtikett={e ? "Lagre" : type === "hendelse" ? "Legg i kalenderen" : "Legg ut"}
         />
       </form>
+      )}
     </Modal>
   );
 }
@@ -480,7 +557,7 @@ function Skjermer({
   valgt,
   onVelg,
   utseende,
-  kontakter,
+  plasserbare,
   erAdmin,
   onEndret,
 }: {
@@ -489,7 +566,7 @@ function Skjermer({
   valgt: Skjerm | null;
   onVelg: (id: string) => void;
   utseende: Tavleutseende | null;
-  kontakter: Tavlekontakt[];
+  plasserbare: ReadonlyArray<{ nokkel: string; navn: string; merknad?: string }>;
   erAdmin: boolean;
   onEndret: () => void;
 }) {
@@ -526,19 +603,31 @@ function Skjermer({
         </div>
       </Kort>
 
-      {valgt && orgId && erAdmin && <Skjerminnstillinger key={valgt.id} orgId={orgId} skjerm={valgt} onEndret={onEndret} />}
-      {orgId && <Kontaktpersoner orgId={orgId} kontakter={kontakter} erAdmin={erAdmin} onEndret={onEndret} />}
-      <BirKort erAdmin={erAdmin} onEndret={onEndret} />
+      {valgt && orgId && erAdmin && (
+        <Skjerminnstillinger key={valgt.id} orgId={orgId} skjerm={valgt} plasserbare={plasserbare} onEndret={onEndret} />
+      )}
       {utseende && orgId && erAdmin && <Utseende orgId={orgId} utseende={utseende} onEndret={onEndret} />}
     </>
   );
 }
 
-function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjerm: Skjerm; onEndret: () => void }) {
+function Skjerminnstillinger({
+  orgId,
+  skjerm,
+  plasserbare,
+  onEndret,
+}: {
+  orgId: string;
+  skjerm: Skjerm;
+  plasserbare: ReadonlyArray<{ nokkel: string; navn: string; merknad?: string }>;
+  onEndret: () => void;
+}) {
   const [navn, setNavn] = useState(skjerm.navn);
   const [adresse, setAdresse] = useState(skjerm.adresse ?? "");
   const [retning, setRetning] = useState<Retning>(skjerm.retning);
-  const [felt, setFelt] = useState<Felt[]>(skjerm.felt);
+  const [mal, setMal] = useState(skjerm.mal);
+  const [soner, setSoner] = useState(skjerm.soner);
+  const [skala, setSkala] = useState(skjerm.skala);
   const { sender, feil, send } = useSending(onEndret);
 
   return (
@@ -547,7 +636,7 @@ function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjer
         className="card-body"
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => oppslagstavle.endreSkjerm(orgId, skjerm.id, { navn, adresse: adresse || null, retning, felt }));
+          void send(() => oppslagstavle.endreSkjerm(orgId, skjerm.id, { navn, adresse: adresse || null, retning, skala, mal, soner }));
         }}
       >
         <div className="ot-to">
@@ -561,15 +650,23 @@ function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjer
           valg={RETNINGER.map((r) => ({ verdi: r, etikett: RETNING_ETIKETT[r] }))}
           notat="Følger hvordan skjermen er montert."
         />
-        {FELT.map((f) => (
-          <Avkryssing
-            key={f}
-            etikett={FELT_INFO[f].navn + (FELT_INFO[f].alltidPa ? " (alltid på)" : "")}
-            notat={FELT_INFO[f].beskrivelse}
-            verdi={felt.includes(f) || Boolean(FELT_INFO[f].alltidPa)}
-            onEndre={(v) => !FELT_INFO[f].alltidPa && setFelt((l) => (v ? [...l, f] : l.filter((x) => x !== f)))}
-          />
-        ))}
+        <Nedtrekk
+          etikett="Skalering"
+          verdi={String(skala)}
+          onEndre={(v) => setSkala(Number(v))}
+          valg={SKALERINGER.map((n) => ({ verdi: String(n), etikett: `${n} %${n === STANDARD_SKALERING ? " (standard)" : ""}` }))}
+          notat="Mindre gir plass til mer innhold, større leses på lengre avstand. Oppløsningen spiller ingen rolle — 4K og Full HD ser like ut."
+        />
+        <SoneOppsett
+          retning={retning}
+          malId={mal}
+          soner={soner}
+          blokker={plasserbare}
+          onEndre={(m, s) => {
+            setMal(m);
+            setSoner(s);
+          }}
+        />
         <Feil melding={feil} />
         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -592,8 +689,10 @@ function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjer
 }
 
 /**
- * Kontaktpersonene i kontaktfeltet. De roterer på skjermen i rekkefølgen her. Uten noen
- * vises borettslagets egen telefon og e-post (fra Brønnøysund, vedlikeholdt av DriftIQ).
+ * Kontaktpersonene i kontaktfeltet: DriftIQ-brukere i borettslaget. Navn, telefon og e-post
+ * kommer fra profilen, rollen fra tittelen under Brukere — styret velger bare hvem og hva
+ * som vises. De roterer på skjermen i rekkefølgen her. Uten noen vises borettslagets egen
+ * telefon og e-post.
  */
 function Kontaktpersoner({
   orgId,
@@ -646,7 +745,10 @@ function Kontaktpersoner({
               {k.rolle && <span className="field-note">{k.rolle}</span>}
             </span>
           }
-          meta={[k.telefon, k.epost].filter(Boolean).join(" · ")}
+          meta={
+            [k.visTelefon && k.telefon, k.visEpost && k.epost].filter(Boolean).join(" · ") ||
+            "Verken telefon eller e-post vises"
+          }
           onClick={erAdmin ? () => setSkjema(k) : undefined}
           hoyre={
             erAdmin &&
@@ -705,36 +807,58 @@ function KontaktSkjema({
   onLukk: () => void;
   onLagret: () => void;
 }) {
-  const [navn, setNavn] = useState(e?.navn ?? "");
-  const [rolle, setRolle] = useState(e?.rolle ?? "");
-  const [telefon, setTelefon] = useState(e?.telefon ?? "");
-  const [epost, setEpost] = useState(e?.epost ?? "");
+  const { data: kandidater } = useOrgData((o) => oppslagstavle.kontaktkandidater(o));
+  const [brukerId, setBrukerId] = useState(e?.brukerId ?? "");
+  const [visTelefon, setVisTelefon] = useState(e?.visTelefon ?? true);
+  const [visEpost, setVisEpost] = useState(e?.visEpost ?? false);
   const [fil, setFil] = useState<File | null>(null);
   const [fjernBilde, setFjernBilde] = useState(false);
   const { sender, feil, send } = useSending(onLagret);
+  const valgt = e ?? kandidater?.find((k) => k.id === brukerId) ?? null;
+  const telefon = valgt?.telefon ?? null;
+  const epost = valgt?.epost ?? null;
 
   return (
-    <Modal tittel={e ? "Endre kontaktperson" : "Ny kontaktperson"} onLukk={onLukk}>
+    <Modal tittel={e ? `Kontaktperson: ${e.navn}` : "Ny kontaktperson"} onLukk={onLukk}>
       <form
         onSubmit={(ev) => {
           ev.preventDefault();
-          const d = { navn, rolle: rolle || null, telefon: telefon || null, epost: epost || null };
           void send(async () => {
-            if (!e) return oppslagstavle.nyKontakt(orgId, d, fil);
-            await oppslagstavle.endreKontakt(orgId, e.id, d);
+            if (!e) {
+              if (!brukerId) throw new Error("Velg en person");
+              return oppslagstavle.nyKontakt(orgId, { brukerId, visTelefon, visEpost }, fil);
+            }
+            await oppslagstavle.endreKontakt(orgId, e.id, { visTelefon, visEpost });
             if (fil) await oppslagstavle.settKontaktbilde(orgId, e.id, fil);
             else if (fjernBilde) await oppslagstavle.fjernKontaktbilde(orgId, e.id);
           });
         }}
       >
-        <div className="ot-to">
-          <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} plassholder="Kari Nilsen" />
-          <Tekstfelt etikett="Rolle" verdi={rolle} onEndre={setRolle} plassholder="Styreleder" />
-        </div>
-        <div className="ot-to">
-          <Tekstfelt etikett="Telefon" verdi={telefon} onEndre={setTelefon} plassholder="900 00 000" />
-          <Tekstfelt etikett="E-post" verdi={epost} onEndre={setEpost} plassholder="styret@borettslaget.no" />
-        </div>
+        {!e && (
+          <Nedtrekk
+            etikett="Person"
+            verdi={brukerId}
+            onEndre={setBrukerId}
+            valg={[
+              { verdi: "", etikett: kandidater ? "Velg en bruker …" : "Henter brukere …" },
+              ...(kandidater ?? []).map((k) => ({ verdi: k.id, etikett: k.tittel ? `${k.navn} — ${k.tittel}` : k.navn })),
+            ]}
+            notat="Brukerne i borettslaget. Mangler noen, inviter dem under Brukere først."
+          />
+        )}
+        {valgt && (
+          <div className="field-note" style={{ marginBottom: "10px" }}>
+            Rolle på skjermen: <b>{"rolle" in valgt ? (valgt.rolle ?? "ingen") : (valgt.tittel ?? "ingen")}</b> — det er
+            tittelen under Brukere, og endres der. Telefon og e-post er fra personens profil.
+          </div>
+        )}
+        <Avkryssing
+          etikett={`Vis telefon${telefon ? ` (${telefon})` : ""}`}
+          verdi={visTelefon}
+          onEndre={setVisTelefon}
+          notat={valgt && !telefon ? "Profilen har ikke telefonnummer — ingenting vises før det er lagt inn." : undefined}
+        />
+        <Avkryssing etikett={`Vis e-post${epost ? ` (${epost})` : ""}`} verdi={visEpost} onEndre={setVisEpost} />
         <Skjemafelt
           etikett="Bilde (valgfritt)"
           notat="Et portrett gjør det lettere for beboerne å kjenne igjen personen. Vises rundt på skjermen."
@@ -746,11 +870,9 @@ function KontaktSkjema({
             onChange={(ev) => setFil(ev.target.files?.[0] ?? null)}
           />
         </Skjemafelt>
-        {e?.harBilde && !fil && (
-          <Avkryssing etikett="Fjern bildet" verdi={fjernBilde} onEndre={setFjernBilde} />
-        )}
+        {e?.harBilde && !fil && <Avkryssing etikett="Fjern bildet" verdi={fjernBilde} onEndre={setFjernBilde} />}
         <div className="field-note" style={{ marginBottom: "10px" }}>
-          Navn, telefon og bilde vises offentlig i oppgangen. Legg bare inn personer som har sagt ja.
+          Navn, bilde og det du slår på over, vises offentlig i oppgangen. Legg bare inn personer som har sagt ja.
         </div>
         <Feil melding={feil} />
         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>

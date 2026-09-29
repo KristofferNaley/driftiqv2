@@ -58,7 +58,8 @@ export async function sokAdresser(sok: string): Promise<Adressetreff[]> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = (await res.json()) as GeonorgeSvar;
   } catch {
-    throw new ApiFeil(502, "Fikk ikke kontakt med Kartverket. Prøv igjen om litt.");
+    // 503, ikke 502: Cloudflare bytter ut 502/504 med sin egen side (CLAUDE.md «Fallgruver»).
+    throw new ApiFeil(503, "Fikk ikke kontakt med Kartverket. Prøv igjen om litt.");
   }
 
   return (data.adresser ?? []).map((a) => ({
@@ -70,4 +71,39 @@ export async function sokAdresser(sok: string): Promise<Adressetreff[]> {
     kommunenavn: a.kommunenavn ?? null,
     bruksenhetsnummer: a.bruksenhetsnummer ?? [],
   }));
+}
+
+export type Stedstreff = { tekst: string; lat: number; lon: number };
+
+/**
+ * Adressesøk med koordinater — til værmeldingen på oppslagstavla, som trenger et punkt og
+ * ikke bruksenheter. Samme Geonorge-API og samme proxy-begrunnelse som over.
+ */
+export async function sokSted(sok: string): Promise<Stedstreff[]> {
+  const rent = sok.replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  if (rent.length < 3) return [];
+  const url =
+    "https://ws.geonorge.no/adresser/v1/sok?" +
+    new URLSearchParams({ sok: rent, treffPerSide: "8", utkoordsys: "4258" }).toString();
+  let data: {
+    adresser?: Array<{ adressetekst?: string; poststed?: string; representasjonspunkt?: { lat?: number; lon?: number } }>;
+  };
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = (await res.json()) as typeof data;
+  } catch {
+    throw new ApiFeil(503, "Fikk ikke kontakt med Kartverket. Prøv igjen om litt.");
+  }
+  return (data.adresser ?? []).flatMap((a) =>
+    typeof a.representasjonspunkt?.lat === "number" && typeof a.representasjonspunkt?.lon === "number"
+      ? [
+          {
+            tekst: [a.adressetekst, a.poststed].filter(Boolean).join(", "),
+            lat: a.representasjonspunkt.lat,
+            lon: a.representasjonspunkt.lon,
+          },
+        ]
+      : [],
+  );
 }
