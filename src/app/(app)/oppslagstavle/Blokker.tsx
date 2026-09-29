@@ -4,9 +4,14 @@ import { useState } from "react";
 import { Pencil, Search, Trash2, X } from "lucide-react";
 import { Feil, Kort, Rad, Tom } from "@/components/felles";
 import { Felt as Skjemafelt, Knapperad, Nedtrekk, Tekstfelt, useSending } from "@/components/skjema";
+import { PlasseringFelter, plasseringTekst } from "./Plassering";
 import {
+  oppslagstavle,
   tavleblokker,
   type AvgangerKonfig,
+  type BlokkInn,
+  type Plassering,
+  type Skjerm,
   type Holdeplasstreff,
   type Stedstreff,
   type Tavleblokk,
@@ -30,12 +35,16 @@ export function blokkBeskrivelse(b: Tavleblokk): string {
 export function BlokkListe({
   orgId,
   blokker,
+  plasseringer,
+  skjermer,
   kanRedigere,
   onRediger,
   onEndret,
 }: {
   orgId: string;
   blokker: Tavleblokk[];
+  plasseringer: Plassering[];
+  skjermer: Skjerm[];
   kanRedigere: boolean;
   onRediger: (b: Tavleblokk) => void;
   onEndret: () => void;
@@ -45,13 +54,16 @@ export function BlokkListe({
     <Kort tittel="Vær og avganger">
       <Feil melding={feil} />
       {blokker.length === 0 && (
-        <Tom tekst="Ingen blokker ennå. Legg til vær eller avganger under «Nytt innhold», og plasser dem på skjermene." />
+        <Tom tekst="Ingen blokker ennå. Legg til vær eller avganger under «Nytt innhold»." />
       )}
       {blokker.map((b) => (
         <Rad
           key={b.id}
           tittel={b.navn}
-          meta={`${BLOKKTYPE_NAVN[b.type]} · ${blokkBeskrivelse(b)}`}
+          meta={`${BLOKKTYPE_NAVN[b.type]} · ${blokkBeskrivelse(b)} — ${plasseringTekst(
+            plasseringer.find((p) => p.nokkel === b.nokkel),
+            skjermer,
+          )}`}
           onClick={kanRedigere ? () => onRediger(b) : undefined}
           hoyre={
             kanRedigere && (
@@ -95,12 +107,17 @@ export function BlokkSkjema({
   orgId,
   type,
   eksisterende,
+  skjermer,
+  plassering,
   onAvbryt,
   onLagret,
 }: {
   orgId: string;
   type: "vaer" | "avganger";
   eksisterende: Tavleblokk | null;
+  skjermer: Skjerm[];
+  /** Nåværende plassering ved redigering; ny blokk får «Sidefelt · alle skjermer». */
+  plassering: Plassering | undefined;
   onAvbryt: () => void;
   onLagret: () => void;
 }) {
@@ -113,20 +130,26 @@ export function BlokkSkjema({
   );
   const [visning, setVisning] = useState<Vaervisning>(vaerStart?.visning ?? "timer");
   const [holdeplasser, setHoldeplasser] = useState<AvgangerKonfig["holdeplasser"]>(avgStart?.holdeplasser ?? []);
+  const [hvor, setHvor] = useState<Omit<Plassering, "nokkel">>(
+    plassering ?? { omrade: "side", alleSkjermer: true, skjermIder: [] },
+  );
   const { sender, feil, send } = useSending(onLagret);
 
   function lagre(ev: React.FormEvent) {
     ev.preventDefault();
     void send(async () => {
+      let d: BlokkInn;
       if (type === "vaer") {
         if (!sted) throw new Error("Velg et sted");
         const konfig: VaerKonfig = { sted: sted.tekst, lat: sted.lat, lon: sted.lon, visning };
-        const d = { type: "vaer" as const, navn, konfig };
-        return e ? tavleblokker.endre(orgId, e.id, d) : tavleblokker.ny(orgId, d);
+        d = { type: "vaer", navn, konfig };
+      } else {
+        if (holdeplasser.length === 0) throw new Error("Velg minst én holdeplass");
+        d = { type: "avganger", navn, konfig: { holdeplasser } };
       }
-      if (holdeplasser.length === 0) throw new Error("Velg minst én holdeplass");
-      const d = { type: "avganger" as const, navn, konfig: { holdeplasser } };
-      return e ? tavleblokker.endre(orgId, e.id, d) : tavleblokker.ny(orgId, d);
+      const blokk = e ? await tavleblokker.endre(orgId, e.id, d) : await tavleblokker.ny(orgId, d);
+      // Plasseringen i samme lagring — en ny blokk skal ikke kreve et ekstra steg for å vises.
+      await oppslagstavle.settPlassering(orgId, { nokkel: blokk.nokkel, ...hvor });
     });
   }
 
@@ -191,6 +214,7 @@ export function BlokkSkjema({
           )}
         </Skjemafelt>
       )}
+      <PlasseringFelter verdi={hvor} skjermer={skjermer} onEndre={setHvor} />
       <Feil melding={feil} />
       <Knapperad onAvbryt={onAvbryt} sender={sender} sendEtikett={e ? "Lagre" : "Legg til"} />
     </form>

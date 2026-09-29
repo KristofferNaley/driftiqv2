@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { boardBlocks, boardScreens, type BoardBlock } from "../db/schema/oppslagstavle";
+import { boardBlocks, boardPlacements, type BoardBlock } from "../db/schema/oppslagstavle";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 import type { Aktor } from "./aktor";
 import { EnturFeil, avgangerFra, erHoldeplassId, sokHoldeplass, type Holdeplasstreff } from "./entur";
@@ -111,37 +111,16 @@ export async function endreBlokk(db: Db, orgId: string, id: string, d: BlokkInn)
   return blokkUt(rad!);
 }
 
-/**
- * Sletter blokken og fjerner den fra sonene på alle skjermene i orgen. `lesSoner` ville
- * ignorert den uansett, men en død nøkkel i lagret JSON er rot noen snubler i senere.
- */
+/** Sletter blokken og plasseringen dens — den forsvinner fra alle skjermene. */
 export async function slettBlokk(db: Db, orgId: string, id: string) {
   const slettet = await db
     .delete(boardBlocks)
     .where(and(eq(boardBlocks.id, id), eq(boardBlocks.orgId, orgId)))
     .returning({ id: boardBlocks.id });
   if (slettet.length === 0) throw ikkeFunnet("Blokk");
-  const nokkel = blokkNokkel(id);
-  const skjermer = await db
-    .select({ id: boardScreens.id, zones: boardScreens.zones })
-    .from(boardScreens)
-    .where(eq(boardScreens.orgId, orgId));
-  for (const s of skjermer) {
-    if (!s.zones?.includes(nokkel)) continue;
-    let soner: Record<string, unknown>;
-    try {
-      soner = JSON.parse(s.zones) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    const rent = Object.fromEntries(
-      Object.entries(soner).map(([k, v]) => [k, Array.isArray(v) ? v.filter((x) => x !== nokkel) : v]),
-    );
-    await db
-      .update(boardScreens)
-      .set({ zones: JSON.stringify(rent) })
-      .where(and(eq(boardScreens.id, s.id), eq(boardScreens.orgId, orgId)));
-  }
+  await db
+    .delete(boardPlacements)
+    .where(and(eq(boardPlacements.orgId, orgId), eq(boardPlacements.blockKey, blokkNokkel(id))));
 }
 
 // ---------------------------------------------------------------------------------------

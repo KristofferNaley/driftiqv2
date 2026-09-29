@@ -51,22 +51,30 @@ periode, skjermer, tid); typen og bildet står fast — et nytt bilde er et nytt
 Typene viktig/informasjon/arrangement styrer BARE merkelapp og kantfarge
 (`KATEGORI_BESKRIVELSE` forklarer dem i skjemaet), ikke rekkefølge eller tid.
 
-### Maler, soner og blokker
+### Maler og plassering
 
-Hva som står HVOR, bestemmes per skjerm: en **mal** (`MALER` i `lib/tavlemaler.ts`, 5–6 per
-retning) deler skjermen i soner `a`–`d` pluss en **stripe** nederst med høyde etter
-innholdet. Hver sone har null eller flere **blokker**; flere roterer (`SONE_SEKUNDER`), og
-stripen viser alle side om side i kompakt form. Lagres som `board_screens.layout` og
-`board_screens.zones` (`{ sone: [nøkkel, …] }`); `null` ⇒ malens standard.
+HVA som vises og HVOR, velges på **innholdet**; skjermen velger bare **mal**.
 
-Blokkene er enten **innebygde** (`oppslag`, `kalender`, `kontakt`, `tommedager` — faste
-nøkler, ingen rad) eller **egne** med innstillinger i `board_blocks` (vær og avganger,
-nøkkel `blokk:<id>`, `docs/entur-yr.md`). Hva som VISES lages under Innhold; hvor det vises
-velges under Skjermer. `lesSoner` renser bort ukjente nøkler og soner malen ikke har, og en
-slettet blokk fjernes fra alle skjermenes soner.
+- **Blokker** er enten innebygde (`oppslag`, `kalender`, `kontakt`, `tommedager` — faste
+  nøkler, ingen rad) eller egne med innstillinger i `board_blocks` (vær og avganger, nøkkel
+  `blokk:<id>`, `docs/entur-yr.md`).
+- **Plassering** (`board_placements`, én rad per blokknøkkel): område — Hovedfelt, Sidefelt,
+  Stripe nederst eller Ikke vist — og skjermer (alle eller et utvalg). Mangler raden, gjelder
+  `STANDARD_PLASSERING` (oppslag i hovedfeltet, kalender og kontakt i sidefeltet, tømmedager i
+  stripen; egne blokker i sidefeltet). Settes med «Vises: … [Endre]» øverst i hvert kort under
+  Innhold, og i skjemaet for vær/avganger.
+- **Mal** (`MALER` i `lib/tavlemaler.ts`, 5–6 per retning): ett stort felt `a`, null til tre
+  små (`b`–`d`) og stripen. `board_screens.layout`.
+- **Sonene regnes ut** (`fordelSoner`) — de lagres ikke: hovedfelt → `a`; sidefelt → ett per
+  lite felt i rekkefølge (`SIDE_REKKEFOLGE`), og det som ikke får plass roterer i det siste;
+  fullskjerm-maler tar sidefeltene inn i rotasjonen i `a`; stripe → stripen, kompakt og side
+  om side. Blir et lite felt stående tomt, er malen for stor for innholdet.
 
-En blokk uten data (tømmedager uten BIR, vær MET ikke har svart på) hoppes over i rotasjonen;
-en sone uten noe å vise står tom. Skjermen henter bare data for blokker som står i en sone.
+En blokk uten data (tømmedager uten BIR, vær MET ikke har svart på) hoppes over i rotasjonen.
+Skjermen henter bare data for blokker som faktisk havner i en sone.
+
+Sone-for-sone-valg per skjerm (A/B/C/D) ble prøvd samme dag og forkastet — for omstendelig;
+se `docs/beslutninger.md`.
 
 **Skalering** (`board_screens.scale`, 60–130 %, standard 85) ganges inn i `--u`, så tekst og
 luft krymper sammen. Tavla måles i prosent av bredden — 4K og Full HD ser like ut; skalering

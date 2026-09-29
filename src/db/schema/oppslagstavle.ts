@@ -35,12 +35,6 @@ export const boardScreens = pgTable(
     scale: integer("scale").notNull().default(85),
     /** Malen skjermen deles etter (`MALER` i lib/tavlemaler.ts). Ukjent mal ⇒ standardmalen. */
     layout: varchar("layout"),
-    /**
-     * JSON `{ sone: [blokknøkkel, …] }` — hvilke blokker som står i hvilken sone. Flere i
-     * samme sone roterer. `null` ⇒ malens standardfordeling. Nøkler til slettede blokker
-     * ignoreres ved lesing (`lesSoner`).
-     */
-    zones: text("zones"),
     deviceTokenHash: varchar("device_token_hash").notNull().unique(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     pairedBy: varchar("paired_by").notNull(),
@@ -181,6 +175,29 @@ export const boardBlocks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("board_blocks_org_idx").on(t.orgId)],
+);
+
+/**
+ * HVOR en blokk vises: område og hvilke skjermer. Én rad per blokknøkkel (`oppslag`,
+ * `kalender`, `kontakt`, `tommedager` eller `blokk:<id>`). Mangler raden, gjelder
+ * `STANDARD_PLASSERING` i lib/tavlemaler.ts. Skjermens soner regnes UT av dette og malen
+ * (`fordelSoner`) — styret velger plassering på innholdet, ikke sone for sone per skjerm.
+ */
+export const boardPlacements = pgTable(
+  "board_placements",
+  {
+    id: varchar("id").primaryKey(),
+    orgId: varchar("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    blockKey: varchar("block_key").notNull(),
+    /** «hoved» | «side» | «stripe» | «av» — `OMRADER`. */
+    area: varchar("area").notNull(),
+    allScreens: boolean("all_screens").notNull().default(true),
+    screenIds: varchar("screen_ids").array().notNull().default([]),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("board_placements_nokkel").on(t.orgId, t.blockKey)],
 );
 
 /**

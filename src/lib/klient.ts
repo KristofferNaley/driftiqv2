@@ -12,6 +12,7 @@
 
 import type { MinAktivitet } from "./aktivitetsslag";
 import type { Driftslogg } from "./driftsloggslag";
+import type { Omrade } from "./tavlemaler";
 import type { Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
 
 export class ApiKlientFeil extends Error {
@@ -1302,12 +1303,16 @@ export type Skjerm = {
   adresse: string | null;
   retning: Retning;
   mal: string;
+  /** Utregnet av malen og plasseringene — lagres ikke per skjerm. */
   soner: Record<string, string[]>;
   skala: number;
   sistSett: string | null;
   paaNett: boolean;
   koblet: string;
 };
+
+/** HVOR en blokk vises. `nokkel`: `oppslag`, `kalender`, `kontakt`, `tommedager` eller `blokk:<id>`. */
+export type Plassering = { nokkel: string; omrade: Omrade; alleSkjermer: boolean; skjermIder: string[] };
 
 export type Tavleutseende = {
   background: string;
@@ -1342,7 +1347,7 @@ export const oppslagstavle = {
   endreSkjerm: (
     o: string,
     id: string,
-    d: { navn: string; adresse: string | null; retning: Retning; skala: number; mal: string; soner: Record<string, string[]> },
+    d: { navn: string; adresse: string | null; retning: Retning; skala: number; mal: string },
   ) =>
     api.endre<Skjerm>(org(o, `/oppslagstavle/skjermer/${id}`), d),
   slettSkjerm: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/skjermer/${id}`)),
@@ -1371,6 +1376,9 @@ export const oppslagstavle = {
   fjernKontaktbilde: (o: string, id: string) =>
     request<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}/bilde`), { method: "DELETE" }),
   kontaktbildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/kontakter/${id}/bilde`)}`,
+
+  plasseringer: (o: string) => api.hent<Plassering[]>(org(o, "/oppslagstavle/plasseringer")),
+  settPlassering: (o: string, d: Plassering) => api.endre<Plassering[]>(org(o, "/oppslagstavle/plasseringer"), d),
 
   utseende: (o: string) => api.hent<Tavleutseende>(org(o, "/oppslagstavle/utseende")),
   lagreUtseende: (o: string, d: Omit<Tavleutseende, "harLogo">) =>

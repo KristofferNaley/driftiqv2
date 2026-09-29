@@ -17,9 +17,17 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import { anonymAktor } from "../src/lib/aktor";
 import { TILLATTE_KALL as ENTUR_KALL, avgangerFra, tolkAvganger, tolkHoldeplasser, tomEnturLager } from "../src/lib/entur";
-import { endreSkjerm, innholdForSkjerm, kobleSkjerm, sjekkKobling, startKobling } from "../src/lib/oppslagstavle";
+import {
+  endreSkjerm,
+  hentPlasseringer,
+  innholdForSkjerm,
+  kobleSkjerm,
+  settPlassering,
+  sjekkKobling,
+  startKobling,
+} from "../src/lib/oppslagstavle";
 import { blokkInn, hentBlokker, opprettBlokk, slettBlokk } from "../src/lib/tavleblokker";
-import { MALER, STANDARD_MAL, finnMal, lesSoner } from "../src/lib/tavlemaler";
+import { MALER, STANDARD_MAL, finnMal, fordelSoner } from "../src/lib/tavlemaler";
 import { avgangstid, vaersymbol } from "../src/lib/vaerregler";
 import { tolkVarsel, tomYrLager, varselFor } from "../src/lib/yr";
 
@@ -51,6 +59,7 @@ afterEach(async () => {
   for (const kode of ryddKoder.splice(0)) await eier.query("DELETE FROM board_pairings WHERE code = $1", [kode]);
   for (const id of ryddOrg.splice(0)) {
     await eier.query("DELETE FROM board_blocks WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM board_placements WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM board_pairings WHERE screen_id IN (SELECT id FROM board_screens WHERE org_id = $1)", [id]);
     await eier.query("DELETE FROM board_screens WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM audit_events WHERE org_id = $1", [id]);
@@ -142,40 +151,60 @@ describe("maler og soner", () => {
     expect(finnMal("s-stor-to", "liggende").id).toBe("l-stor-to");
   });
 
-  it("lesSoner fjerner ukjente blokker og soner malen ikke har, og ødelagt JSON gir standarden", () => {
-    const mal = finnMal("l-to-like", "liggende");
-    const gyldige = new Set(["oppslag", "kalender", "kontakt"]);
-    expect(lesSoner(JSON.stringify({ a: ["oppslag", "blokk:borte"], b: ["kalender"], d: ["kontakt"] }), mal, gyldige)).toEqual({
-      a: ["oppslag"],
-      b: ["kalender"],
-      stripe: [],
-    });
-    expect(lesSoner("{ødelagt", mal, gyldige).a).toEqual(["oppslag"]);
+  it("fordelSoner: hoved i a, sidefelt ett per lite felt og resten roterer i det siste, stripe i stripen", () => {
+    const side = (n: string) => ({ nokkel: n, omrade: "side" as const });
+    const tre = finnMal("l-stor-tre", "liggende");
+    expect(
+      fordelSoner(tre, [
+        { nokkel: "oppslag", omrade: "hoved" },
+        side("kalender"),
+        side("blokk:1"),
+        side("blokk:2"),
+        side("kontakt"),
+        { nokkel: "tommedager", omrade: "stripe" },
+      ]),
+    ).toEqual({ a: ["oppslag"], b: ["kalender"], c: ["blokk:1"], d: ["blokk:2", "kontakt"], stripe: ["tommedager"] });
+    // Fullskjerm har ingen små felt: sidefeltene roterer i hovedfeltet.
+    expect(fordelSoner(finnMal("l-fullskjerm", "liggende"), [{ nokkel: "oppslag", omrade: "hoved" }, side("kalender")]).a).toEqual([
+      "oppslag",
+      "kalender",
+    ]);
   });
 });
 
 describe("blokker og skjermen", () => {
-  it("skjermen får bare blokkene som står i en sone — og data for dem", async () => {
+  it("skjermen får bare blokkene som er plassert på den — og data bare for dem", async () => {
     const orgId = await nyOrg();
     const kall = nettet();
-    const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
-    await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
     const { skjerm, token } = await kobletSkjerm(orgId);
-
-    // Standardfordelingen har ingen egne blokker: ingen kall til MET eller Entur.
-    expect((await innholdForSkjerm(medToken(token))).blokker).toEqual({});
-    expect(kall).toEqual({ met: 0, entur: 0 });
-
-    await withOrg(orgId, (db) =>
-      endreSkjerm(db, orgId, skjerm.id, {
-        navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-stor-to",
-        soner: { a: ["oppslag"], b: [vaer.nokkel], c: ["kontakt"], stripe: [] },
-      }),
-    );
+    const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
+    const avg = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
+    // Avgangene av; været i sidefeltet på denne skjermen.
+    await withOrg(orgId, async (db) => {
+      await settPlassering(db, orgId, { nokkel: avg.nokkel, omrade: "av", alleSkjermer: true, skjermIder: [] });
+      await settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "side", alleSkjermer: false, skjermIder: [skjerm.id] });
+    });
     const innhold = await innholdForSkjerm(medToken(token));
     expect(Object.keys(innhold.blokker)).toEqual([vaer.nokkel]);
     expect(innhold.blokker[vaer.nokkel]).toMatchObject({ type: "vaer", sted: "Håsteins gate 9, Bergen" });
+    expect(Object.values(innhold.skjerm.soner).flat()).toContain(vaer.nokkel);
     expect(kall).toEqual({ met: 1, entur: 0 });
+  });
+
+  it("en blokk for en annen skjerm vises ikke, og standardplasseringene gjelder uten valg", async () => {
+    const orgId = await nyOrg();
+    nettet();
+    const a = await kobletSkjerm(orgId);
+    const b = await kobletSkjerm(orgId);
+    const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
+    await withOrg(orgId, (db) =>
+      settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "hoved", alleSkjermer: false, skjermIder: [b.skjerm.id] }),
+    );
+    const paaA = await innholdForSkjerm(medToken(a.token));
+    expect(Object.values(paaA.skjerm.soner).flat()).not.toContain(vaer.nokkel);
+    expect(paaA.skjerm.soner.a).toEqual(["oppslag"]);
+    expect(paaA.skjerm.soner.stripe).toEqual(["tommedager"]);
+    expect((await innholdForSkjerm(medToken(b.token))).skjerm.soner.a).toEqual(["oppslag", vaer.nokkel]);
   });
 
   it("MET-koordinatene lagres med fire desimaler", async () => {
@@ -184,34 +213,31 @@ describe("blokker og skjermen", () => {
     expect(b.konfig).toMatchObject({ lat: 60.3863, lon: 5.2972 });
   });
 
-  it("en slettet blokk fjernes fra sonene på skjermene", async () => {
+  it("en slettet blokk tar plasseringen med seg", async () => {
     const orgId = await nyOrg();
-    nettet();
     const b = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
-    const { skjerm } = await kobletSkjerm(orgId);
-    await withOrg(orgId, (db) =>
-      endreSkjerm(db, orgId, skjerm.id, {
-        navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-to-like",
-        soner: { a: ["oppslag"], b: [b.nokkel, "kalender"], stripe: [] },
-      }),
-    );
+    await withOrg(orgId, (db) => settPlassering(db, orgId, { nokkel: b.nokkel, omrade: "stripe", alleSkjermer: true, skjermIder: [] }));
     await withOrg(orgId, (db) => slettBlokk(db, orgId, b.id));
-    const { rows } = await eier.query("SELECT zones FROM board_screens WHERE id = $1", [skjerm.id]);
-    expect(JSON.parse(rows[0].zones).b).toEqual(["kalender"]);
+    const { rows } = await eier.query("SELECT count(*)::int AS n FROM board_placements WHERE org_id = $1", [orgId]);
+    expect(rows[0].n).toBe(0);
+    expect((await withOrg(orgId, (db) => hentPlasseringer(db, orgId))).map((p) => p.nokkel)).not.toContain(b.nokkel);
   });
 
-  it("en annen orgs blokk kan ikke plasseres på skjermen", async () => {
+  it("en annen orgs blokk eller skjerm kan ikke brukes i en plassering", async () => {
     const a = await nyOrg();
     const b = await nyOrg();
-    const fremmed = await withOrg(b, (db) => opprettBlokk(db, b, KARI, VAER));
-    const { skjerm } = await kobletSkjerm(a);
-    const endret = await withOrg(a, (db) =>
-      endreSkjerm(db, a, skjerm.id, {
-        navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-to-like",
-        soner: { a: [fremmed.nokkel], b: [], stripe: [] },
-      }),
+    const fremmedBlokk = await withOrg(b, (db) => opprettBlokk(db, b, KARI, VAER));
+    const fremmedSkjerm = await kobletSkjerm(b);
+    const f1 = await feilFra(() =>
+      withOrg(a, (db) => settPlassering(db, a, { nokkel: fremmedBlokk.nokkel, omrade: "hoved", alleSkjermer: true, skjermIder: [] })),
     );
-    expect(endret.soner.a).toEqual([]);
+    expect(f1.status).toBe(404);
+    const f2 = await feilFra(() =>
+      withOrg(a, (db) =>
+        settPlassering(db, a, { nokkel: "kalender", omrade: "side", alleSkjermer: false, skjermIder: [fremmedSkjerm.skjerm.id] }),
+      ),
+    );
+    expect(f2.status).toBe(400);
     expect(await withOrg(a, (db) => hentBlokker(db, a))).toEqual([]);
   });
 
@@ -234,7 +260,7 @@ describe("blokker og skjermen", () => {
     const orgId = await nyOrg();
     const { skjerm } = await kobletSkjerm(orgId);
     const { skjermEndring } = await import("../src/lib/oppslagstavle");
-    expect(skjermEndring.safeParse({ navn: "A", retning: "liggende", skala: 55, mal: "l-to-like", soner: {} }).success).toBe(false);
+    expect(skjermEndring.safeParse({ navn: "A", retning: "liggende", skala: 55, mal: "l-to-like" }).success).toBe(false);
     expect(skjerm.skala).toBe(85);
   });
 });
@@ -338,11 +364,9 @@ describe("MET / yr", () => {
     const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
     const { skjerm, token } = await kobletSkjerm(orgId);
     await withOrg(orgId, (db) =>
-      endreSkjerm(db, orgId, skjerm.id, {
-        navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-fullskjerm",
-        soner: { a: ["oppslag"], stripe: [vaer.nokkel] },
-      }),
+      endreSkjerm(db, orgId, skjerm.id, { navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-fullskjerm" }),
     );
+    await withOrg(orgId, (db) => settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "stripe", alleSkjermer: true, skjermIder: [] }));
     const innhold = await innholdForSkjerm(medToken(token));
     expect(innhold.blokker[vaer.nokkel]).toMatchObject({ type: "vaer", varsel: null });
   });

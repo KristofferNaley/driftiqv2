@@ -17,6 +17,10 @@ blokker med egne innstillinger i `board_blocks`, og svarene holdes i minnet på 
 (`docs/entur-yr.md`). (3) Kontaktpersonene er DriftIQ-brukere med vis/skjul per felt, ikke
 manuelle oppføringer.
 
+*Justert samme dag:* sone for sone per skjerm (A/B/C/D) var for omstendelig. Plassering
+velges nå på innholdet (hovedfelt/sidefelt/stripe + skjermer, `board_placements`), og
+sonene regnes ut av malen. `board_screens.zones` er fjernet (0065).
+
 **Hvorfor:** Styret ville bestemme hva som står hvor, uten at tavla kan bli uleselig. Vær og
 avganger er per sted/holdeplass, og en org trenger flere. Kontaktinfo skrevet inn for hånd
 går ut på dato; profilen er fasiten, og den som går ut av styret skal forsvinne av seg selv.

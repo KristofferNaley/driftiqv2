@@ -18,9 +18,8 @@ import { useOkt } from "@/components/OktProvider";
 import { Tavleskjerm } from "@/components/Tavleskjerm";
 import { BirKort } from "./BirKort";
 import { BLOKKTYPE_NAVN, BlokkListe, BlokkSkjema } from "./Blokker";
-import { SoneOppsett } from "./SoneOppsett";
+import { MalVelger, Plasseringslinje } from "./Plassering";
 import {
-  bir,
   oppslagstavle,
   tavleblokker,
   type Oppslag,
@@ -29,7 +28,6 @@ import {
   type Tavlekontakt,
   type Tavleutseende,
 } from "@/lib/klient";
-import { INNEBYGDE_BLOKKER, INNEBYGD_NAVN } from "@/lib/tavlemaler";
 import {
   FORVALG,
   KATEGORI_BESKRIVELSE,
@@ -72,19 +70,10 @@ export default function Oppslagstavle() {
       oppslagstavle.utseende(o),
       oppslagstavle.kontakter(o),
       tavleblokker.liste(o),
-      bir.status(o),
+      oppslagstavle.plasseringer(o),
     ]),
   );
-  const [oppslag, hendelser, skjermer, utseende, kontakter, blokker, birStatus] = data ?? [[], [], [], null, [], [], null];
-  // Det som kan plasseres i en sone: de innebygde blokkene og orgens egne.
-  const plasserbare = [
-    ...INNEBYGDE_BLOKKER.map((n) => ({
-      nokkel: n as string,
-      navn: INNEBYGD_NAVN[n],
-      merknad: n === "tommedager" && !birStatus ? "Ikke koblet til BIR — vises ikke før det er gjort" : undefined,
-    })),
-    ...blokker.map((b) => ({ nokkel: b.nokkel, navn: `${BLOKKTYPE_NAVN[b.type]}: ${b.navn}` })),
-  ];
+  const [oppslag, hendelser, skjermer, utseende, kontakter, blokker, plasseringer] = data ?? [[], [], [], null, [], [], []];
 
   const [valgtSkjerm, setValgtSkjerm] = useState<string | null>(null);
   const skjerm = skjermer.find((s) => s.id === valgtSkjerm) ?? skjermer[0] ?? null;
@@ -99,6 +88,17 @@ export default function Oppslagstavle() {
   const [redigerer, setRedigerer] = useState<Oppslag | "nytt" | null>(null);
   const [kobler, setKobler] = useState(false);
   const [blokkRedigering, setBlokkRedigering] = useState<Tavleblokk | null>(null);
+  /** «Vises: Sidefelt · alle skjermer [Endre]» for en blokk — øverst i kortet som eier den. */
+  const plass = (nokkel: string) =>
+    orgId && (
+      <Plasseringslinje
+        orgId={orgId}
+        plassering={plasseringer.find((p) => p.nokkel === nokkel)}
+        skjermer={skjermer}
+        kanRedigere={kanRedigere}
+        onEndret={oppdater}
+      />
+    );
 
   return (
     <Layout
@@ -143,18 +143,29 @@ export default function Oppslagstavle() {
                 kanRedigere={kanRedigere}
                 onEndret={oppdater}
                 onRediger={setRedigerer}
+                plass={plass}
               />
               {orgId && (
                 <BlokkListe
                   orgId={orgId}
                   blokker={blokker}
+                  plasseringer={plasseringer}
+                  skjermer={skjermer}
                   kanRedigere={kanRedigere}
                   onRediger={setBlokkRedigering}
                   onEndret={oppdater}
                 />
               )}
-              <BirKort erAdmin={kanRedigere} onEndret={oppdater} />
-              {orgId && <Kontaktpersoner orgId={orgId} kontakter={kontakter} erAdmin={erAdmin} onEndret={oppdater} />}
+              <BirKort erAdmin={kanRedigere} onEndret={oppdater} topp={plass("tommedager")} />
+              {orgId && (
+                <Kontaktpersoner
+                  orgId={orgId}
+                  kontakter={kontakter}
+                  erAdmin={erAdmin}
+                  onEndret={oppdater}
+                  topp={plass("kontakt")}
+                />
+              )}
               </>
             ) : (
               <Skjermer
@@ -163,7 +174,6 @@ export default function Oppslagstavle() {
                 valgt={skjerm}
                 onVelg={setValgtSkjerm}
                 utseende={utseende}
-                plasserbare={plasserbare}
                 erAdmin={erAdmin}
                 onEndret={oppdater}
               />
@@ -202,6 +212,8 @@ export default function Oppslagstavle() {
             orgId={orgId}
             type={blokkRedigering.type}
             eksisterende={blokkRedigering}
+            skjermer={skjermer}
+            plassering={plasseringer.find((p) => p.nokkel === blokkRedigering.nokkel)}
             onAvbryt={() => setBlokkRedigering(null)}
             onLagret={() => {
               setBlokkRedigering(null);
@@ -238,9 +250,11 @@ function Innhold({
   kanRedigere,
   onEndret,
   onRediger,
+  plass,
 }: {
   orgId: string | undefined;
   onRediger: (p: Oppslag) => void;
+  plass: (nokkel: string) => React.ReactNode;
   oppslag: Oppslag[];
   hendelser: Awaited<ReturnType<typeof oppslagstavle.hendelser>>;
   skjermer: Skjerm[];
@@ -277,6 +291,7 @@ function Innhold({
           </div>
         }
       >
+        {plass("oppslag")}
         {synlige.length === 0 && (
           <Tom tekst={oppslag.length === 0 ? "Ingen oppslag ennå. Trykk «Nytt innhold» for å legge ut noe." : "Ingen oppslag her."} />
         )}
@@ -330,6 +345,7 @@ function Innhold({
       </Kort>
 
       <Kort tittel="Kalender">
+        {plass("kalender")}
         {hendelser.length === 0 && <Tom tekst="Ingen kommende hendelser." />}
         {hendelser.map((h) => (
           <Rad
@@ -436,13 +452,23 @@ function OppslagSkjema({
         </div>
       )}
       {(type === "vaer" || type === "avganger") && (
-        <BlokkSkjema key={type} orgId={orgId} type={type} eksisterende={null} onAvbryt={onLukk} onLagret={onLagret} />
+        <BlokkSkjema
+          key={type}
+          orgId={orgId}
+          type={type}
+          eksisterende={null}
+          skjermer={skjermer}
+          plassering={undefined}
+          onAvbryt={onLukk}
+          onLagret={onLagret}
+        />
       )}
       {type === "tommedager" && (
         <>
           <BirKort erAdmin onEndret={() => {}} />
           <div className="field-note">
-            Tømmedagene er én blokk for hele borettslaget. Plasser den på skjermene under «Skjermer og utseende».
+            Tømmedagene er én blokk for hele borettslaget. Hvor de vises, endrer du i kortet «Tømmedager fra BIR»
+            under Innhold (standard: stripen nederst).
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button type="button" className="btn btn-primary" onClick={onLagret}>
@@ -557,7 +583,6 @@ function Skjermer({
   valgt,
   onVelg,
   utseende,
-  plasserbare,
   erAdmin,
   onEndret,
 }: {
@@ -566,7 +591,6 @@ function Skjermer({
   valgt: Skjerm | null;
   onVelg: (id: string) => void;
   utseende: Tavleutseende | null;
-  plasserbare: ReadonlyArray<{ nokkel: string; navn: string; merknad?: string }>;
   erAdmin: boolean;
   onEndret: () => void;
 }) {
@@ -604,29 +628,18 @@ function Skjermer({
       </Kort>
 
       {valgt && orgId && erAdmin && (
-        <Skjerminnstillinger key={valgt.id} orgId={orgId} skjerm={valgt} plasserbare={plasserbare} onEndret={onEndret} />
+        <Skjerminnstillinger key={valgt.id} orgId={orgId} skjerm={valgt} onEndret={onEndret} />
       )}
       {utseende && orgId && erAdmin && <Utseende orgId={orgId} utseende={utseende} onEndret={onEndret} />}
     </>
   );
 }
 
-function Skjerminnstillinger({
-  orgId,
-  skjerm,
-  plasserbare,
-  onEndret,
-}: {
-  orgId: string;
-  skjerm: Skjerm;
-  plasserbare: ReadonlyArray<{ nokkel: string; navn: string; merknad?: string }>;
-  onEndret: () => void;
-}) {
+function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjerm: Skjerm; onEndret: () => void }) {
   const [navn, setNavn] = useState(skjerm.navn);
   const [adresse, setAdresse] = useState(skjerm.adresse ?? "");
   const [retning, setRetning] = useState<Retning>(skjerm.retning);
   const [mal, setMal] = useState(skjerm.mal);
-  const [soner, setSoner] = useState(skjerm.soner);
   const [skala, setSkala] = useState(skjerm.skala);
   const { sender, feil, send } = useSending(onEndret);
 
@@ -636,7 +649,7 @@ function Skjerminnstillinger({
         className="card-body"
         onSubmit={(e) => {
           e.preventDefault();
-          void send(() => oppslagstavle.endreSkjerm(orgId, skjerm.id, { navn, adresse: adresse || null, retning, skala, mal, soner }));
+          void send(() => oppslagstavle.endreSkjerm(orgId, skjerm.id, { navn, adresse: adresse || null, retning, skala, mal }));
         }}
       >
         <div className="ot-to">
@@ -657,16 +670,7 @@ function Skjerminnstillinger({
           valg={SKALERINGER.map((n) => ({ verdi: String(n), etikett: `${n} %${n === STANDARD_SKALERING ? " (standard)" : ""}` }))}
           notat="Mindre gir plass til mer innhold, større leses på lengre avstand. Oppløsningen spiller ingen rolle — 4K og Full HD ser like ut."
         />
-        <SoneOppsett
-          retning={retning}
-          malId={mal}
-          soner={soner}
-          blokker={plasserbare}
-          onEndre={(m, s) => {
-            setMal(m);
-            setSoner(s);
-          }}
-        />
+        <MalVelger retning={retning} malId={mal} onEndre={setMal} />
         <Feil melding={feil} />
         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -699,11 +703,13 @@ function Kontaktpersoner({
   kontakter,
   erAdmin,
   onEndret,
+  topp,
 }: {
   orgId: string;
   kontakter: Tavlekontakt[];
   erAdmin: boolean;
   onEndret: () => void;
+  topp?: React.ReactNode;
 }) {
   const [skjema, setSkjema] = useState<Tavlekontakt | "ny" | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
@@ -729,6 +735,7 @@ function Kontaktpersoner({
         )
       }
     >
+      {topp}
       <Feil melding={feil} />
       {kontakter.length === 0 && (
         <Tom tekst="Ingen kontaktpersoner. Skjermen viser borettslagets telefon og e-post." />

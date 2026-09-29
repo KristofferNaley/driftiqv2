@@ -40,7 +40,7 @@ import {
   type Blokkdata,
   type Skjerminnhold,
 } from "@/lib/oppslagstavleregler";
-import { STRIPE, finnMal } from "@/lib/tavlemaler";
+import { INNEBYGDE_BLOKKER, STANDARD_PLASSERING, STRIPE, finnMal, fordelSoner } from "@/lib/tavlemaler";
 import { avgangstid, transportmiddel, vaersymbol } from "@/lib/vaerregler";
 
 /**
@@ -49,8 +49,9 @@ import { avgangstid, transportmiddel, vaersymbol } from "@/lib/vaerregler";
  *
  * ## Maler og soner
  *
- * Skjermen deles etter malen (`lib/tavlemaler.ts`). Hver sone har null eller flere blokker;
- * flere roterer (`SONE_SEKUNDER`). Stripen nederst har høyde etter innholdet og viser
+ * Skjermen deles etter malen (`lib/tavlemaler.ts`). Sonene er regnet ut på serveren av
+ * plasseringen styret har valgt på hvert innhold (`fordelSoner`). Flere blokker i samme
+ * sone roterer (`SONE_SEKUNDER`). Stripen nederst har høyde etter innholdet og viser
  * blokkene KOMPAKT (én linje). En blokk uten data — tømmedager uten BIR-kobling, vær MET
  * ikke har svart på — hoppes over, og en sone uten noe å vise står tom i stedet for å vise
  * en tom boks.
@@ -81,7 +82,9 @@ export function Tavleskjerm({
   const liggende = skjerm.retning === "liggende";
   // Innhold lagret av en skjerm før malene fantes, har ikke `mal`/`soner` — da gjelder standarden.
   const mal = finnMal(skjerm.mal ?? null, skjerm.retning);
-  const soner = skjerm.soner ?? mal.standard;
+  const soner =
+    skjerm.soner ??
+    fordelSoner(mal, INNEBYGDE_BLOKKER.map((n) => ({ nokkel: n, omrade: STANDARD_PLASSERING[n] })));
   const sistHentet = utenNett ? new Date(utenNett) : null;
 
   // Skaleringen ganges inn i `--u` (se `.ot-skjerm` i globals.css).

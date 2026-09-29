@@ -4666,6 +4666,11 @@ textarea.qr-input { resize: vertical; }
   background: rgba(var(--accent-rgb), 0.18); border-radius: 2px; font-style: normal; font-weight: 700;
   font-size: var(--fs-label); color: var(--accent); display: grid; place-items: center; min-height: 0;
 }
+.ot-miniatyr i.hoved { background: rgba(var(--accent-rgb), 0.4); }
+.ot-plassering {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 20px;
+  border-bottom: 1px solid var(--border); color: var(--muted); font-size: var(--fs-label);
+}
 .ot-treff { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .ot-treff-rad {
   display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-top: 1px solid var(--border);

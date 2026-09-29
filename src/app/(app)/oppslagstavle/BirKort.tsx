@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { Feil, Kort, Rad, Tom, dato, siden, useOrgData } from "@/components/felles";
 import { bir, type BirTreff } from "@/lib/klient";
@@ -12,7 +12,16 @@ import { bir, type BirTreff } from "@/lib/klient";
  * Styret VELGER oppføringen: borettslag med fellesløsning er en egen oppføring hos BIR
  * («Borettslaget Håsteinsgate 9»), og en adresse i laget kan gi en annen henteordning.
  */
-export function BirKort({ erAdmin, onEndret }: { erAdmin: boolean; onEndret: () => void }) {
+export function BirKort({
+  erAdmin,
+  onEndret,
+  topp,
+}: {
+  erAdmin: boolean;
+  onEndret: () => void;
+  /** Plasseringslinja — vises bare når borettslaget er koblet (ellers er det ingenting å plassere). */
+  topp?: ReactNode;
+}) {
   const { data: status, setData, feil, setFeil, orgId } = useOrgData((o) => bir.status(o));
   const [q, setQ] = useState("");
   const [treff, setTreff] = useState<BirTreff[] | null>(null);
@@ -53,6 +62,7 @@ export function BirKort({ erAdmin, onEndret }: { erAdmin: boolean; onEndret: () 
       <Feil melding={feil} />
       {status ? (
         <>
+          {topp}
           <div className="card-body" style={{ paddingBottom: 0 }}>
             <div className="list-tittel">{status.navn}</div>
             <div className="field-note">

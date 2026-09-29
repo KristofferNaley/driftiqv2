@@ -72,6 +72,7 @@ afterEach(async () => {
     await eier.query("DELETE FROM board_settings WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM board_contacts WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM board_blocks WHERE org_id = $1", [id]);
+    await eier.query("DELETE FROM board_placements WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM audit_events WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM user_org_memberships WHERE org_id = $1", [id]);
     await eier.query("DELETE FROM organizations WHERE id = $1", [id]);

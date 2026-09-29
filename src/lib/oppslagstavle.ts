@@ -30,6 +30,7 @@ import {
   boardContacts,
   boardEvents,
   boardPairings,
+  boardPlacements,
   boardPosts,
   boardScreens,
   boardSettings,
@@ -39,7 +40,17 @@ import { ApiFeil, ikkeFunnet, ugyldig, type Filsvar } from "./api";
 import type { Aktor } from "./aktor";
 import { tommedagerForSkjerm } from "./birkobling";
 import { blokkdataForSkjerm } from "./tavleblokker";
-import { INNEBYGDE_BLOKKER, blokkNokkel, finnMal, lesSoner } from "./tavlemaler";
+import {
+  INNEBYGDE_BLOKKER,
+  OMRADER,
+  SIDE_REKKEFOLGE,
+  STANDARD_PLASSERING,
+  blokkNokkel,
+  finnMal,
+  fordelSoner,
+  type InnebygdBlokk,
+  type Omrade,
+} from "./tavlemaler";
 import { loggHendelse } from "./hendelser";
 import { filSti, lagreFil, slettFil } from "./lagring";
 import {
@@ -294,10 +305,10 @@ export async function slettHendelse(db: Db, orgId: string, id: string) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * `gyldige` er blokknøklene som finnes i orgen (innebygde + `blokk:<id>`). Soner som peker
- * på en slettet blokk, renses her — ved lesing, så en glemt opprydding aldri når veggen.
+ * Sonene regnes ut av malen og orgens plasseringer (`fordelSoner`) — de lagres ikke per
+ * skjerm. `plasseringer` er alle blokkene i orgen med område og skjermutvalg.
  */
-function skjermUt(s: BoardScreen, gyldige: ReadonlySet<string>, naa = new Date()) {
+function skjermUt(s: BoardScreen, plasseringer: readonly Plassering[], naa = new Date()) {
   const sistSett = s.lastSeenAt;
   const paaNett = sistSett !== null && naa.getTime() - sistSett.getTime() < NEDE_ETTER_SEKUNDER * 1000;
   const retning = (RETNINGER as readonly string[]).includes(s.orientation) ? (s.orientation as Retning) : "staende";
@@ -308,7 +319,12 @@ function skjermUt(s: BoardScreen, gyldige: ReadonlySet<string>, naa = new Date()
     adresse: s.address,
     retning,
     mal: mal.id,
-    soner: lesSoner(s.zones, mal, gyldige),
+    soner: fordelSoner(
+      mal,
+      plasseringer
+        .filter((p) => p.omrade !== "av" && (p.alleSkjermer || p.skjermIder.includes(s.id)))
+        .map((p) => ({ nokkel: p.nokkel, omrade: p.omrade })),
+    ),
     skala: s.scale,
     sistSett: sistSett?.toISOString() ?? null,
     paaNett,
@@ -316,10 +332,69 @@ function skjermUt(s: BoardScreen, gyldige: ReadonlySet<string>, naa = new Date()
   };
 }
 
-/** Blokknøklene som kan stå i en sone i denne orgen. */
-async function gyldigeBlokker(db: Db, orgId: string): Promise<Set<string>> {
-  const egne = await db.select({ id: boardBlocks.id }).from(boardBlocks).where(eq(boardBlocks.orgId, orgId));
-  return new Set<string>([...INNEBYGDE_BLOKKER, ...egne.map((b) => blokkNokkel(b.id))]);
+// ---------------------------------------------------------------------------------------
+// Plassering — HVOR hver blokk vises, valgt på innholdet
+// ---------------------------------------------------------------------------------------
+
+export type Plassering = { nokkel: string; omrade: Omrade; alleSkjermer: boolean; skjermIder: string[] };
+
+/** Blokknøklene i orgen i visningsrekkefølge: innebygde og egne (eldste først). */
+async function blokknokler(db: Db, orgId: string): Promise<string[]> {
+  const egne = await db
+    .select({ id: boardBlocks.id })
+    .from(boardBlocks)
+    .where(eq(boardBlocks.orgId, orgId))
+    .orderBy(asc(boardBlocks.createdAt));
+  return [...INNEBYGDE_BLOKKER, ...egne.map((b) => blokkNokkel(b.id))].sort(
+    (a, b) => SIDE_REKKEFOLGE(a) - SIDE_REKKEFOLGE(b),
+  );
+}
+
+/** Plasseringen for hver blokk i orgen — lagret, eller standarden når styret ikke har valgt. */
+export async function hentPlasseringer(db: Db, orgId: string): Promise<Plassering[]> {
+  const [nokler, lagret] = await Promise.all([
+    blokknokler(db, orgId),
+    db.select().from(boardPlacements).where(eq(boardPlacements.orgId, orgId)),
+  ]);
+  const perNokkel = new Map(lagret.map((p) => [p.blockKey, p]));
+  return nokler.map((nokkel) => {
+    const p = perNokkel.get(nokkel);
+    const omrade = p && (OMRADER as readonly string[]).includes(p.area) ? (p.area as Omrade) : null;
+    return {
+      nokkel,
+      omrade: omrade ?? STANDARD_PLASSERING[nokkel as InnebygdBlokk] ?? "side",
+      alleSkjermer: p?.allScreens ?? true,
+      skjermIder: p?.screenIds ?? [],
+    };
+  });
+}
+
+export const plasseringInn = z
+  .object({
+    nokkel: z.string().max(80),
+    omrade: z.enum(OMRADER),
+    alleSkjermer: z.boolean(),
+    skjermIder: z.array(z.string()).default([]),
+  })
+  .refine((d) => d.alleSkjermer || d.omrade === "av" || d.skjermIder.length > 0, {
+    message: "Velg minst én skjerm",
+    path: ["skjermIder"],
+  });
+
+export async function settPlassering(db: Db, orgId: string, d: z.infer<typeof plasseringInn>) {
+  if (!(await blokknokler(db, orgId)).includes(d.nokkel)) throw ikkeFunnet("Innhold");
+  await validerSkjermer(db, orgId, d.skjermIder);
+  const verdier = {
+    area: d.omrade,
+    allScreens: d.alleSkjermer,
+    screenIds: d.alleSkjermer ? [] : d.skjermIder,
+    updatedAt: new Date(),
+  };
+  await db
+    .insert(boardPlacements)
+    .values({ id: randomUUID(), orgId, blockKey: d.nokkel, ...verdier })
+    .onConflictDoUpdate({ target: [boardPlacements.orgId, boardPlacements.blockKey], set: verdier });
+  return hentPlasseringer(db, orgId);
 }
 
 export async function hentSkjermer(db: Db, orgId: string) {
@@ -328,8 +403,8 @@ export async function hentSkjermer(db: Db, orgId: string) {
     .from(boardScreens)
     .where(eq(boardScreens.orgId, orgId))
     .orderBy(asc(boardScreens.createdAt));
-  const gyldige = await gyldigeBlokker(db, orgId);
-  return rader.map((s) => skjermUt(s, gyldige));
+  const plasseringer = await hentPlasseringer(db, orgId);
+  return rader.map((s) => skjermUt(s, plasseringer));
 }
 
 const skjermFelter = {
@@ -343,7 +418,6 @@ export const koblingInn = z.object({ kode: z.string(), ...skjermFelter });
 export const skjermEndring = z.object({
   ...skjermFelter,
   mal: z.string().max(40),
-  soner: z.record(z.string().max(20), z.array(z.string().max(80)).max(8)),
   skala: z
     .number()
     .int()
@@ -374,9 +448,7 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
       name: d.navn,
       address: d.adresse || null,
       orientation: d.retning,
-      // Standardmalen og -fordelingen for retningen; `zones: null` ⇒ malens standard.
       layout: finnMal(null, d.retning).id,
-      zones: null,
       // Plassholder til skjermen henter sitt ekte token: hashen av et token ingen har fått,
       // så raden kan ikke brukes av noen fram til da.
       deviceTokenHash: hash(randomBytes(32).toString("base64url")),
@@ -392,7 +464,7 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
     entitetId: id,
     hendelse: `Koblet til skjermen «${d.navn}»`,
   });
-  return skjermUt(skjerm!, await gyldigeBlokker(db, orgId));
+  return skjermUt(skjerm!, await hentPlasseringer(db, orgId));
 }
 
 export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<typeof skjermEndring>) {
@@ -402,16 +474,15 @@ export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<
       name: d.navn,
       address: d.adresse || null,
       orientation: d.retning,
-      // En mal for den andre retningen byttes til standardmalen av `finnMal`, og sonene
-      // renses mot malen — lagres rent, så det som står i basen er det som vises.
+      // En mal for den andre retningen byttes til standardmalen — lagres rent, så det som
+      // står i basen er det som vises.
       layout: finnMal(d.mal, d.retning).id,
-      zones: JSON.stringify(lesSoner(JSON.stringify(d.soner), finnMal(d.mal, d.retning), await gyldigeBlokker(db, orgId))),
       scale: d.skala,
     })
     .where(and(eq(boardScreens.id, id), eq(boardScreens.orgId, orgId)))
     .returning();
   if (!rad) throw ikkeFunnet("Skjerm");
-  return skjermUt(rad, await gyldigeBlokker(db, orgId));
+  return skjermUt(rad, await hentPlasseringer(db, orgId));
 }
 
 /** Fjerner skjermen og dermed tokenet — skjermen faller tilbake til koblingsbildet. */
@@ -696,7 +767,7 @@ export async function byggSkjerminnhold(
     .where(and(eq(boardScreens.id, skjermId), eq(boardScreens.orgId, orgId)))
     .limit(1);
   if (!skjerm) throw ikkeFunnet("Skjerm");
-  const s = skjermUt(skjerm, await gyldigeBlokker(db, orgId));
+  const s = skjermUt(skjerm, await hentPlasseringer(db, orgId));
   // Bare det som faktisk står i en sone, hentes — en skjerm uten kalender spør ikke etter den.
   const iBruk = new Set(Object.values(s.soner).flat());
 

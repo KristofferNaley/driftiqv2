@@ -456,6 +456,13 @@
       "when": 1790715591774,
       "tag": "0064_oppslagstavle_rydd",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790716754683,
+      "tag": "0065_oppslagstavle_plassering",
+      "breakpoints": true
     }
   ]
 }
