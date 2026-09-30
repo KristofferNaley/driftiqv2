@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -35,6 +35,13 @@ export const boardScreens = pgTable(
     scale: integer("scale").notNull().default(85),
     /** Malen skjermen deles etter (`MALER` i lib/tavlemaler.ts). Ukjent mal ⇒ standardmalen. */
     layout: varchar("layout"),
+    /**
+     * Hva som står i hvert felt i malen: `{ a: ["oppslag"], b: ["kalender"], stripe: [...] }`.
+     * Verdiene er blokknøkler (`INNEBYGDE_BLOKKER` eller `blokk:<id>`); flere i samme felt
+     * roterer. `null` finnes bare på rader fra før felt ble lagret per skjerm — de fylles av
+     * `migrerPlasseringerTilFelt` ved oppstart.
+     */
+    zones: jsonb("zones").$type<Record<string, string[]>>(),
     deviceTokenHash: varchar("device_token_hash").notNull().unique(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     pairedBy: varchar("paired_by").notNull(),
@@ -86,6 +93,8 @@ export const boardPosts = pgTable(
     fileSize: integer("file_size"),
     /** Sekunder oppslaget står før neste. Styret velger per oppslag — et bilde trenger kortere tid enn en tekst. */
     displaySeconds: integer("display_seconds").notNull().default(10),
+    /** Plassen i rotasjonen, lavest først. Styret drar radene i lista; nye oppslag havner øverst. */
+    sortOrder: integer("sort_order").notNull().default(0),
     showFrom: date("show_from").notNull(),
     showUntil: date("show_until").notNull(),
     allScreens: boolean("all_screens").notNull().default(true),
@@ -178,10 +187,9 @@ export const boardBlocks = pgTable(
 );
 
 /**
- * HVOR en blokk vises: område og hvilke skjermer. Én rad per blokknøkkel (`oppslag`,
- * `kalender`, `kontakt`, `tommedager` eller `blokk:<id>`). Mangler raden, gjelder
- * `STANDARD_PLASSERING` i lib/tavlemaler.ts. Skjermens soner regnes UT av dette og malen
- * (`fordelSoner`) — styret velger plassering på innholdet, ikke sone for sone per skjerm.
+ * UTGÅTT 30.09.2026: plassering per blokk (område og skjermer). Feltene lagres nå per skjerm
+ * (`board_screens.zones`). Tabellen leses bare av `migrerPlasseringerTilFelt` i
+ * lib/tavlemigrering.ts, som gjør radene om til felt for skjermer som mangler dem.
  */
 export const boardPlacements = pgTable(
   "board_placements",

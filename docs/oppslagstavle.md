@@ -13,14 +13,15 @@ et enhetstoken den får ved kobling. Tilleggsmodul (`oppslagstavle`, av som stan
 
 | Del | Hvor |
 |---|---|
-| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_events`, `board_settings`, `board_contacts`, `board_blocks` (DIREKTE), `board_pairings` (UNNTATT) |
+| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_events`, `board_settings`, `board_contacts`, `board_blocks` (DIREKTE), `board_pairings` (UNNTATT). `board_placements` er utgått og leses bare av migreringen |
 | Logikk | `src/lib/oppslagstavle.ts` |
 | Regler, typer, palett (importfri) | `src/lib/oppslagstavleregler.ts` |
-| Maler og soner (importfri) | `src/lib/tavlemaler.ts` |
+| Maler og felt (importfri) | `src/lib/tavlemaler.ts` |
+| Migrering plassering → felt | `src/lib/tavlemigrering.ts`, kjørt av `scripts/oppstart.ts` |
 | Vær- og avgangsblokker | `src/lib/tavleblokker.ts` — se `docs/entur-yr.md` |
 | Styrets API | `/api/organizations/{orgId}/oppslagstavle/…` via `orgRute` |
 | Skjermens API (anonymt) | `/api/skjerm/kobling`, `/kobling/status`, `/innhold`, `/fil/{postId}`, `/logo` |
-| Adminside | `src/app/(app)/oppslagstavle/page.tsx` |
+| Adminside | `src/app/(app)/oppslagstavle/` — `page.tsx` (utkast, lagrelinje, første gangs oppsett, forhåndsvisning), `Innhold.tsx`, `Oppsett.tsx`, `Feltkart.tsx`, `Blokker.tsx`, `BirKort.tsx`, `Kontaktpersoner.tsx` |
 | Skjermen | `src/app/skjerm/page.tsx` + `src/components/Tavleskjerm.tsx` (samme komponent i forhåndsvisningen) |
 
 ### Kobling
@@ -51,30 +52,63 @@ periode, skjermer, tid); typen og bildet står fast — et nytt bilde er et nytt
 Typene viktig/informasjon/arrangement styrer BARE merkelapp og kantfarge
 (`KATEGORI_BESKRIVELSE` forklarer dem i skjemaet), ikke rekkefølge eller tid.
 
-### Maler og plassering
+### Maler og felt (lagt om 30.09.2026)
 
-HVA som vises og HVOR, velges på **innholdet**; skjermen velger bare **mal**.
+HVA som vises HVOR, velges **per skjerm**: skjermen har en mal, og hvert felt i malen har en
+liste med blokker. Innholdet selv (oppslag, kalender) vet ikke hvor det står.
 
-- **Blokker** er enten innebygde (`oppslag`, `kalender`, `kontakt`, `tommedager` — faste
-  nøkler, ingen rad) eller egne med innstillinger i `board_blocks` (vær og avganger, nøkkel
-  `blokk:<id>`, `docs/entur-yr.md`).
-- **Plassering** (`board_placements`, én rad per blokknøkkel): område — Hovedfelt, Sidefelt,
-  Stripe nederst eller Ikke vist — og skjermer (alle eller et utvalg). Mangler raden, gjelder
-  `STANDARD_PLASSERING` (oppslag i hovedfeltet, kalender og kontakt i sidefeltet, tømmedager i
-  stripen; egne blokker i sidefeltet). Settes med «Vises: … [Endre]» øverst i hvert kort under
-  Innhold, og i skjemaet for vær/avganger.
 - **Mal** (`MALER` i `lib/tavlemaler.ts`, 5–6 per retning): ett stort felt `a`, null til tre
   små (`b`–`d`) og stripen. `board_screens.layout`.
-- **Sonene regnes ut** (`fordelSoner`) — de lagres ikke: hovedfelt → `a`; sidefelt → ett per
-  lite felt i rekkefølge (`SIDE_REKKEFOLGE`), og det som ikke får plass roterer i det siste;
-  fullskjerm-maler tar sidefeltene inn i rotasjonen i `a`; stripe → stripen, kompakt og side
-  om side. Blir et lite felt stående tomt, er malen for stor for innholdet.
+- **Felt** (`board_screens.zones`, JSON): `{ a: ["oppslag"], b: ["kalender"], stripe: [...] }`.
+  Verdiene er blokknøkler — de innebygde (`oppslag`, `kalender`, `kontakt`, `tommedager`)
+  eller `blokk:<id>` for vær og avganger (`board_blocks`, `docs/entur-yr.md`). Flere nøkler i
+  ett felt roterer (`SONE_SEKUNDER`); stripen viser sine kompakt, side om side. En tom stripe
+  tar ingen plass.
+- **Kartet** (`Feltkart.tsx`) under «Skjermer og oppsett» viser feltene. Klikk på et felt
+  åpner velgeren; et felt uten innhold står som «Velg innhold», og skjermkortet teller felt
+  uten innhold (tomme, eller bare blokker som mangler oppsett — tømmedager uten BIR).
+  Forhåndsvisningen rammer inn feltet som er valgt.
+- **Oppsettet for det som står i feltet** (vær og avganger, BIR, kontaktpersoner) vises under
+  kartet når feltet er valgt. Det gjelder hele borettslaget, ikke skjermen.
+- `endreSkjerm` AVVISER felt malen ikke har og blokker orgen ikke eier — den rydder ikke
+  stille. Klienten rydder selv ved malbytte (`ryddFelt`: felt som finnes i begge maler,
+  beholdes). En ny skjerm får `standardFelt`. Slettes en blokk, tas den ut av alle skjermene.
+- Mal og felt krever orgadmin, som resten av skjerminnstillingene.
 
 En blokk uten data (tømmedager uten BIR, vær MET ikke har svart på) hoppes over i rotasjonen.
-Skjermen henter bare data for blokker som faktisk havner i en sone.
+Skjermen henter bare data for blokker som står i et felt; forhåndsvisningen ber om alt
+(`byggSkjerminnhold(…, { alt: true })`), så et felt styret har valgt, men ikke lagret, har noe
+å vise.
 
-Sone-for-sone-valg per skjerm (A/B/C/D) ble prøvd samme dag og forkastet — for omstendelig;
-se `docs/beslutninger.md`.
+**Migreringen** fra plassering per blokk (`board_placements`: område + skjermer, regnet om
+til soner ved hver henting) er et idempotent TypeScript-steg ved oppstart, ikke SQL: den
+bruker samme `fordelSoner` som regnet ut sonene før, så skjermene viser det samme etterpå.
+Den rører bare skjermer der `zones` er `null`. Historikken står i `docs/beslutninger.md`
+(29.09 og 30.09.2026).
+
+### Én lagremodell
+
+Skjerminnstillinger (navn, adresse, retning, skalering, mal, felt), farger og nettbrudd-valget
+er ett utkast i `page.tsx`, lagret med den faste linja nederst («Ulagrede endringer»,
+«Forkast», «Lagre»). Forhåndsvisningen tegner utkastet over serverdataene. Bytte av skjerm og
+lenker ut av siden spør først (dialog i siden; `beforeunload` for lukking og omlasting —
+nettleserens tilbakeknapp fanges ikke). Filopplasting og tredjepartskall lagres straks i sitt
+eget vindu: logo, BIR-kobling, kontaktpersoner, vær og avganger.
+
+### Innhold-fanen og rekkefølgen
+
+Bare oppslag og kalender. Hele raden åpner redigering (sletting ligger i vinduet), utløpte
+oppslag ligger bak «Vis N utløpte», og metalinjen viser visningstid og skjermer bare når de
+avviker fra standard (`STANDARD_SEKUNDER`, alle skjermer). Rekkefølgen i rotasjonen er
+`board_posts.sort_order` for hele borettslaget: radene dras (innebygd HTML-dra, virker ikke
+på berøringsskjerm), et nytt oppslag havner øverst, og lista og skjermen sorterer likt
+(`OPPSLAG_REKKEFOLGE`).
+
+### Første gangs oppsett
+
+Uten skjermer erstattes fanene av tre steg (`Forstegang` i `page.tsx`): koble til skjerm,
+velg mal og innhold i feltene, legg ut første oppslag. Avgjøres når siden lastes, og varer
+til første oppslag er lagt ut eller styret hopper over.
 
 **Skalering** (`board_screens.scale`, 60–130 %, standard 85) ganges inn i `--u`, så tekst og
 luft krymper sammen. Tavla måles i prosent av bredden — 4K og Full HD ser like ut; skalering
@@ -98,8 +132,9 @@ ellers ville et byttet bilde aldri blitt hentet på nytt.
 
 - **Forhåndsvisningen og skjermen deler både komponent og data** (`byggSkjerminnhold`). Lag
   aldri en egen «forhåndsvisnings-spørring» — da viser appen noe annet enn veggen.
-- **Faste soner**: plassen avhenger av malen, aldri av innholdets lengde. Lange oppslag
-  klippes (`line-clamp`). Tavla måles i `--u` (1 % av bredden × skalering), ikke `--fs-*` —
+- **Faste soner**: plassen avhenger av malen, aldri av innholdets lengde. Teksten i et
+  oppslag skaleres så den fyller feltet (`useTilpassetTekst`, `--tekstskala` mellom 0,8 og
+  2,6); passer den ikke på minste størrelse, klippes den (`line-clamp`). Tavla måles i `--u` (1 % av bredden × skalering), ikke `--fs-*` —
   unntaket gjelder bare innenfor `.ot-skjerm`.
 - En skjerm som har lagret innhold fra FØR en endring i `Skjerminnhold`, viser det etter
   omstart uten nett. Nye felt må derfor tåle å mangle i klienten (`kontakter = []`,
@@ -122,7 +157,6 @@ Rekkefølgen er et forslag; hver etappe er leverbar alene.
   har vært nede i N minutter, pluss «tilbake»-varsel. Egen bakgrunnsjobb (arver gatene i
   `instrumentation.ts`); skjermtid (av/på-tider) må trekkes fra, ellers varsler hver natt.
 - Skjermtid: skjermen blanker seg selv utenfor på/av-tidene.
-- Redigere et oppslag (i dag: bare opprette/slette).
 
 **Etappe 3 — mer innhold**
 - PDF-presentasjon: rastrer sidene med `pdftoppm` (finnes i imaget, se tekstuttrekk) til
@@ -131,6 +165,8 @@ Rekkefølgen er et forslag; hver etappe er leverbar alene.
   oppgaver hører hjemme på en offentlig vegg.
 - QR «Meld avvik» som åpner et offentlig avviksskjema med skjermens adresse forhåndsutfylt.
   Det offentlige skjemaet finnes ikke ennå og trenger egen vurdering (anonym skriving).
+  Kontaktfeltet har derfor ingen QR-kode; det som så ut som en ødelagt en, var de stående
+  rotasjonsprikkene (rettet 30.09.2026).
 - Avfallshenting fra BIR — BYGGET 29.09.2026, se `docs/bir.md`.
 
 **Etappe 4 — kalendersynk**

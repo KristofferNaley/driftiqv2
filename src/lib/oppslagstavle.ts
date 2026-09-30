@@ -20,7 +20,7 @@
 
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, asc, desc, eq, gte, lte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, lt, min } from "drizzle-orm";
 import { z } from "zod";
 import { withOrg, withoutRls, type Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
@@ -30,7 +30,6 @@ import {
   boardContacts,
   boardEvents,
   boardPairings,
-  boardPlacements,
   boardPosts,
   boardScreens,
   boardSettings,
@@ -40,17 +39,7 @@ import { ApiFeil, ikkeFunnet, ugyldig, type Filsvar } from "./api";
 import type { Aktor } from "./aktor";
 import { tommedagerForSkjerm } from "./birkobling";
 import { blokkdataForSkjerm } from "./tavleblokker";
-import {
-  INNEBYGDE_BLOKKER,
-  OMRADER,
-  SIDE_REKKEFOLGE,
-  STANDARD_PLASSERING,
-  blokkNokkel,
-  finnMal,
-  fordelSoner,
-  type InnebygdBlokk,
-  type Omrade,
-} from "./tavlemaler";
+import { INNEBYGDE_BLOKKER, blokkNokkel, feltI, finnMal, ryddFelt, standardFelt } from "./tavlemaler";
 import { loggHendelse } from "./hendelser";
 import { filSti, lagreFil, slettFil } from "./lagring";
 import {
@@ -125,6 +114,12 @@ async function validerSkjermer(db: Db, orgId: string, ider: string[]) {
   if (ider.some((id) => !kjente.has(id))) throw ugyldig("Ukjent skjerm i utvalget");
 }
 
+/**
+ * Rotasjonen: styrets rekkefølge først (`sort_order`), og for oppslag ingen har flyttet på,
+ * nyeste først. Samme rekkefølge i lista og på skjermen.
+ */
+const OPPSLAG_REKKEFOLGE = [asc(boardPosts.sortOrder), desc(boardPosts.showFrom), desc(boardPosts.createdAt)] as const;
+
 export async function hentOppslag(db: Db, orgId: string) {
   const iDag = osloIDag();
   const rader = await db
@@ -145,7 +140,7 @@ export async function hentOppslag(db: Db, orgId: string) {
     })
     .from(boardPosts)
     .where(eq(boardPosts.orgId, orgId))
-    .orderBy(desc(boardPosts.showFrom), desc(boardPosts.createdAt));
+    .orderBy(...OPPSLAG_REKKEFOLGE);
   return rader.map((r) => ({ ...r, status: oppslagStatus(r, iDag) }));
 }
 
@@ -165,10 +160,14 @@ export async function opprettOppslag(
       ? await lagreFil(db, orgId, MAPPE, fil, { typer: BILDETYPER, maksStorrelse: MAKS_BILDE })
       : null;
 
+  // Et nytt oppslag havner øverst i rotasjonen.
+  const [forst] = await db.select({ n: min(boardPosts.sortOrder) }).from(boardPosts).where(eq(boardPosts.orgId, orgId));
+
   const [rad] = await db
     .insert(boardPosts)
     .values({
       id: randomUUID(),
+      sortOrder: Number(forst?.n ?? 0) - 1,
       orgId,
       kind: type,
       title: data.tittel,
@@ -218,6 +217,24 @@ export async function endreOppslag(db: Db, orgId: string, id: string, data: Opps
     .where(and(eq(boardPosts.id, id), eq(boardPosts.orgId, orgId)))
     .returning();
   return rad!;
+}
+
+export const rekkefolgeInn = z.object({ ider: z.array(z.string()).min(1).max(500) });
+
+/**
+ * Setter rekkefølgen i rotasjonen. `ider` er oppslagene i ny rekkefølge; oppslag som ikke er
+ * med (typisk de utløpte, som lista skjuler) beholder plassen seg imellom og legges etter.
+ */
+export async function settRekkefolge(db: Db, orgId: string, ider: string[]) {
+  const alle = await db.select({ id: boardPosts.id }).from(boardPosts).where(eq(boardPosts.orgId, orgId)).orderBy(...OPPSLAG_REKKEFOLGE);
+  const kjente = new Set(alle.map((p) => p.id));
+  if (new Set(ider).size !== ider.length || ider.some((id) => !kjente.has(id))) throw ugyldig("Ukjent oppslag i rekkefølgen");
+  const flyttet = new Set(ider);
+  const ny = [...ider, ...alle.map((p) => p.id).filter((id) => !flyttet.has(id))];
+  for (const [n, id] of ny.entries()) {
+    await db.update(boardPosts).set({ sortOrder: n }).where(and(eq(boardPosts.id, id), eq(boardPosts.orgId, orgId)));
+  }
+  return hentOppslag(db, orgId);
 }
 
 /**
@@ -292,6 +309,16 @@ export async function opprettHendelse(db: Db, orgId: string, av: Aktor, d: z.inf
   return rad!;
 }
 
+export async function endreHendelse(db: Db, orgId: string, id: string, d: z.infer<typeof hendelseInn>) {
+  const [rad] = await db
+    .update(boardEvents)
+    .set({ title: d.tittel, eventDate: d.dato, eventTime: d.tid ?? null, place: d.sted || null })
+    .where(and(eq(boardEvents.id, id), eq(boardEvents.orgId, orgId)))
+    .returning();
+  if (!rad) throw ikkeFunnet("Hendelse");
+  return rad;
+}
+
 export async function slettHendelse(db: Db, orgId: string, id: string) {
   const slettet = await db
     .delete(boardEvents)
@@ -305,10 +332,10 @@ export async function slettHendelse(db: Db, orgId: string, id: string) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Sonene regnes ut av malen og orgens plasseringer (`fordelSoner`) — de lagres ikke per
- * skjerm. `plasseringer` er alle blokkene i orgen med område og skjermutvalg.
+ * Feltene leses fra raden (`zones`) og ryddes mot malen — et felt malen ikke har, vises ikke.
+ * `zones` er bare `null` før `migrerPlasseringerTilFelt` har kjørt; da gjelder standarden.
  */
-function skjermUt(s: BoardScreen, plasseringer: readonly Plassering[], naa = new Date()) {
+function skjermUt(s: BoardScreen, naa = new Date()) {
   const sistSett = s.lastSeenAt;
   const paaNett = sistSett !== null && naa.getTime() - sistSett.getTime() < NEDE_ETTER_SEKUNDER * 1000;
   const retning = (RETNINGER as readonly string[]).includes(s.orientation) ? (s.orientation as Retning) : "staende";
@@ -319,12 +346,7 @@ function skjermUt(s: BoardScreen, plasseringer: readonly Plassering[], naa = new
     adresse: s.address,
     retning,
     mal: mal.id,
-    soner: fordelSoner(
-      mal,
-      plasseringer
-        .filter((p) => p.omrade !== "av" && (p.alleSkjermer || p.skjermIder.includes(s.id)))
-        .map((p) => ({ nokkel: p.nokkel, omrade: p.omrade })),
-    ),
+    soner: s.zones ? ryddFelt(mal, s.zones) : standardFelt(mal),
     skala: s.scale,
     sistSett: sistSett?.toISOString() ?? null,
     paaNett,
@@ -332,69 +354,14 @@ function skjermUt(s: BoardScreen, plasseringer: readonly Plassering[], naa = new
   };
 }
 
-// ---------------------------------------------------------------------------------------
-// Plassering — HVOR hver blokk vises, valgt på innholdet
-// ---------------------------------------------------------------------------------------
-
-export type Plassering = { nokkel: string; omrade: Omrade; alleSkjermer: boolean; skjermIder: string[] };
-
-/** Blokknøklene i orgen i visningsrekkefølge: innebygde og egne (eldste først). */
+/** Blokknøklene som finnes i orgen: de innebygde og de egne (vær, avganger). */
 async function blokknokler(db: Db, orgId: string): Promise<string[]> {
   const egne = await db
     .select({ id: boardBlocks.id })
     .from(boardBlocks)
     .where(eq(boardBlocks.orgId, orgId))
     .orderBy(asc(boardBlocks.createdAt));
-  return [...INNEBYGDE_BLOKKER, ...egne.map((b) => blokkNokkel(b.id))].sort(
-    (a, b) => SIDE_REKKEFOLGE(a) - SIDE_REKKEFOLGE(b),
-  );
-}
-
-/** Plasseringen for hver blokk i orgen — lagret, eller standarden når styret ikke har valgt. */
-export async function hentPlasseringer(db: Db, orgId: string): Promise<Plassering[]> {
-  const [nokler, lagret] = await Promise.all([
-    blokknokler(db, orgId),
-    db.select().from(boardPlacements).where(eq(boardPlacements.orgId, orgId)),
-  ]);
-  const perNokkel = new Map(lagret.map((p) => [p.blockKey, p]));
-  return nokler.map((nokkel) => {
-    const p = perNokkel.get(nokkel);
-    const omrade = p && (OMRADER as readonly string[]).includes(p.area) ? (p.area as Omrade) : null;
-    return {
-      nokkel,
-      omrade: omrade ?? STANDARD_PLASSERING[nokkel as InnebygdBlokk] ?? "side",
-      alleSkjermer: p?.allScreens ?? true,
-      skjermIder: p?.screenIds ?? [],
-    };
-  });
-}
-
-export const plasseringInn = z
-  .object({
-    nokkel: z.string().max(80),
-    omrade: z.enum(OMRADER),
-    alleSkjermer: z.boolean(),
-    skjermIder: z.array(z.string()).default([]),
-  })
-  .refine((d) => d.alleSkjermer || d.omrade === "av" || d.skjermIder.length > 0, {
-    message: "Velg minst én skjerm",
-    path: ["skjermIder"],
-  });
-
-export async function settPlassering(db: Db, orgId: string, d: z.infer<typeof plasseringInn>) {
-  if (!(await blokknokler(db, orgId)).includes(d.nokkel)) throw ikkeFunnet("Innhold");
-  await validerSkjermer(db, orgId, d.skjermIder);
-  const verdier = {
-    area: d.omrade,
-    allScreens: d.alleSkjermer,
-    screenIds: d.alleSkjermer ? [] : d.skjermIder,
-    updatedAt: new Date(),
-  };
-  await db
-    .insert(boardPlacements)
-    .values({ id: randomUUID(), orgId, blockKey: d.nokkel, ...verdier })
-    .onConflictDoUpdate({ target: [boardPlacements.orgId, boardPlacements.blockKey], set: verdier });
-  return hentPlasseringer(db, orgId);
+  return [...INNEBYGDE_BLOKKER, ...egne.map((b) => blokkNokkel(b.id))];
 }
 
 export async function hentSkjermer(db: Db, orgId: string) {
@@ -403,8 +370,7 @@ export async function hentSkjermer(db: Db, orgId: string) {
     .from(boardScreens)
     .where(eq(boardScreens.orgId, orgId))
     .orderBy(asc(boardScreens.createdAt));
-  const plasseringer = await hentPlasseringer(db, orgId);
-  return rader.map((s) => skjermUt(s, plasseringer));
+  return rader.map((s) => skjermUt(s));
 }
 
 const skjermFelter = {
@@ -423,6 +389,8 @@ export const skjermEndring = z.object({
     .int()
     .refine((n) => (SKALERINGER as readonly number[]).includes(n), "Ugyldig skalering")
     .default(STANDARD_SKALERING),
+  /** Blokknøklene per felt i malen. Flere i samme felt roterer. */
+  felt: z.record(z.string().max(10), z.array(z.string().max(80)).max(12)),
 });
 
 /**
@@ -449,6 +417,7 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
       address: d.adresse || null,
       orientation: d.retning,
       layout: finnMal(null, d.retning).id,
+      zones: standardFelt(finnMal(null, d.retning)),
       // Plassholder til skjermen henter sitt ekte token: hashen av et token ingen har fått,
       // så raden kan ikke brukes av noen fram til da.
       deviceTokenHash: hash(randomBytes(32).toString("base64url")),
@@ -464,10 +433,16 @@ export async function kobleSkjerm(db: Db, orgId: string, av: Aktor, d: z.infer<t
     entitetId: id,
     hendelse: `Koblet til skjermen «${d.navn}»`,
   });
-  return skjermUt(skjerm!, await hentPlasseringer(db, orgId));
+  return skjermUt(skjerm!);
 }
 
 export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<typeof skjermEndring>) {
+  const mal = finnMal(d.mal, d.retning);
+  // Avvises, ikke ryddes stille: et felt malen ikke har, eller en blokk orgen ikke eier,
+  // betyr at klienten og serveren er uenige om hva skjermen viser.
+  if (Object.keys(d.felt).some((f) => !feltI(mal).includes(f))) throw ugyldig("Malen har ikke alle feltene som ble sendt");
+  const kjente = new Set(await blokknokler(db, orgId));
+  if (Object.values(d.felt).flat().some((n) => !kjente.has(n))) throw ugyldig("Ukjent innhold i et felt");
   const [rad] = await db
     .update(boardScreens)
     .set({
@@ -476,13 +451,14 @@ export async function endreSkjerm(db: Db, orgId: string, id: string, d: z.infer<
       orientation: d.retning,
       // En mal for den andre retningen byttes til standardmalen — lagres rent, så det som
       // står i basen er det som vises.
-      layout: finnMal(d.mal, d.retning).id,
+      layout: mal.id,
+      zones: ryddFelt(mal, d.felt),
       scale: d.skala,
     })
     .where(and(eq(boardScreens.id, id), eq(boardScreens.orgId, orgId)))
     .returning();
   if (!rad) throw ikkeFunnet("Skjerm");
-  return skjermUt(rad, await hentPlasseringer(db, orgId));
+  return skjermUt(rad);
 }
 
 /** Fjerner skjermen og dermed tokenet — skjermen faller tilbake til koblingsbildet. */
@@ -758,18 +734,27 @@ export async function byggSkjerminnhold(
   db: Db,
   orgId: string,
   skjermId: string,
-  /** `false` fra tilgangssjekken for bilder: den trenger ikke avganger og vær fra nettet. */
-  medEksterne = true,
+  valg: {
+    /** `false` fra tilgangssjekken for bilder: den trenger ikke avganger og vær fra nettet. */
+    medEksterne?: boolean;
+    /**
+     * Forhåndsvisningen i appen: data for ALLE blokkene i orgen, ikke bare dem som står i et
+     * felt. Styret flytter innhold mellom felt før det er lagret, og det nye feltet skal ha
+     * noe å vise. Skjermen på veggen ber aldri om dette.
+     */
+    alt?: boolean;
+  } = {},
 ): Promise<Skjerminnhold> {
+  const { medEksterne = true, alt = false } = valg;
   const [skjerm] = await db
     .select()
     .from(boardScreens)
     .where(and(eq(boardScreens.id, skjermId), eq(boardScreens.orgId, orgId)))
     .limit(1);
   if (!skjerm) throw ikkeFunnet("Skjerm");
-  const s = skjermUt(skjerm, await hentPlasseringer(db, orgId));
-  // Bare det som faktisk står i en sone, hentes — en skjerm uten kalender spør ikke etter den.
-  const iBruk = new Set(Object.values(s.soner).flat());
+  const s = skjermUt(skjerm);
+  // Bare det som faktisk står i et felt, hentes — en skjerm uten kalender spør ikke etter den.
+  const iBruk = new Set(alt ? await blokknokler(db, orgId) : Object.values(s.soner).flat());
 
   const [org] = await db
     .select({ navn: organizations.name, telefon: organizations.phone, epost: organizations.contactEmail })
@@ -783,7 +768,7 @@ export async function byggSkjerminnhold(
         .select()
         .from(boardPosts)
         .where(and(eq(boardPosts.orgId, orgId), lte(boardPosts.showFrom, iDag), gte(boardPosts.showUntil, iDag)))
-        .orderBy(desc(boardPosts.showFrom), desc(boardPosts.createdAt))
+        .orderBy(...OPPSLAG_REKKEFOLGE)
     : [];
 
   const hendelser = iBruk.has("kalender")
@@ -930,7 +915,7 @@ export async function innholdForSkjerm(req: Request): Promise<Skjerminnhold> {
 export async function filForSkjerm(req: Request, postId: string): Promise<Filsvar> {
   const s = await skjermFraToken(req);
   return withOrg(s.orgId, async (db) => {
-    const innhold = await byggSkjerminnhold(db, s.orgId, s.id, false);
+    const innhold = await byggSkjerminnhold(db, s.orgId, s.id, { medEksterne: false });
     if (!innhold.oppslag.some((p) => p.id === postId && p.harFil)) throw ikkeFunnet("Bilde");
     return hentOppslagFil(db, s.orgId, postId);
   });

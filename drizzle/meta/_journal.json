@@ -463,6 +463,13 @@
       "when": 1790716754683,
       "tag": "0065_oppslagstavle_plassering",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790777368451,
+      "tag": "0066_oppslagstavle_felt",
+      "breakpoints": true
     }
   ]
 }

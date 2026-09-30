@@ -14,8 +14,12 @@ import { lukkPooler, withOrg } from "../src/db/client";
 import type { ApiFeil } from "../src/lib/api";
 import { anonymAktor } from "../src/lib/aktor";
 import {
+  endreHendelse,
   endreOppslag,
   filForSkjerm,
+  hentOppslag,
+  settRekkefolge,
+  slettHendelse,
   flyttKontakt,
   hentKontakter,
   kontaktbildeForSkjerm,
@@ -319,6 +323,56 @@ describe("visningstid og redigering", () => {
     const p = await withOrg(b, (db) => opprettOppslag(db, b, KARI, "tekst", { ...periode, tittel: "B" }, null));
     const feil = await feilFra(() => withOrg(a, (db) => endreOppslag(db, a, p.id, { ...periode, tittel: "Kapret" })));
     expect(feil.status).toBe(404);
+  });
+});
+
+describe("rekkefølge og kalender", () => {
+  const tekst = (orgId: string, tittel: string) =>
+    withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, "tekst", { tittel, ...periode }, null));
+  const titler = async (orgId: string) => (await withOrg(orgId, (db) => hentOppslag(db, orgId))).map((p) => p.title);
+
+  it("et nytt oppslag havner øverst, og styrets rekkefølge gjelder både i lista og på skjermen", async () => {
+    const orgId = await nyOrg();
+    const { token } = await kobletSkjerm(orgId);
+    const a = await tekst(orgId, "A");
+    const b = await tekst(orgId, "B");
+    const c = await tekst(orgId, "C");
+    expect(await titler(orgId)).toEqual(["C", "B", "A"]);
+    await withOrg(orgId, (db) => settRekkefolge(db, orgId, [a.id, c.id, b.id]));
+    expect(await titler(orgId)).toEqual(["A", "C", "B"]);
+    expect((await innholdForSkjerm(medToken(token))).oppslag.map((p) => p.tittel)).toEqual(["A", "C", "B"]);
+    // Et nytt oppslag etter omsorteringen går fortsatt øverst.
+    await tekst(orgId, "D");
+    expect(await titler(orgId)).toEqual(["D", "A", "C", "B"]);
+  });
+
+  it("oppslag som ikke er med i rekkefølgen, beholder plassen seg imellom og legges etter", async () => {
+    const orgId = await nyOrg();
+    const a = await tekst(orgId, "A");
+    await tekst(orgId, "B");
+    await tekst(orgId, "C");
+    await withOrg(orgId, (db) => settRekkefolge(db, orgId, [a.id]));
+    expect(await titler(orgId)).toEqual(["A", "C", "B"]);
+  });
+
+  it("rekkefølgen kan ikke inneholde en annen orgs oppslag, eller samme oppslag to ganger", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    const egen = await tekst(a, "Egen");
+    const fremmed = await tekst(b, "Fremmed");
+    expect((await feilFra(() => withOrg(a, (db) => settRekkefolge(db, a, [egen.id, fremmed.id])))).status).toBe(400);
+    expect((await feilFra(() => withOrg(a, (db) => settRekkefolge(db, a, [egen.id, egen.id])))).status).toBe(400);
+  });
+
+  it("en kalenderhendelse kan endres, men ikke en annen orgs", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    const h = await withOrg(a, (db) => opprettHendelse(db, a, KARI, { tittel: "Dugnad", dato: iDag, tid: "10:00", sted: "Gården" }));
+    const endret = await withOrg(a, (db) => endreHendelse(db, a, h.id, { tittel: "Høstdugnad", dato: iDag, tid: null, sted: null }));
+    expect(endret).toMatchObject({ id: h.id, title: "Høstdugnad", eventTime: null, place: null });
+    expect((await withOrg(a, (db) => hentHendelser(db, a))).map((x) => x.title)).toEqual(["Høstdugnad"]);
+    expect((await feilFra(() => withOrg(b, (db) => endreHendelse(db, b, h.id, { tittel: "X", dato: iDag })))).status).toBe(404);
+    expect((await feilFra(() => withOrg(b, (db) => slettHendelse(db, b, h.id)))).status).toBe(404);
   });
 });
 

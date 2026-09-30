@@ -16,6 +16,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { adminPool, dbNavn, lukkPooler, medEierklient, verifiserRoller } from "../src/db/client";
 import { settOpp } from "../src/db/rls/setup";
+import { kjorFeltmigrering } from "../src/lib/tavlemigrering";
 
 const APP_DB_USER = process.env.APP_DB_USER ?? "driftiq_v2_app";
 const APP_DB_PASSWORD = process.env.APP_DB_PASSWORD;
@@ -48,6 +49,10 @@ async function main(): Promise<void> {
   });
 
   await verifiserRoller();
+
+  // Datamigrering som trenger applikasjonslogikk (se lib/tavlemigrering.ts). Idempotent.
+  const felt = await kjorFeltmigrering();
+  if (felt > 0) console.log(`[oppstart] oppslagstavle: ${felt} skjerm(er) fikk felt fra gammel plassering`);
   console.log(`[rls] Aktiv — appen kobler til som «${APP_DB_USER}», underlagt policyene.`);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Apple,
   Bus,
@@ -40,7 +40,7 @@ import {
   type Blokkdata,
   type Skjerminnhold,
 } from "@/lib/oppslagstavleregler";
-import { INNEBYGDE_BLOKKER, STANDARD_PLASSERING, STRIPE, finnMal, fordelSoner } from "@/lib/tavlemaler";
+import { STRIPE, finnMal, standardFelt } from "@/lib/tavlemaler";
 import { avgangstid, transportmiddel, vaersymbol } from "@/lib/vaerregler";
 
 /**
@@ -49,8 +49,8 @@ import { avgangstid, transportmiddel, vaersymbol } from "@/lib/vaerregler";
  *
  * ## Maler og soner
  *
- * Skjermen deles etter malen (`lib/tavlemaler.ts`). Sonene er regnet ut på serveren av
- * plasseringen styret har valgt på hvert innhold (`fordelSoner`). Flere blokker i samme
+ * Skjermen deles etter malen (`lib/tavlemaler.ts`). Hva som står i hvert felt, har styret
+ * valgt per skjerm (`skjerm.soner`). Flere blokker i samme
  * sone roterer (`SONE_SEKUNDER`). Stripen nederst har høyde etter innholdet og viser
  * blokkene KOMPAKT (én linje). En blokk uten data — tømmedager uten BIR-kobling, vær MET
  * ikke har svart på — hoppes over, og en sone uten noe å vise står tom i stedet for å vise
@@ -68,6 +68,8 @@ export function Tavleskjerm({
   kontaktbildeUrl,
   logoUrl,
   utenNett,
+  markertSone,
+  visOppslagId,
 }: {
   innhold: Skjerminnhold;
   /** URL til bildet i et bildeoppslag — blob-URL på skjermen, API-sti i appen. */
@@ -76,15 +78,17 @@ export function Tavleskjerm({
   logoUrl: string | null;
   /** Satt når skjermen ikke har fått svar på en stund: tidspunktet for siste vellykkede henting. */
   utenNett?: string | null;
+  /** Bare forhåndsvisningen: feltet som er valgt i kartet, tegnes med ramme. */
+  markertSone?: string | null;
+  /** Bare forhåndsvisningen: hopp til dette oppslaget (raden styret klikket på). */
+  visOppslagId?: string | null;
 }) {
   const naa = useKlokke();
   const { skjerm, utseende } = innhold;
   const liggende = skjerm.retning === "liggende";
   // Innhold lagret av en skjerm før malene fantes, har ikke `mal`/`soner` — da gjelder standarden.
   const mal = finnMal(skjerm.mal ?? null, skjerm.retning);
-  const soner =
-    skjerm.soner ??
-    fordelSoner(mal, INNEBYGDE_BLOKKER.map((n) => ({ nokkel: n, omrade: STANDARD_PLASSERING[n] })));
+  const soner = skjerm.soner ?? standardFelt(mal);
   const sistHentet = utenNett ? new Date(utenNett) : null;
 
   // Skaleringen ganges inn i `--u` (se `.ot-skjerm` i globals.css).
@@ -107,7 +111,7 @@ export function Tavleskjerm({
     );
   }
 
-  const ctx: Kontekst = { innhold, naa, bildeUrl, kontaktbildeUrl };
+  const ctx: Kontekst = { innhold, naa, bildeUrl, kontaktbildeUrl, visOppslagId: visOppslagId ?? null };
   const harData = (n: string) => blokkHarData(n, innhold);
   const stripe = (soner[STRIPE] ?? []).filter(harData);
   const bredde = mal.omrader[0]!.split(" ").length;
@@ -124,9 +128,9 @@ export function Tavleskjerm({
       <Topp innhold={innhold} naa={naa} logoUrl={logoUrl} />
       <div className="ot-kropp" style={grid}>
         {mal.soner.map((sone) => (
-          <Sone key={sone} navn={sone} nokler={(soner[sone] ?? []).filter(harData)} ctx={ctx} />
+          <Sone key={sone} navn={sone} nokler={(soner[sone] ?? []).filter(harData)} ctx={ctx} markert={markertSone === sone} />
         ))}
-        {stripe.length > 0 && <Stripe nokler={stripe} ctx={ctx} />}
+        {stripe.length > 0 && <Stripe nokler={stripe} ctx={ctx} markert={markertSone === STRIPE} />}
       </div>
       <Fot tekst={sistHentet ? "" : `Oppdatert ${klokke(new Date(innhold.hentet))}`} />
       {sistHentet && (
@@ -144,6 +148,7 @@ type Kontekst = {
   naa: Date;
   bildeUrl: (postId: string) => string | null;
   kontaktbildeUrl: (kontaktId: string) => string | null;
+  visOppslagId: string | null;
 };
 
 /** Om en blokk har noe å vise. Oppslag, kalender og kontakt viser alltid noe (også «ingen …»). */
@@ -153,6 +158,58 @@ function blokkHarData(nokkel: string, i: Skjerminnhold): boolean {
   const b = i.blokker?.[nokkel];
   if (!b) return false;
   return b.type === "vaer" ? b.varsel !== null : true;
+}
+
+/** Grensene for tekstskaleringen i et oppslag: 1 er grunnstørrelsen i `.ot-hero`. */
+const TEKSTSKALA_MIN = 0.8;
+const TEKSTSKALA_MAKS = 2.6;
+
+/**
+ * Skalerer teksten i et oppslag så den fyller feltet: en kort beskjed blir stor, en lang blir
+ * mindre, innenfor faste grenser. Måles i nettleseren (halvering mot `scrollHeight`) fordi
+ * feltets størrelse avhenger av mal, retning og skalering. Passer ikke teksten på minste
+ * størrelse, klippes den som før (`klipp`).
+ */
+function useTilpassetTekst(nokkel: string) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const tilpass = () => {
+      const passer = (skala: number) => {
+        el.style.setProperty("--tekstskala", String(skala));
+        return el.scrollHeight <= el.clientHeight + 1;
+      };
+      el.classList.remove("klipp");
+      if (el.clientHeight === 0) return;
+      if (passer(TEKSTSKALA_MAKS)) return;
+      let lav = TEKSTSKALA_MIN;
+      let hoy = TEKSTSKALA_MAKS;
+      if (!passer(lav)) {
+        el.classList.add("klipp");
+        return;
+      }
+      for (let n = 0; n < 7; n++) {
+        const midt = (lav + hoy) / 2;
+        if (passer(midt)) lav = midt;
+        else hoy = midt;
+      }
+      passer(lav);
+    };
+    tilpass();
+    if (typeof ResizeObserver === "undefined") return;
+    // Bare bredden: høyden følger bredden (fast sideforhold), og å lytte på høyden ville
+    // startet en ny måling av hver måling.
+    let bredde = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === bredde) return;
+      bredde = el.clientWidth;
+      tilpass();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [nokkel]);
+  return ref;
 }
 
 /** Roterende indeks for en sone — står stille når det bare er én blokk. */
@@ -166,11 +223,11 @@ function useRotasjon(antall: number, sekunder: number): number {
   return antall > 0 ? i % antall : 0;
 }
 
-function Sone({ navn, nokler, ctx }: { navn: string; nokler: string[]; ctx: Kontekst }) {
+function Sone({ navn, nokler, ctx, markert }: { navn: string; nokler: string[]; ctx: Kontekst; markert: boolean }) {
   const i = useRotasjon(nokler.length, SONE_SEKUNDER);
   const nokkel = nokler[i];
   return (
-    <div className="ot-sone" style={{ gridArea: navn }}>
+    <div className={`ot-sone${markert ? " markert" : ""}`} style={{ gridArea: navn }}>
       {nokkel && (
         <div key={nokkel} className={nokler.length > 1 ? "ot-fade ot-sone-innhold" : "ot-sone-innhold"}>
           <Blokk nokkel={nokkel} ctx={ctx} />
@@ -181,9 +238,9 @@ function Sone({ navn, nokler, ctx }: { navn: string; nokler: string[]; ctx: Kont
 }
 
 /** Stripen: alle blokkene side om side i kompakt form — ingen rotasjon, den er smal nok. */
-function Stripe({ nokler, ctx }: { nokler: string[]; ctx: Kontekst }) {
+function Stripe({ nokler, ctx, markert }: { nokler: string[]; ctx: Kontekst; markert: boolean }) {
   return (
-    <div className="ot-kort ot-stripe" style={{ gridArea: STRIPE }}>
+    <div className={`ot-kort ot-stripe${markert ? " markert" : ""}`} style={{ gridArea: STRIPE }}>
       {nokler.map((n) => (
         <Blokk key={n} nokkel={n} ctx={ctx} kompakt />
       ))}
@@ -218,6 +275,12 @@ function Oppslag({ ctx }: { ctx: Kontekst }) {
     const t = window.setTimeout(() => setIndeks((i) => i + 1), sekunder * 1000);
     return () => window.clearTimeout(t);
   }, [indeks, sekunder, oppslag.length]);
+  // Forhåndsvisningen: styret klikket på en rad i lista, og vil se akkurat det oppslaget.
+  const onsket = ctx.visOppslagId ? oppslag.findIndex((p) => p.id === ctx.visOppslagId) : -1;
+  useEffect(() => {
+    if (onsket >= 0) setIndeks(onsket);
+  }, [onsket, ctx.visOppslagId]);
+  const tekstRef = useTilpassetTekst(aktivt ? `${aktivt.id}|${aktivt.tittel}|${aktivt.tekst ?? ""}` : "");
 
   if (!aktivt) {
     return (
@@ -229,7 +292,11 @@ function Oppslag({ ctx }: { ctx: Kontekst }) {
   }
   const bilde = aktivt.type === "bilde" ? ctx.bildeUrl(aktivt.id) : null;
   return (
-    <div key={aktivt.id} className={`ot-hero ot-fade ${aktivt.type === "bilde" ? "media" : (aktivt.kategori ?? "info")}`}>
+    <div
+      key={aktivt.id}
+      ref={aktivt.type === "tekst" ? tekstRef : undefined}
+      className={`ot-hero ot-fade ${aktivt.type === "bilde" ? "media" : (aktivt.kategori ?? "info")}`}
+    >
       {aktivt.type === "bilde" ? (
         <>
           {bilde ? <img className="ot-bilde" src={bilde} alt="" /> : <div className="ot-bilde" />}
@@ -309,7 +376,7 @@ function Kontakt({ ctx, kompakt }: { ctx: Kontekst; kompakt: boolean }) {
               <span>{k.telefon ?? k.epost}</span>
             </>
           ) : (
-            <span>{org.telefon ?? org.epost ?? "—"}</span>
+            <span>{org.telefon ?? org.epost ?? ""}</span>
           )}
         </span>
       </Kompakt>
@@ -329,13 +396,6 @@ function Kontakt({ ctx, kompakt }: { ctx: Kontekst; kompakt: boolean }) {
             {k.telefon && <div className="ot-ph">{k.telefon}</div>}
             {k.epost && <div className="ot-ph">{k.epost}</div>}
           </div>
-          {kontakter.length > 1 && (
-            <div className="ot-prikker ot-prikker-side">
-              {kontakter.map((x, j) => (
-                <i key={x.id} className={j === i ? "pa" : ""} />
-              ))}
-            </div>
-          )}
         </div>
       ) : (
         <>
@@ -343,6 +403,14 @@ function Kontakt({ ctx, kompakt }: { ctx: Kontekst; kompakt: boolean }) {
           {org.epost && <div className="ot-ph">{org.epost}</div>}
           {!org.telefon && !org.epost && <div className="ot-tom">Kontaktinfo er ikke lagt inn</div>}
         </>
+      )}
+      {/* Liggende prikker nederst, som i oppslagene. Stående streker til høyre så ut som en ødelagt QR-kode. */}
+      {kontakter.length > 1 && (
+        <div className="ot-prikker">
+          {kontakter.map((x, j) => (
+            <i key={x.id} className={j === i ? "pa" : ""} />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -433,6 +433,10 @@ komponenter — endres logikken, må begge med.
   bare feiler. Del det i to migrasjoner: først legg til (behold de gamle), så fjern. Trenger
   fjerningen å rydde data først (f.eks. rader som bryter en ny `NOT NULL`), legges SQL-en inn
   øverst i den genererte fila (mønster: `drizzle/0064_oppslagstavle_rydd.sql`). 29.09.2026.
+- **En datamigrering som trenger applikasjonslogikk, er et idempotent steg i
+  `scripts/oppstart.ts`**, ikke SQL (mønster: `lib/tavlemigrering.ts`, 30.09.2026). SQL-
+  migrasjonene kjører FØR steget, så tabellen det leser fra kan ikke droppes i samme
+  utgivelse.
 - `timestamp` uten sone leses av node-postgres som lokaltid — auth-tabellene er lagt om
   til `timestamptz`; bruk det på nye tidskolonner.
 - **Liste og detalj skal ha like joins.** `hentOppgaver` joinet leverandør, `hentOppgave`

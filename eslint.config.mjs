@@ -84,6 +84,9 @@ export default ts.config(
         MouseEvent: "readonly",
         HTMLDivElement: "readonly",
         Node: "readonly",
+        Element: "readonly",
+        HTMLAnchorElement: "readonly",
+        BeforeUnloadEvent: "readonly",
       },
     },
     rules: {

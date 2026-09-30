@@ -1,6 +1,6 @@
 /**
  * Innholdsblokker med egne innstillinger: vær for et sted (MET/yr) og avganger fra en eller
- * to holdeplasser (Entur). Styret lager dem under «Nytt innhold» og plasserer dem i sonene
+ * to holdeplasser (Entur). Styret lager dem i skjermoppsettet og velger dem inn i et felt
  * per skjerm. Designnotatet er `docs/entur-yr.md`.
  *
  * HTTP og mellomlager ligger i `entur.ts` og `yr.ts`. Her er databasen og det skjermen får.
@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { boardBlocks, boardPlacements, type BoardBlock } from "../db/schema/oppslagstavle";
+import { boardBlocks, boardScreens, type BoardBlock } from "../db/schema/oppslagstavle";
 import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
 import type { Aktor } from "./aktor";
 import { EnturFeil, avgangerFra, erHoldeplassId, sokHoldeplass, type Holdeplasstreff } from "./entur";
@@ -37,7 +37,7 @@ const avgangerKonfig = z.object({
   holdeplasser: z
     .array(z.object({ id: z.string().refine(erHoldeplassId, "Ugyldig holdeplass-id"), navn: z.string().trim().min(1).max(80) }))
     .min(1, "Velg minst én holdeplass")
-    .max(MAKS_HOLDEPLASSER, `Maks ${MAKS_HOLDEPLASSER} holdeplasser per blokk — flere får ikke plass`),
+    .max(MAKS_HOLDEPLASSER, `Maks ${MAKS_HOLDEPLASSER} holdeplasser per blokk. Flere får ikke plass.`),
 });
 
 export const blokkInn = z.discriminatedUnion("type", [
@@ -101,7 +101,7 @@ export async function endreBlokk(db: Db, orgId: string, id: string, d: BlokkInn)
     .where(and(eq(boardBlocks.id, id), eq(boardBlocks.orgId, orgId)))
     .limit(1);
   if (!gammel) throw ikkeFunnet("Blokk");
-  if (gammel.kind !== d.type) throw ugyldig("Typen til en blokk kan ikke endres — lag en ny blokk");
+  if (gammel.kind !== d.type) throw ugyldig("Typen til en blokk kan ikke endres. Lag en ny blokk.");
   const n = normaliser(d);
   const [rad] = await db
     .update(boardBlocks)
@@ -111,16 +111,23 @@ export async function endreBlokk(db: Db, orgId: string, id: string, d: BlokkInn)
   return blokkUt(rad!);
 }
 
-/** Sletter blokken og plasseringen dens — den forsvinner fra alle skjermene. */
+/** Sletter blokken og tar den ut av feltene på alle skjermene i orgen. */
 export async function slettBlokk(db: Db, orgId: string, id: string) {
   const slettet = await db
     .delete(boardBlocks)
     .where(and(eq(boardBlocks.id, id), eq(boardBlocks.orgId, orgId)))
     .returning({ id: boardBlocks.id });
   if (slettet.length === 0) throw ikkeFunnet("Blokk");
-  await db
-    .delete(boardPlacements)
-    .where(and(eq(boardPlacements.orgId, orgId), eq(boardPlacements.blockKey, blokkNokkel(id))));
+  const nokkel = blokkNokkel(id);
+  const skjermer = await db
+    .select({ id: boardScreens.id, zones: boardScreens.zones })
+    .from(boardScreens)
+    .where(eq(boardScreens.orgId, orgId));
+  for (const s of skjermer) {
+    if (!s.zones || !Object.values(s.zones).flat().includes(nokkel)) continue;
+    const zones = Object.fromEntries(Object.entries(s.zones).map(([f, n]) => [f, n.filter((x) => x !== nokkel)]));
+    await db.update(boardScreens).set({ zones }).where(and(eq(boardScreens.id, s.id), eq(boardScreens.orgId, orgId)));
+  }
 }
 
 // ---------------------------------------------------------------------------------------

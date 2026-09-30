@@ -1,9 +1,9 @@
 /**
- * Oppslagstavla — maler, soner og innholdsblokkene vær (MET/yr) og avganger (Entur). Ingen
+ * Oppslagstavla — maler, felt per skjerm og innholdsblokkene vær (MET/yr) og avganger (Entur). Ingen
  * v1-forgjenger; bygget fra API-ene slik de svarte 29.09.2026 (docs/entur-yr.md), med et
  * ekte MET-svar som fixture.
  *
- * Tyngdepunktet: at skjermen bare får det som står i sonene sine, at mellomlagrene faktisk
+ * Tyngdepunktet: at feltene lagres per skjerm og at skjermen bare får det som står i dem, at mellomlagrene faktisk
  * sparer kall (vilkårene til MET og Entur), og at en tredjepart som feiler gir en blokk som
  * forsvinner eller viser forrige svar — aldri en tavle som ikke svarer.
  */
@@ -18,16 +18,16 @@ import type { ApiFeil } from "../src/lib/api";
 import { anonymAktor } from "../src/lib/aktor";
 import { TILLATTE_KALL as ENTUR_KALL, avgangerFra, tolkAvganger, tolkHoldeplasser, tomEnturLager } from "../src/lib/entur";
 import {
+  byggSkjerminnhold,
   endreSkjerm,
-  hentPlasseringer,
+  hentSkjermer,
   innholdForSkjerm,
   kobleSkjerm,
-  settPlassering,
   sjekkKobling,
   startKobling,
 } from "../src/lib/oppslagstavle";
 import { blokkInn, hentBlokker, opprettBlokk, slettBlokk } from "../src/lib/tavleblokker";
-import { MALER, STANDARD_MAL, finnMal, fordelSoner } from "../src/lib/tavlemaler";
+import { MALER, STANDARD_MAL, finnMal, fordelSoner, ryddFelt, standardFelt, tommeFelt } from "../src/lib/tavlemaler";
 import { avgangstid, vaersymbol } from "../src/lib/vaerregler";
 import { tolkVarsel, tomYrLager, varselFor } from "../src/lib/yr";
 
@@ -137,6 +137,10 @@ function enturSvar(tid: Date) {
   };
 }
 
+/** Lagrer feltene for en skjerm, med resten av innstillingene uendret. */
+const settFelt = (orgId: string, skjermId: string, felt: Record<string, string[]>, mal = "l-stor-to") =>
+  withOrg(orgId, (db) => endreSkjerm(db, orgId, skjermId, { navn: "A", adresse: null, retning: "liggende", skala: 85, mal, felt }));
+
 describe("maler og soner", () => {
   it("hver retning har en standardmal, og hver mal har områder for alle sonene sine", () => {
     for (const r of ["liggende", "staende"] as const) expect(finnMal(null, r).id).toBe(STANDARD_MAL[r]);
@@ -172,73 +176,100 @@ describe("maler og soner", () => {
   });
 });
 
-describe("blokker og skjermen", () => {
-  it("skjermen får bare blokkene som er plassert på den — og data bare for dem", async () => {
+describe("felt per skjerm", () => {
+  it("en ny skjerm starter med standardfeltene, og ingen felt står tomme", async () => {
     const orgId = await nyOrg();
-    const kall = nettet();
-    const { skjerm, token } = await kobletSkjerm(orgId);
-    const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
-    const avg = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
-    // Avgangene av; været i sidefeltet på denne skjermen.
-    await withOrg(orgId, async (db) => {
-      await settPlassering(db, orgId, { nokkel: avg.nokkel, omrade: "av", alleSkjermer: true, skjermIder: [] });
-      await settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "side", alleSkjermer: false, skjermIder: [skjerm.id] });
-    });
-    const innhold = await innholdForSkjerm(medToken(token));
-    expect(Object.keys(innhold.blokker)).toEqual([vaer.nokkel]);
-    expect(innhold.blokker[vaer.nokkel]).toMatchObject({ type: "vaer", sted: "Håsteins gate 9, Bergen" });
-    expect(Object.values(innhold.skjerm.soner).flat()).toContain(vaer.nokkel);
-    expect(kall).toEqual({ met: 1, entur: 0 });
+    const { skjerm } = await kobletSkjerm(orgId);
+    expect(skjerm.soner).toEqual({ a: ["oppslag"], b: ["kalender"], c: ["kontakt"], stripe: ["tommedager"] });
+    for (const r of ["liggende", "staende"] as const) expect(tommeFelt(finnMal(null, r), standardFelt(finnMal(null, r))), r).toEqual([]);
   });
 
-  it("en blokk for en annen skjerm vises ikke, og standardplasseringene gjelder uten valg", async () => {
+  it("feltene lagres per skjerm: flere i samme felt roterer, og den andre skjermen er urørt", async () => {
     const orgId = await nyOrg();
     nettet();
     const a = await kobletSkjerm(orgId);
     const b = await kobletSkjerm(orgId);
     const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
-    await withOrg(orgId, (db) =>
-      settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "hoved", alleSkjermer: false, skjermIder: [b.skjerm.id] }),
-    );
-    const paaA = await innholdForSkjerm(medToken(a.token));
-    expect(Object.values(paaA.skjerm.soner).flat()).not.toContain(vaer.nokkel);
-    expect(paaA.skjerm.soner.a).toEqual(["oppslag"]);
-    expect(paaA.skjerm.soner.stripe).toEqual(["tommedager"]);
-    expect((await innholdForSkjerm(medToken(b.token))).skjerm.soner.a).toEqual(["oppslag", vaer.nokkel]);
+    const lagret = await settFelt(orgId, a.skjerm.id, { a: ["oppslag", vaer.nokkel], b: ["kalender"], c: [], stripe: [] });
+    expect(lagret.soner).toEqual({ a: ["oppslag", vaer.nokkel], b: ["kalender"], c: [], stripe: [] });
+    const [paaA, paaB] = await Promise.all([innholdForSkjerm(medToken(a.token)), innholdForSkjerm(medToken(b.token))]);
+    expect(paaA.skjerm.soner).toEqual(lagret.soner);
+    expect(Object.values(paaB.skjerm.soner).flat()).not.toContain(vaer.nokkel);
+    // Lista i appen og skjermen på veggen leser samme rad.
+    const liste = await withOrg(orgId, (db) => hentSkjermer(db, orgId));
+    expect(liste.find((s) => s.id === a.skjerm.id)!.soner).toEqual(lagret.soner);
+  });
+
+  it("et felt malen ikke har, og innhold orgen ikke eier, avvises", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    const { skjerm } = await kobletSkjerm(a);
+    const fremmed = await withOrg(b, (db) => opprettBlokk(db, b, KARI, VAER));
+    // `d` finnes ikke i «Stor + to».
+    expect((await feilFra(() => settFelt(a, skjerm.id, { a: ["oppslag"], d: ["kalender"] }))).status).toBe(400);
+    expect((await feilFra(() => settFelt(a, skjerm.id, { a: [fremmed.nokkel] }))).status).toBe(400);
+    expect((await feilFra(() => settFelt(a, skjerm.id, { a: ["finnes-ikke"] }))).status).toBe(400);
+    // En annen orgs skjerm kan ikke endres.
+    expect((await feilFra(() => settFelt(b, skjerm.id, { a: ["oppslag"] }))).status).toBe(404);
+    // Ingenting ble lagret underveis.
+    expect((await withOrg(a, (db) => hentSkjermer(db, a)))[0]!.soner).toEqual(skjerm.soner);
+  });
+
+  it("felt som ikke sendes, lagres tomme, og hver blokk står én gang per felt", async () => {
+    const orgId = await nyOrg();
+    const { skjerm } = await kobletSkjerm(orgId);
+    const lagret = await settFelt(orgId, skjerm.id, { a: ["oppslag", "oppslag"] });
+    expect(lagret.soner).toEqual({ a: ["oppslag"], b: [], c: [], stripe: [] });
+    expect(tommeFelt(finnMal(lagret.mal, "liggende"), lagret.soner)).toEqual(["b", "c"]);
+  });
+
+  it("ryddFelt: ved malbytte beholdes feltene som finnes i begge maler", () => {
+    const fra = { a: ["oppslag"], b: ["kalender"], c: ["kontakt"], d: ["blokk:1"], stripe: ["tommedager"] };
+    expect(ryddFelt(finnMal("l-to-like", "liggende"), fra)).toEqual({ a: ["oppslag"], b: ["kalender"], stripe: ["tommedager"] });
+    expect(ryddFelt(finnMal("l-fullskjerm", "liggende"), fra, new Set(["oppslag"]))).toEqual({ a: ["oppslag"], stripe: [] });
+  });
+});
+
+describe("blokker og skjermen", () => {
+  it("skjermen får bare blokkene som står i feltene — og data bare for dem", async () => {
+    const orgId = await nyOrg();
+    const kall = nettet();
+    const { skjerm, token } = await kobletSkjerm(orgId);
+    const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
+    const avg = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
+    // Været i et felt; avgangene finnes i orgen, men står ikke på skjermen.
+    await settFelt(orgId, skjerm.id, { a: ["oppslag"], b: [vaer.nokkel], c: [], stripe: [] });
+    const innhold = await innholdForSkjerm(medToken(token));
+    expect(Object.keys(innhold.blokker)).toEqual([vaer.nokkel]);
+    expect(innhold.blokker[vaer.nokkel]).toMatchObject({ type: "vaer", sted: "Håsteins gate 9, Bergen" });
+    expect(kall).toEqual({ met: 1, entur: 0 });
+    // Forhåndsvisningen ber om alt, så et felt styret nettopp har valgt har noe å vise.
+    const forhand = await withOrg(orgId, (db) => byggSkjerminnhold(db, orgId, skjerm.id, { alt: true }));
+    expect(Object.keys(forhand.blokker).sort()).toEqual([vaer.nokkel, avg.nokkel].sort());
+    expect(forhand.skjerm.soner).toEqual(innhold.skjerm.soner);
+  });
+
+  it("en slettet blokk tas ut av feltene på alle skjermene", async () => {
+    const orgId = await nyOrg();
+    const { skjerm } = await kobletSkjerm(orgId);
+    const b = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
+    await settFelt(orgId, skjerm.id, { a: ["oppslag"], b: [b.nokkel, "kalender"], c: [], stripe: [b.nokkel] });
+    await withOrg(orgId, (db) => slettBlokk(db, orgId, b.id));
+    expect((await withOrg(orgId, (db) => hentSkjermer(db, orgId)))[0]!.soner).toEqual({ a: ["oppslag"], b: ["kalender"], c: [], stripe: [] });
+  });
+
+  it("en annen orgs blokk kan ikke slettes", async () => {
+    const a = await nyOrg();
+    const b = await nyOrg();
+    const fremmed = await withOrg(b, (db) => opprettBlokk(db, b, KARI, VAER));
+    expect((await feilFra(() => withOrg(a, (db) => slettBlokk(db, a, fremmed.id)))).status).toBe(404);
+    expect(await withOrg(a, (db) => hentBlokker(db, a))).toEqual([]);
   });
 
   it("MET-koordinatene lagres med fire desimaler", async () => {
     const orgId = await nyOrg();
     const b = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
     expect(b.konfig).toMatchObject({ lat: 60.3863, lon: 5.2972 });
-  });
-
-  it("en slettet blokk tar plasseringen med seg", async () => {
-    const orgId = await nyOrg();
-    const b = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, AVGANGER));
-    await withOrg(orgId, (db) => settPlassering(db, orgId, { nokkel: b.nokkel, omrade: "stripe", alleSkjermer: true, skjermIder: [] }));
-    await withOrg(orgId, (db) => slettBlokk(db, orgId, b.id));
-    const { rows } = await eier.query("SELECT count(*)::int AS n FROM board_placements WHERE org_id = $1", [orgId]);
-    expect(rows[0].n).toBe(0);
-    expect((await withOrg(orgId, (db) => hentPlasseringer(db, orgId))).map((p) => p.nokkel)).not.toContain(b.nokkel);
-  });
-
-  it("en annen orgs blokk eller skjerm kan ikke brukes i en plassering", async () => {
-    const a = await nyOrg();
-    const b = await nyOrg();
-    const fremmedBlokk = await withOrg(b, (db) => opprettBlokk(db, b, KARI, VAER));
-    const fremmedSkjerm = await kobletSkjerm(b);
-    const f1 = await feilFra(() =>
-      withOrg(a, (db) => settPlassering(db, a, { nokkel: fremmedBlokk.nokkel, omrade: "hoved", alleSkjermer: true, skjermIder: [] })),
-    );
-    expect(f1.status).toBe(404);
-    const f2 = await feilFra(() =>
-      withOrg(a, (db) =>
-        settPlassering(db, a, { nokkel: "kalender", omrade: "side", alleSkjermer: false, skjermIder: [fremmedSkjerm.skjerm.id] }),
-      ),
-    );
-    expect(f2.status).toBe(400);
-    expect(await withOrg(a, (db) => hentBlokker(db, a))).toEqual([]);
   });
 
   it("validering: sted utenfor Norge, for mange holdeplasser og ugyldig holdeplass-id", () => {
@@ -363,10 +394,7 @@ describe("MET / yr", () => {
     nettet({ met: () => new Response("nede", { status: 503 }) });
     const vaer = await withOrg(orgId, (db) => opprettBlokk(db, orgId, KARI, VAER));
     const { skjerm, token } = await kobletSkjerm(orgId);
-    await withOrg(orgId, (db) =>
-      endreSkjerm(db, orgId, skjerm.id, { navn: "A", adresse: null, retning: "liggende", skala: 85, mal: "l-fullskjerm" }),
-    );
-    await withOrg(orgId, (db) => settPlassering(db, orgId, { nokkel: vaer.nokkel, omrade: "stripe", alleSkjermer: true, skjermIder: [] }));
+    await settFelt(orgId, skjerm.id, { a: ["oppslag"], stripe: [vaer.nokkel] }, "l-fullskjerm");
     const innhold = await innholdForSkjerm(medToken(token));
     expect(innhold.blokker[vaer.nokkel]).toMatchObject({ type: "vaer", varsel: null });
   });

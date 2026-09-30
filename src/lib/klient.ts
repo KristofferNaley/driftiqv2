@@ -12,7 +12,6 @@
 
 import type { MinAktivitet } from "./aktivitetsslag";
 import type { Driftslogg } from "./driftsloggslag";
-import type { Omrade } from "./tavlemaler";
 import type { Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
 
 export class ApiKlientFeil extends Error {
@@ -1303,7 +1302,7 @@ export type Skjerm = {
   adresse: string | null;
   retning: Retning;
   mal: string;
-  /** Utregnet av malen og plasseringene — lagres ikke per skjerm. */
+  /** Blokknøklene per felt i malen (`a`–`d` og `stripe`). Flere i samme felt roterer. */
   soner: Record<string, string[]>;
   skala: number;
   sistSett: string | null;
@@ -1311,8 +1310,14 @@ export type Skjerm = {
   koblet: string;
 };
 
-/** HVOR en blokk vises. `nokkel`: `oppslag`, `kalender`, `kontakt`, `tommedager` eller `blokk:<id>`. */
-export type Plassering = { nokkel: string; omrade: Omrade; alleSkjermer: boolean; skjermIder: string[] };
+export type SkjermEndring = {
+  navn: string;
+  adresse: string | null;
+  retning: Retning;
+  skala: number;
+  mal: string;
+  felt: Record<string, string[]>;
+};
 
 export type Tavleutseende = {
   background: string;
@@ -1332,6 +1337,7 @@ export const oppslagstavle = {
     return api.lastOpp<Oppslag>(org(o, "/oppslagstavle/oppslag"), f);
   },
   endreOppslag: (o: string, id: string, d: OppslagInn) => api.endre<Oppslag>(org(o, `/oppslagstavle/oppslag/${id}`), d),
+  settRekkefolge: (o: string, ider: string[]) => api.endre<Oppslag[]>(org(o, "/oppslagstavle/oppslag/rekkefolge"), { ider }),
   slettOppslag: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/oppslag/${id}`)),
   /** Til `<img src>` — cookien følger med, så bildet går gjennom de samme gatene. */
   bildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/oppslag/${id}/fil`)}`,
@@ -1339,6 +1345,8 @@ export const oppslagstavle = {
   hendelser: (o: string) => api.hent<Tavlehendelse[]>(org(o, "/oppslagstavle/hendelser")),
   nyHendelse: (o: string, d: { tittel: string; dato: string; tid: string | null; sted: string | null }) =>
     api.send<Tavlehendelse>(org(o, "/oppslagstavle/hendelser"), d),
+  endreHendelse: (o: string, id: string, d: { tittel: string; dato: string; tid: string | null; sted: string | null }) =>
+    api.endre<Tavlehendelse>(org(o, `/oppslagstavle/hendelser/${id}`), d),
   slettHendelse: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/hendelser/${id}`)),
 
   skjermer: (o: string) => api.hent<Skjerm[]>(org(o, "/oppslagstavle/skjermer")),
@@ -1347,7 +1355,7 @@ export const oppslagstavle = {
   endreSkjerm: (
     o: string,
     id: string,
-    d: { navn: string; adresse: string | null; retning: Retning; skala: number; mal: string },
+    d: SkjermEndring,
   ) =>
     api.endre<Skjerm>(org(o, `/oppslagstavle/skjermer/${id}`), d),
   slettSkjerm: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/skjermer/${id}`)),
@@ -1376,9 +1384,6 @@ export const oppslagstavle = {
   fjernKontaktbilde: (o: string, id: string) =>
     request<Tavlekontakt>(org(o, `/oppslagstavle/kontakter/${id}/bilde`), { method: "DELETE" }),
   kontaktbildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/kontakter/${id}/bilde`)}`,
-
-  plasseringer: (o: string) => api.hent<Plassering[]>(org(o, "/oppslagstavle/plasseringer")),
-  settPlassering: (o: string, d: Plassering) => api.endre<Plassering[]>(org(o, "/oppslagstavle/plasseringer"), d),
 
   utseende: (o: string) => api.hent<Tavleutseende>(org(o, "/oppslagstavle/utseende")),
   lagreUtseende: (o: string, d: Omit<Tavleutseende, "harLogo">) =>

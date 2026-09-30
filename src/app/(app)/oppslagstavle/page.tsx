@@ -1,67 +1,56 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Check, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
-import { Faner, Feil, Kort, Rad, Tom, dato, initialer, siden, useOrgData } from "@/components/felles";
-import {
-  Avkryssing,
-  Felt as Skjemafelt,
-  Knapperad,
-  Modal,
-  Nedtrekk,
-  Tekstfelt,
-  Tekstomrade,
-  useSending,
-} from "@/components/skjema";
+import { Faner, Feil, Tom, useOrgData } from "@/components/felles";
+import { Knapperad, Modal, Nedtrekk, Tekstfelt, useSending } from "@/components/skjema";
 import { useOkt } from "@/components/OktProvider";
 import { Tavleskjerm } from "@/components/Tavleskjerm";
-import { BirKort } from "./BirKort";
-import { BLOKKTYPE_NAVN, BlokkListe, BlokkSkjema } from "./Blokker";
-import { MalVelger, Plasseringslinje } from "./Plassering";
 import {
+  bir as birklient,
   oppslagstavle,
   tavleblokker,
   type Oppslag,
   type Skjerm,
-  type Tavleblokk,
-  type Tavlekontakt,
-  type Tavleutseende,
+  type SkjermEndring,
+  type Tavlehendelse,
 } from "@/lib/klient";
-import {
-  FORVALG,
-  KATEGORI_BESKRIVELSE,
-  KATEGORI_ETIKETT,
-  KATEGORIER,
-  RETNING_ETIKETT,
-  RETNINGER,
-  SKALERINGER,
-  STANDARD_SEKUNDER,
-  STANDARD_SKALERING,
-  STATUS_ETIKETT,
-  VISNINGSTIDER,
-  osloIDag,
-  type Kategori,
-  type Retning,
-  type Status,
-} from "@/lib/oppslagstavleregler";
+import { RETNING_ETIKETT, RETNINGER, type Retning, type Skjerminnhold } from "@/lib/oppslagstavleregler";
+import { INNEBYGDE_BLOKKER, finnMal, ryddFelt } from "@/lib/tavlemaler";
+import { Innhold, OppslagSkjema } from "./Innhold";
+import { Drift, Skjermliste, Skjermoppsett, Utseende, type Utseendeverdi } from "./Oppsett";
+import { sistSett } from "./felles";
 
 /**
  * Oppslagstavla — det styret legger ut her, vises på skjermene i bygget innen ett minutt.
  *
- * To faner: Innhold (oppslag, kalender, vær, avganger, tømmedager og kontaktpersoner — alt
- * som skal VISES) og Skjermer (kobling, mal og soner per skjerm, utseende — HVOR det vises,
- * for orgadmin). Forhåndsvisningen står til høyre på begge og er den samme komponenten som
- * skjermen på veggen tegner, med de samme dataene fra serveren.
+ * To faner: Innhold (det daglige: oppslag og kalender) og Skjermer og oppsett (mal og felt
+ * per skjerm, oppsettet for det som står i feltene, utseende og drift). Uten skjermer
+ * erstattes fanene av tre steg (`Forstegang`).
+ *
+ * ## Én lagremodell
+ *
+ * Skjerminnstillinger (navn, adresse, retning, skalering, mal, felt), farger og nettbrudd-valget
+ * er et UTKAST som eies her: `skjermUtkast` og `utseendeUtkast` er bare endringene, lagt over
+ * det serveren har. Linja nederst vises når utkastet avviker, og forhåndsvisningen tegner
+ * utkastet, så styret ser endringen før den er lagret. Forhåndsvisningen er samme komponent
+ * som skjermen på veggen, med de samme dataene fra serveren.
  */
-type Fane = "innhold" | "skjermer";
+type Fane = "innhold" | "oppsett";
+
+const lik = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export default function Oppslagstavle() {
   const { aktivOrg } = useOkt();
+  const router = useRouter();
   const kanRedigere = aktivOrg?.nivaa === "orgadmin" || aktivOrg?.nivaa === "redigering";
   const erAdmin = aktivOrg?.nivaa === "orgadmin";
 
   const [fane, setFane] = useState<Fane>("innhold");
+  // `o` følger med svaret: etter et orgbytte står forrige orgs data igjen til de nye er hentet,
+  // og første gangs oppsett skal avgjøres av riktig borettslag.
   const { data, feil, last, orgId } = useOrgData((o) =>
     Promise.all([
       oppslagstavle.oppslag(o),
@@ -70,13 +59,16 @@ export default function Oppslagstavle() {
       oppslagstavle.utseende(o),
       oppslagstavle.kontakter(o),
       tavleblokker.liste(o),
-      oppslagstavle.plasseringer(o),
-    ]),
+      birklient.status(o),
+    ]).then((d) => ({ o, d })),
   );
-  const [oppslag, hendelser, skjermer, utseende, kontakter, blokker, plasseringer] = data ?? [[], [], [], null, [], [], []];
+  const fersk = data && data.o === orgId ? data.d : null;
+  const [oppslag, hendelser, skjermer, utseende, kontakter, blokker, bir] = fersk ?? [[], [], [], null, [], [], null];
 
   const [valgtSkjerm, setValgtSkjerm] = useState<string | null>(null);
   const skjerm = skjermer.find((s) => s.id === valgtSkjerm) ?? skjermer[0] ?? null;
+  const [valgtFelt, setValgtFelt] = useState<string | null>(null);
+  const [visOppslagId, setVisOppslagId] = useState<string | null>(null);
   // Forhåndsvisningen hentes på nytt etter hver endring — `versjon` er utløseren.
   const [versjon, setVersjon] = useState(0);
   const oppdater = () => {
@@ -84,143 +76,309 @@ export default function Oppslagstavle() {
     setVersjon((v) => v + 1);
   };
 
-  /** «nytt» = tomt skjema; et oppslag = redigering av det. */
-  const [redigerer, setRedigerer] = useState<Oppslag | "nytt" | null>(null);
+  // --- Utkastet -------------------------------------------------------------------------
+  const [skjermUtkast, setSkjermUtkast] = useState<{ id: string; e: Partial<SkjermEndring> } | null>(null);
+  const [utseendeUtkast, setUtseendeUtkast] = useState<Partial<Utseendeverdi>>({});
+  const [lagrer, setLagrer] = useState(false);
+  const [lagrefeil, setLagrefeil] = useState<string | null>(null);
+  /** Noe brukeren ville gjøre mens det lå ulagrede endringer: venter på svaret i dialogen. */
+  const [ventende, setVentende] = useState<{ handling: () => void } | null>(null);
+
+  const lagretSkjerm: SkjermEndring | null = useMemo(
+    () =>
+      skjerm && {
+        navn: skjerm.navn,
+        adresse: skjerm.adresse,
+        retning: skjerm.retning,
+        skala: skjerm.skala,
+        mal: skjerm.mal,
+        felt: skjerm.soner,
+      },
+    [skjerm],
+  );
+  const skjermVerdi: SkjermEndring | null = useMemo(() => {
+    if (!skjerm || !lagretSkjerm) return null;
+    const v = { ...lagretSkjerm, ...(skjermUtkast?.id === skjerm.id ? skjermUtkast.e : {}) };
+    // En blokk som er slettet etter at den ble lagt i utkastet, skal ikke følge med i lagringen.
+    const gyldige = new Set<string>([...INNEBYGDE_BLOKKER, ...blokker.map((b) => b.nokkel)]);
+    return { ...v, felt: ryddFelt(finnMal(v.mal, v.retning), v.felt, gyldige) };
+  }, [skjerm, lagretSkjerm, skjermUtkast, blokker]);
+  const lagretUtseende: Utseendeverdi | null = utseende && {
+    background: utseende.background,
+    accent: utseende.accent,
+    offlineMode: utseende.offlineMode,
+  };
+  const utseendeVerdi = lagretUtseende && { ...lagretUtseende, ...utseendeUtkast };
+  const skjermEndret = erAdmin && skjermVerdi !== null && !lik(skjermVerdi, lagretSkjerm);
+  const utseendeEndret = erAdmin && utseendeVerdi !== null && !lik(utseendeVerdi, lagretUtseende);
+  const endret = skjermEndret || utseendeEndret;
+
+  const endreSkjerm = (e: Partial<SkjermEndring>) =>
+    skjerm && setSkjermUtkast((u) => ({ id: skjerm.id, e: { ...(u?.id === skjerm.id ? u.e : {}), ...e } }));
+  const endreUtseende = (e: Partial<Utseendeverdi>) => setUtseendeUtkast((u) => ({ ...u, ...e }));
+
+  function forkast() {
+    setSkjermUtkast(null);
+    setUtseendeUtkast({});
+    setLagrefeil(null);
+  }
+
+  async function lagre(): Promise<boolean> {
+    if (!orgId) return false;
+    setLagrer(true);
+    setLagrefeil(null);
+    try {
+      if (skjermEndret && skjerm && skjermVerdi) await oppslagstavle.endreSkjerm(orgId, skjerm.id, skjermVerdi);
+      if (utseendeEndret && utseendeVerdi) await oppslagstavle.lagreUtseende(orgId, utseendeVerdi);
+      // Utkastet slippes først når de nye verdiene er hentet, ellers blinker forhåndsvisningen
+      // tilbake til det gamle et øyeblikk.
+      await last();
+      forkast();
+      setVersjon((v) => v + 1);
+      return true;
+    } catch (e) {
+      setLagrefeil(e instanceof Error ? e.message : "Kunne ikke lagre");
+      void last();
+      return false;
+    } finally {
+      setLagrer(false);
+    }
+  }
+
+  /** Kjører handlingen, eller spør først hvis den ville kastet ulagrede endringer. */
+  const vokt = (handling: () => void, gjelder: boolean = endret) => (gjelder ? setVentende({ handling }) : handling());
+
+  /** Begge skjermvelgerne (kortene og nedtrekket i forhåndsvisningen) går gjennom denne. */
+  const velgSkjerm = (id: string) => {
+    if (id === skjerm?.id) return;
+    vokt(() => {
+      setSkjermUtkast(null);
+      setValgtFelt(null);
+      setValgtSkjerm(id);
+    }, skjermEndret);
+  };
+
+  // Orgbytte: utkastet hører til forrige borettslag.
+  useEffect(() => {
+    setSkjermUtkast(null);
+    setUtseendeUtkast({});
+    setValgtSkjerm(null);
+    setValgtFelt(null);
+    setVentende(null);
+  }, [orgId]);
+
+  // Advarsel før siden forlates. Next har ingen sperre for klientnavigasjon, så lenkeklikk
+  // fanges her; lukking og omlasting tar nettleseren selv (`beforeunload`).
+  useEffect(() => {
+    if (!endret) return;
+    const paaKlikk = (e: MouseEvent) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!(a instanceof HTMLAnchorElement) || a.target === "_blank") return;
+      if (a.origin !== window.location.origin || a.pathname === window.location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const mal = a.pathname + a.search + a.hash;
+      setVentende({ handling: () => router.push(mal) });
+    };
+    const paaLukk = (e: BeforeUnloadEvent) => e.preventDefault();
+    document.addEventListener("click", paaKlikk, true);
+    window.addEventListener("beforeunload", paaLukk);
+    return () => {
+      document.removeEventListener("click", paaKlikk, true);
+      window.removeEventListener("beforeunload", paaLukk);
+    };
+  }, [endret, router]);
+
+  // --- Første gangs oppsett -------------------------------------------------------------
+  /** Avgjøres én gang per borettslag, når dataene er hentet: ingen skjermer ⇒ tre steg. */
+  const [forstegang, setForstegang] = useState<{ o: string; aktiv: boolean } | null>(null);
+  const [steg2Ferdig, setSteg2Ferdig] = useState(false);
+  useEffect(() => {
+    if (!fersk || !orgId || forstegang?.o === orgId) return;
+    setForstegang({ o: orgId, aktiv: fersk[2].length === 0 });
+    setSteg2Ferdig(false);
+  }, [fersk, orgId, forstegang]);
+  const iForstegang = forstegang?.o === orgId && forstegang?.aktiv === true;
+  const avsluttForstegang = () => orgId && setForstegang({ o: orgId, aktiv: false });
+
+  /** «nytt» = tomt skjema; ellers oppslaget eller hendelsen som redigeres. */
+  const [redigerer, setRedigerer] = useState<{ oppslag: Oppslag } | { hendelse: Tavlehendelse } | "nytt" | null>(null);
   const [kobler, setKobler] = useState(false);
-  const [blokkRedigering, setBlokkRedigering] = useState<Tavleblokk | null>(null);
-  /** «Vises: Sidefelt · alle skjermer [Endre]» for en blokk — øverst i kortet som eier den. */
-  const plass = (nokkel: string) =>
-    orgId && (
-      <Plasseringslinje
-        orgId={orgId}
-        plassering={plasseringer.find((p) => p.nokkel === nokkel)}
-        skjermer={skjermer}
-        kanRedigere={kanRedigere}
-        onEndret={oppdater}
-      />
-    );
+
+  const oppsett = skjerm && skjermVerdi && orgId && (
+    <Skjermoppsett
+      key={skjerm.id}
+      orgId={orgId}
+      skjerm={skjerm}
+      verdi={skjermVerdi}
+      onEndre={endreSkjerm}
+      valgtFelt={valgtFelt}
+      onVelgFelt={setValgtFelt}
+      blokker={blokker}
+      bir={bir}
+      kontakter={kontakter}
+      erAdmin={erAdmin}
+      kanRedigere={kanRedigere}
+      onEndret={oppdater}
+      onFjernet={() => {
+        forkast();
+        setValgtSkjerm(null);
+        setValgtFelt(null);
+        oppdater();
+      }}
+      utenFjern={iForstegang}
+    />
+  );
 
   return (
     <Layout
       tittel="Oppslagstavle"
       subnav={
-        <Faner
-          valgt={fane}
-          onVelg={setFane}
-          faner={[
-            { nokkel: "innhold", etikett: "Innhold" },
-            { nokkel: "skjermer", etikett: "Skjermer og utseende" },
-          ]}
-        />
+        !iForstegang && (
+          <Faner
+            valgt={fane}
+            onVelg={setFane}
+            faner={[
+              { nokkel: "innhold", etikett: "Innhold" },
+              { nokkel: "oppsett", etikett: "Skjermer og oppsett" },
+            ]}
+          />
+        )
       }
       handlinger={
-        fane === "innhold"
-          ? kanRedigere && (
-              <button className="btn btn-primary" onClick={() => setRedigerer("nytt")}>
-                <Plus size={16} strokeWidth={2} aria-hidden />
-                Nytt innhold
-              </button>
-            )
-          : erAdmin && (
-              <button className="btn btn-primary" onClick={() => setKobler(true)}>
-                <Plus size={16} strokeWidth={2} aria-hidden />
-                Koble til skjerm
-              </button>
-            )
+        iForstegang
+          ? null
+          : fane === "innhold"
+            ? kanRedigere && (
+                <button className="btn btn-primary" onClick={() => setRedigerer("nytt")}>
+                  <Plus size={16} strokeWidth={2} aria-hidden />
+                  Nytt innhold
+                </button>
+              )
+            : erAdmin && (
+                <button className="btn btn-primary" onClick={() => setKobler(true)}>
+                  <Plus size={16} strokeWidth={2} aria-hidden />
+                  Koble til skjerm
+                </button>
+              )
       }
     >
       <div className="page-content">
         <Feil melding={feil} />
-        <div className={`ot-oppsett${skjerm?.retning === "liggende" ? " liggende" : ""}`}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
-            {fane === "innhold" ? (
-              <>
+        <div className={`ot-oppsett${skjermVerdi?.retning === "liggende" ? " liggende" : ""}`}>
+          <div className="ot-kolonne">
+            {!fersk || !orgId ? null : iForstegang ? (
+              <Forstegang
+                erAdmin={erAdmin}
+                kanRedigere={kanRedigere}
+                harSkjerm={skjermer.length > 0}
+                steg2Ferdig={steg2Ferdig}
+                lagrer={lagrer}
+                lagrefeil={lagrefeil}
+                oppsett={oppsett}
+                onKoble={() => setKobler(true)}
+                onSteg2={async () => {
+                  if (!endret || (await lagre())) setSteg2Ferdig(true);
+                }}
+                onOppslag={() => setRedigerer("nytt")}
+                onHoppOver={() => vokt(avsluttForstegang)}
+              />
+            ) : fane === "innhold" ? (
               <Innhold
                 orgId={orgId}
                 oppslag={oppslag}
                 hendelser={hendelser}
                 skjermer={skjermer}
                 kanRedigere={kanRedigere}
+                valgtOppslag={visOppslagId}
                 onEndret={oppdater}
-                onRediger={setRedigerer}
-                plass={plass}
+                onVelgOppslag={(p) => {
+                  setVisOppslagId(p.id);
+                  if (kanRedigere) setRedigerer({ oppslag: p });
+                }}
+                onVelgHendelse={(h) => setRedigerer({ hendelse: h })}
               />
-              {orgId && (
-                <BlokkListe
-                  orgId={orgId}
-                  blokker={blokker}
-                  plasseringer={plasseringer}
-                  skjermer={skjermer}
-                  kanRedigere={kanRedigere}
-                  onRediger={setBlokkRedigering}
-                  onEndret={oppdater}
-                />
-              )}
-              <BirKort erAdmin={kanRedigere} onEndret={oppdater} topp={plass("tommedager")} />
-              {orgId && (
-                <Kontaktpersoner
-                  orgId={orgId}
-                  kontakter={kontakter}
-                  erAdmin={erAdmin}
-                  onEndret={oppdater}
-                  topp={plass("kontakt")}
-                />
-              )}
-              </>
             ) : (
-              <Skjermer
-                orgId={orgId}
-                skjermer={skjermer}
-                valgt={skjerm}
-                onVelg={setValgtSkjerm}
-                utseende={utseende}
-                erAdmin={erAdmin}
-                onEndret={oppdater}
-              />
+              <>
+                {skjermer.length === 0 ? (
+                  <Tom tekst={erAdmin ? "Ingen skjermer ennå. Trykk «Koble til skjerm»." : "Ingen skjermer ennå. Bare orgadmin kan koble til skjermer."} />
+                ) : (
+                  <Skjermliste
+                    skjermer={skjermer}
+                    valgt={skjerm}
+                    valgtFelt={skjermVerdi && { mal: finnMal(skjermVerdi.mal, skjermVerdi.retning), felt: skjermVerdi.felt }}
+                    onVelg={velgSkjerm}
+                    blokker={blokker}
+                    bir={bir}
+                  />
+                )}
+                {oppsett}
+                {erAdmin && utseendeVerdi && (
+                  <>
+                    <Utseende
+                      orgId={orgId}
+                      harLogo={utseende?.harLogo ?? false}
+                      verdi={utseendeVerdi}
+                      onEndre={endreUtseende}
+                      onEndret={oppdater}
+                    />
+                    <Drift verdi={utseendeVerdi} onEndre={endreUtseende} />
+                  </>
+                )}
+              </>
             )}
           </div>
           <Forhandsvisning
             orgId={orgId}
             skjermer={skjermer}
             skjerm={skjerm}
-            onVelg={setValgtSkjerm}
+            skjermVerdi={skjermVerdi}
+            utseendeVerdi={utseendeVerdi}
+            onVelg={velgSkjerm}
             versjon={versjon}
             harLogo={utseende?.harLogo ?? false}
+            markertSone={iForstegang || fane === "oppsett" ? valgtFelt : null}
+            visOppslagId={visOppslagId}
+            ulagret={endret}
           />
         </div>
+
+        {endret && !iForstegang && (
+          <div className="ot-lagrelinje" role="status">
+            <div>
+              <b>Ulagrede endringer</b>
+              {lagrefeil && <span className="ot-lagrelinje-feil">{lagrefeil}</span>}
+            </div>
+            <div className="ot-lagrelinje-knapper">
+              <button type="button" className="btn btn-ghost" disabled={lagrer} onClick={forkast}>
+                Forkast
+              </button>
+              <button type="button" className="btn btn-primary" disabled={lagrer} onClick={() => void lagre()}>
+                {lagrer ? "Lagrer …" : "Lagre"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {redigerer && orgId && (
         <OppslagSkjema
           orgId={orgId}
           skjermer={skjermer}
-          eksisterende={redigerer === "nytt" ? null : redigerer}
+          eksisterende={redigerer !== "nytt" && "oppslag" in redigerer ? redigerer.oppslag : null}
+          hendelse={redigerer !== "nytt" && "hendelse" in redigerer ? redigerer.hendelse : null}
           onLukk={() => setRedigerer(null)}
           onLagret={() => {
             setRedigerer(null);
             oppdater();
+            // Første oppslag er lagt ut: oppsettet er ferdig, og det daglige tar over.
+            if (iForstegang && !endret) {
+              avsluttForstegang();
+              setFane("innhold");
+            }
           }}
         />
-      )}
-      {blokkRedigering && orgId && (
-        <Modal
-          tittel={`Endre ${BLOKKTYPE_NAVN[blokkRedigering.type].toLowerCase()}`}
-          onLukk={() => setBlokkRedigering(null)}
-          bredde={720}
-        >
-          <BlokkSkjema
-            orgId={orgId}
-            type={blokkRedigering.type}
-            eksisterende={blokkRedigering}
-            skjermer={skjermer}
-            plassering={plasseringer.find((p) => p.nokkel === blokkRedigering.nokkel)}
-            onAvbryt={() => setBlokkRedigering(null)}
-            onLagret={() => {
-              setBlokkRedigering(null);
-              oppdater();
-            }}
-          />
-        </Modal>
       )}
       {kobler && orgId && (
         <KobleSkjerm
@@ -229,770 +387,165 @@ export default function Oppslagstavle() {
           onLukk={() => setKobler(false)}
           onKoblet={(s) => {
             setKobler(false);
+            setSkjermUtkast(null);
+            setValgtFelt(null);
             setValgtSkjerm(s.id);
             oppdater();
           }}
         />
+      )}
+      {ventende && (
+        <Modal tittel="Ulagrede endringer" onLukk={() => setVentende(null)} bredde={460}>
+          <div>Du har endringer som ikke er lagret. Vil du lagre dem før du går videre?</div>
+          <Feil melding={lagrefeil} />
+          <div className="ot-skjemafot">
+            <button type="button" className="btn btn-ghost" onClick={() => setVentende(null)}>
+              Bli her
+            </button>
+            <div className="ot-lagrelinje-knapper">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={lagrer}
+                onClick={() => {
+                  const { handling } = ventende;
+                  setVentende(null);
+                  forkast();
+                  handling();
+                }}
+              >
+                Forkast
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={lagrer}
+                onClick={async () => {
+                  const { handling } = ventende;
+                  if (!(await lagre())) return;
+                  setVentende(null);
+                  handling();
+                }}
+              >
+                {lagrer ? "Lagrer …" : "Lagre"}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </Layout>
   );
 }
 
 // ---------------------------------------------------------------------------------------
-// Innhold
+// Første gangs oppsett
 // ---------------------------------------------------------------------------------------
 
-function Innhold({
-  orgId,
-  oppslag,
-  hendelser,
-  skjermer,
+/**
+ * Tre steg i stedet for fanene når borettslaget ikke har noen skjerm: koble til, velg mal og
+ * innhold i feltene, legg ut første oppslag. Alt på én flate, så et styremedlem kommer fra
+ * start til første oppslag uten å lete i faner.
+ */
+function Forstegang({
+  erAdmin,
   kanRedigere,
-  onEndret,
-  onRediger,
-  plass,
+  harSkjerm,
+  steg2Ferdig,
+  lagrer,
+  lagrefeil,
+  oppsett,
+  onKoble,
+  onSteg2,
+  onOppslag,
+  onHoppOver,
 }: {
-  orgId: string | undefined;
-  onRediger: (p: Oppslag) => void;
-  plass: (nokkel: string) => React.ReactNode;
-  oppslag: Oppslag[];
-  hendelser: Awaited<ReturnType<typeof oppslagstavle.hendelser>>;
-  skjermer: Skjerm[];
+  erAdmin: boolean;
   kanRedigere: boolean;
-  onEndret: () => void;
+  harSkjerm: boolean;
+  steg2Ferdig: boolean;
+  lagrer: boolean;
+  lagrefeil: string | null;
+  oppsett: React.ReactNode;
+  onKoble: () => void;
+  onSteg2: () => void;
+  onOppslag: () => void;
+  onHoppOver: () => void;
 }) {
-  const [filter, setFilter] = useState<Status | "alle">("alle");
-  const [feil, setFeil] = useState<string | null>(null);
-  const synlige = oppslag.filter((p) => filter === "alle" || p.status === filter);
-  const navn = new Map(skjermer.map((s) => [s.id, s.navn]));
-
-  async function slett(handling: () => Promise<unknown>) {
-    setFeil(null);
-    try {
-      await handling();
-      onEndret();
-    } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke slette");
-    }
-  }
-
+  const aktivt = !harSkjerm ? 1 : !steg2Ferdig ? 2 : 3;
+  const steg = (nr: number, tittel: string, kropp: React.ReactNode) => (
+    <div className={`card ot-steg${nr < aktivt ? " ferdig" : nr === aktivt ? " aktiv" : ""}`}>
+      <div className="ot-steg-hode">
+        <span className="ot-steg-nr">{nr < aktivt ? <Check size={14} aria-label="Ferdig" /> : nr}</span>
+        <b>{tittel}</b>
+      </div>
+      {nr === aktivt && <div className="ot-steg-kropp">{kropp}</div>}
+    </div>
+  );
   return (
     <>
-      <Feil melding={feil} />
-      <Kort
-        tittel="Oppslag"
-        handling={
-          <div className="ot-filter">
-            {(["alle", "na", "planlagt", "utlopt"] as const).map((f) => (
-              <button key={f} className={`ot-chip${filter === f ? " valgt" : ""}`} onClick={() => setFilter(f)}>
-                {f === "alle" ? "Alle" : STATUS_ETIKETT[f]}
-              </button>
-            ))}
-          </div>
-        }
-      >
-        {plass("oppslag")}
-        {synlige.length === 0 && (
-          <Tom tekst={oppslag.length === 0 ? "Ingen oppslag ennå. Trykk «Nytt innhold» for å legge ut noe." : "Ingen oppslag her."} />
-        )}
-        {synlige.map((p) => (
-          <Rad
-            key={p.id}
-            tittel={p.title}
-            meta={[
-              p.kind === "bilde" ? "Bilde" : KATEGORI_ETIKETT[p.category ?? "info"],
-              `${dato(p.showFrom)} – ${dato(p.showUntil)}`,
-              p.allScreens ? "Alle skjermer" : p.screenIds.map((id) => navn.get(id) ?? "Fjernet skjerm").join(", "),
-              `${p.displaySeconds} sek`,
-            ].join(" · ")}
-            onClick={kanRedigere ? () => onRediger(p) : undefined}
-            hoyre={
-              <>
-                <span className={`badge ${p.status === "na" ? "ok" : p.status === "planlagt" ? "info" : ""}`}>
-                  {STATUS_ETIKETT[p.status]}
-                </span>
-                {kanRedigere && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    aria-label={`Endre ${p.title}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRediger(p);
-                    }}
-                  >
-                    <Pencil size={14} aria-hidden />
-                  </button>
-                )}
-                {kanRedigere && orgId && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    aria-label={`Slett ${p.title}`}
-                    onClick={(e) => {
-                      // Raden selv åpner redigering — slettknappen skal ikke gjøre begge deler.
-                      e.stopPropagation();
-                      if (window.confirm(`Slette «${p.title}»? Det forsvinner fra skjermene med en gang.`)) {
-                        void slett(() => oppslagstavle.slettOppslag(orgId, p.id));
-                      }
-                    }}
-                  >
-                    <Trash2 size={14} aria-hidden />
-                  </button>
-                )}
-              </>
-            }
-          />
-        ))}
-      </Kort>
-
-      <Kort tittel="Kalender">
-        {plass("kalender")}
-        {hendelser.length === 0 && <Tom tekst="Ingen kommende hendelser." />}
-        {hendelser.map((h) => (
-          <Rad
-            key={h.id}
-            tittel={h.title}
-            meta={[dato(h.eventDate), h.eventTime && `kl. ${h.eventTime}`, h.place].filter(Boolean).join(" · ")}
-            hoyre={
-              kanRedigere &&
-              orgId && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  aria-label={`Slett ${h.title}`}
-                  onClick={() =>
-                    window.confirm(`Slette «${h.title}» fra kalenderen?`) &&
-                    void slett(() => oppslagstavle.slettHendelse(orgId, h.id))
-                  }
-                >
-                  <Trash2 size={14} aria-hidden />
-                </button>
-              )
-            }
-          />
-        ))}
-      </Kort>
-    </>
-  );
-}
-
-type Innholdstype = "tekst" | "bilde" | "hendelse" | "vaer" | "avganger" | "tommedager";
-
-/**
- * Nytt innhold, eller redigering av et oppslag. Ved redigering står typen fast — et nytt
- * bilde er et nytt oppslag — og kalenderhendelser redigeres ikke her.
- */
-function OppslagSkjema({
-  orgId,
-  skjermer,
-  eksisterende,
-  onLukk,
-  onLagret,
-}: {
-  orgId: string;
-  skjermer: Skjerm[];
-  eksisterende: Oppslag | null;
-  onLukk: () => void;
-  onLagret: () => void;
-}) {
-  const iDag = osloIDag();
-  const omToUker = osloIDag(new Date(Date.now() + 14 * 86_400_000));
-  const e = eksisterende;
-  const [type, setType] = useState<Innholdstype>(e?.kind ?? "tekst");
-  const erBlokk = type === "vaer" || type === "avganger" || type === "tommedager";
-  const [tittel, setTittel] = useState(e?.title ?? "");
-  const [tekst, setTekst] = useState(e?.body ?? "");
-  const [kategori, setKategori] = useState<Kategori>(e?.category ?? "info");
-  const [fil, setFil] = useState<File | null>(null);
-  const [fra, setFra] = useState(e?.showFrom ?? iDag);
-  const [til, setTil] = useState(e?.showUntil ?? omToUker);
-  const [alle, setAlle] = useState(e?.allScreens ?? true);
-  const [utvalg, setUtvalg] = useState<string[]>(e?.screenIds ?? []);
-  const [sekunder, setSekunder] = useState(e?.displaySeconds ?? STANDARD_SEKUNDER);
-  const [hDato, setHDato] = useState(iDag);
-  const [hTid, setHTid] = useState("");
-  const [hSted, setHSted] = useState("");
-  const { sender, feil, send } = useSending(onLagret);
-
-  function lagre(ev: React.FormEvent) {
-    ev.preventDefault();
-    const periode = { fra, til, alleSkjermer: alle, skjermIder: alle ? [] : utvalg, sekunder };
-    void send(async () => {
-      if (e) {
-        return oppslagstavle.endreOppslag(orgId, e.id, { tittel, tekst: tekst || null, kategori, ...periode });
-      }
-      if (type === "hendelse") {
-        return oppslagstavle.nyHendelse(orgId, { tittel, dato: hDato, tid: hTid || null, sted: hSted || null });
-      }
-      if (type === "bilde") {
-        if (!fil) throw new Error("Velg et bilde");
-        return oppslagstavle.nyttBildeoppslag(orgId, { tittel, ...periode }, fil);
-      }
-      return oppslagstavle.nyttTekstoppslag(orgId, { tittel, tekst: tekst || null, kategori, ...periode });
-    });
-  }
-
-  return (
-    <Modal tittel={e ? "Endre oppslag" : "Nytt innhold"} onLukk={onLukk} bredde={720}>
-      {!e && (
-        <div className="ot-typer">
-          {(
-            [
-              ["tekst", "Tekst", "Oppslag med overskrift og tekst"],
-              ["bilde", "Bilde", "JPG, PNG eller WebP med bildetekst"],
-              ["hendelse", "Kalender", "Hendelse i kalenderfeltet"],
-              ["vaer", "Vær", "Varsel fra MET Norway (yr) for et sted"],
-              ["avganger", "Avganger", "Sanntid fra Entur for en eller to holdeplasser"],
-              ["tommedager", "Tømmedager", "Hentes fra BIR hver uke"],
-            ] as const
-          ).map(([n, t, b]) => (
-            <button type="button" key={n} className={`ot-type${type === n ? " valgt" : ""}`} onClick={() => setType(n)}>
-              <b>{t}</b>
-              <span>{b}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {(type === "vaer" || type === "avganger") && (
-        <BlokkSkjema
-          key={type}
-          orgId={orgId}
-          type={type}
-          eksisterende={null}
-          skjermer={skjermer}
-          plassering={undefined}
-          onAvbryt={onLukk}
-          onLagret={onLagret}
-        />
-      )}
-      {type === "tommedager" && (
+      <div className="field-note">
+        Oppslagstavla viser oppslag fra styret på skjermer i bygget. Tre steg, så er den første skjermen i gang.
+      </div>
+      {steg(
+        1,
+        "Koble til skjerm",
         <>
-          <BirKort erAdmin onEndret={() => {}} />
-          <div className="field-note">
-            Tømmedagene er én blokk for hele borettslaget. Hvor de vises, endrer du i kortet «Tømmedager fra BIR»
-            under Innhold (standard: stripen nederst).
+          <div>
+            Åpne <b>/skjerm</b> på appens adresse i nettleseren på skjermen, i fullskjerm. Skjermen viser en kode på
+            seks tegn.
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-primary" onClick={onLagret}>
-              Ferdig
-            </button>
-          </div>
-        </>
-      )}
-      {!erBlokk && (
-      <form onSubmit={lagre} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-
-        {type === "hendelse" ? (
-          <>
-            <Tekstfelt etikett="Hva" verdi={tittel} onEndre={setTittel} plassholder="Åpent styremøte" />
-            <div className="ot-to">
-              <Tekstfelt etikett="Dato" type="date" verdi={hDato} onEndre={setHDato} />
-              <Tekstfelt etikett="Klokkeslett" type="time" verdi={hTid} onEndre={setHTid} notat="Valgfritt" />
-            </div>
-            <Tekstfelt etikett="Hvor" verdi={hSted} onEndre={setHSted} plassholder="Fellesrommet" />
-          </>
-        ) : (
-          <>
-            {type === "bilde" && !e && (
-              <Skjemafelt etikett="Bilde" notat="Liggende bilder passer best. Maks 10 MB.">
-                <input
-                  className="input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => setFil(e.target.files?.[0] ?? null)}
-                />
-              </Skjemafelt>
-            )}
-            <Tekstfelt
-              etikett={type === "bilde" ? "Bildetekst" : "Overskrift"}
-              verdi={tittel}
-              onEndre={setTittel}
-              plassholder={type === "bilde" ? "Nytt uteområde er ferdig" : "Vannet stenges torsdag"}
-            />
-            {type === "tekst" && (
-              <>
-                <Tekstomrade
-                  etikett="Tekst"
-                  verdi={tekst}
-                  onEndre={setTekst}
-                  rader={5}
-                  notat={`${tekst.length}/400 tegn. Kort er bedre — det leses i forbifarten.`}
-                />
-                <Nedtrekk
-                  etikett="Type"
-                  verdi={kategori}
-                  onEndre={(v) => setKategori(v as Kategori)}
-                  valg={KATEGORIER.map((k) => ({ verdi: k, etikett: KATEGORI_ETIKETT[k] }))}
-                  notat={`${KATEGORI_BESKRIVELSE[kategori]} Typen endrer bare merkelappen og fargen.`}
-                />
-              </>
-            )}
-            <div className="ot-to">
-              <Tekstfelt etikett="Vis fra" type="date" verdi={fra} onEndre={setFra} />
-              <Tekstfelt etikett="Til og med" type="date" verdi={til} onEndre={setTil} />
-            </div>
-            <Nedtrekk
-              etikett="Visningstid"
-              verdi={String(sekunder)}
-              onEndre={(v) => setSekunder(Number(v))}
-              valg={VISNINGSTIDER.map((n) => ({ verdi: String(n), etikett: `${n} sekunder` }))}
-              notat="Hvor lenge oppslaget står før skjermen går videre til neste."
-            />
-            <Avkryssing
-              etikett="Vis på alle skjermer"
-              verdi={alle}
-              onEndre={setAlle}
-              notat="Gjelder også skjermer som kobles til senere."
-            />
-            {!alle && (
-              <div className="ot-filter">
-                {skjermer.map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    className={`ot-chip${utvalg.includes(s.id) ? " valgt" : ""}`}
-                    onClick={() =>
-                      setUtvalg((u) => (u.includes(s.id) ? u.filter((x) => x !== s.id) : [...u, s.id]))
-                    }
-                  >
-                    {s.navn}
-                  </button>
-                ))}
-                {skjermer.length === 0 && <span className="field-note">Ingen skjermer er koblet til ennå.</span>}
-              </div>
-            )}
-          </>
-        )}
-        <Feil melding={feil} />
-        <Knapperad
-          onAvbryt={onLukk}
-          sender={sender}
-          sendEtikett={e ? "Lagre" : type === "hendelse" ? "Legg i kalenderen" : "Legg ut"}
-        />
-      </form>
-      )}
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------------------------------
-// Skjermer og utseende
-// ---------------------------------------------------------------------------------------
-
-function Skjermer({
-  orgId,
-  skjermer,
-  valgt,
-  onVelg,
-  utseende,
-  erAdmin,
-  onEndret,
-}: {
-  orgId: string | undefined;
-  skjermer: Skjerm[];
-  valgt: Skjerm | null;
-  onVelg: (id: string) => void;
-  utseende: Tavleutseende | null;
-  erAdmin: boolean;
-  onEndret: () => void;
-}) {
-  return (
-    <>
-      {!erAdmin && (
-        <div className="field-note">Bare orgadmin kan koble til skjermer og endre utseendet.</div>
-      )}
-      <Kort tittel={`Skjermer (${skjermer.length})`}>
-        <div className="card-body">
-          {skjermer.length === 0 ? (
-            <div className="field-note">
-              Ingen skjermer ennå. Åpne <b>/skjerm</b> på appens adresse i nettleseren på skjermen — den
-              viser en kode på seks tegn. Trykk så «Koble til skjerm» her.
+          {erAdmin ? (
+            <div>
+              <button className="btn btn-primary" onClick={onKoble}>
+                <Plus size={16} strokeWidth={2} aria-hidden />
+                Koble til skjerm
+              </button>
             </div>
           ) : (
-            <div className="auto-grid">
-              {skjermer.map((s) => (
-                <button
-                  key={s.id}
-                  className={`ot-skjermkort${valgt?.id === s.id ? " valgt" : ""}`}
-                  onClick={() => onVelg(s.id)}
-                >
-                  <b>{s.navn}</b>
-                  <span>
-                    <i className={`ot-prikk ${s.paaNett ? "ok" : "nede"}`} />
-                    {s.paaNett ? "På nett" : `Sist sett ${siden(s.sistSett)}`}
-                  </span>
-                  <span>{RETNING_ETIKETT[s.retning]}{s.adresse ? ` · ${s.adresse}` : ""}</span>
-                </button>
-              ))}
+            <div className="field-note">Bare orgadmin kan koble til skjermer.</div>
+          )}
+        </>,
+      )}
+      {steg(
+        2,
+        "Velg mal og innhold i feltene",
+        <>
+          <div>
+            Velg hvordan skjermen deles opp, og klikk på et felt i kartet for å velge hva som står der. Skjermen starter
+            med et vanlig oppsett, så du kan også gå rett videre.
+          </div>
+          {oppsett}
+          <Feil melding={lagrefeil} />
+          <div>
+            <button className="btn btn-primary" disabled={lagrer} onClick={onSteg2}>
+              {lagrer ? "Lagrer …" : "Lagre og gå videre"}
+            </button>
+          </div>
+        </>,
+      )}
+      {steg(
+        3,
+        "Legg ut første oppslag",
+        <>
+          <div>Skriv en beskjed til beboerne. Den vises på skjermen innen ett minutt.</div>
+          {kanRedigere && (
+            <div>
+              <button className="btn btn-primary" onClick={onOppslag}>
+                <Plus size={16} strokeWidth={2} aria-hidden />
+                Legg ut første oppslag
+              </button>
             </div>
           )}
-        </div>
-      </Kort>
-
-      {valgt && orgId && erAdmin && (
-        <Skjerminnstillinger key={valgt.id} orgId={orgId} skjerm={valgt} onEndret={onEndret} />
+        </>,
       )}
-      {utseende && orgId && erAdmin && <Utseende orgId={orgId} utseende={utseende} onEndret={onEndret} />}
+      {harSkjerm && (
+        <div>
+          <button type="button" className="ot-lenke" onClick={onHoppOver}>
+            Hopp over og gå til oppslagstavla
+          </button>
+        </div>
+      )}
     </>
-  );
-}
-
-function Skjerminnstillinger({ orgId, skjerm, onEndret }: { orgId: string; skjerm: Skjerm; onEndret: () => void }) {
-  const [navn, setNavn] = useState(skjerm.navn);
-  const [adresse, setAdresse] = useState(skjerm.adresse ?? "");
-  const [retning, setRetning] = useState<Retning>(skjerm.retning);
-  const [mal, setMal] = useState(skjerm.mal);
-  const [skala, setSkala] = useState(skjerm.skala);
-  const { sender, feil, send } = useSending(onEndret);
-
-  return (
-    <Kort tittel={`Innstillinger for ${skjerm.navn}`}>
-      <form
-        className="card-body"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(() => oppslagstavle.endreSkjerm(orgId, skjerm.id, { navn, adresse: adresse || null, retning, skala, mal }));
-        }}
-      >
-        <div className="ot-to">
-          <Tekstfelt etikett="Navn" verdi={navn} onEndre={setNavn} />
-          <Tekstfelt etikett="Adresse på skjermen" verdi={adresse} onEndre={setAdresse} />
-        </div>
-        <Nedtrekk
-          etikett="Retning"
-          verdi={retning}
-          onEndre={(v) => setRetning(v as Retning)}
-          valg={RETNINGER.map((r) => ({ verdi: r, etikett: RETNING_ETIKETT[r] }))}
-          notat="Følger hvordan skjermen er montert."
-        />
-        <Nedtrekk
-          etikett="Skalering"
-          verdi={String(skala)}
-          onEndre={(v) => setSkala(Number(v))}
-          valg={SKALERINGER.map((n) => ({ verdi: String(n), etikett: `${n} %${n === STANDARD_SKALERING ? " (standard)" : ""}` }))}
-          notat="Mindre gir plass til mer innhold, større leses på lengre avstand. Oppløsningen spiller ingen rolle — 4K og Full HD ser like ut."
-        />
-        <MalVelger retning={retning} malId={mal} onEndre={setMal} />
-        <Feil melding={feil} />
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() =>
-              window.confirm(`Fjerne «${skjerm.navn}»? Skjermen går tilbake til koblingskoden og må kobles på nytt.`) &&
-              void send(() => oppslagstavle.slettSkjerm(orgId, skjerm.id))
-            }
-          >
-            Fjern skjerm
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={sender}>
-            {sender ? "Lagrer …" : "Lagre"}
-          </button>
-        </div>
-      </form>
-    </Kort>
-  );
-}
-
-/**
- * Kontaktpersonene i kontaktfeltet: DriftIQ-brukere i borettslaget. Navn, telefon og e-post
- * kommer fra profilen, rollen fra tittelen under Brukere — styret velger bare hvem og hva
- * som vises. De roterer på skjermen i rekkefølgen her. Uten noen vises borettslagets egen
- * telefon og e-post.
- */
-function Kontaktpersoner({
-  orgId,
-  kontakter,
-  erAdmin,
-  onEndret,
-  topp,
-}: {
-  orgId: string;
-  kontakter: Tavlekontakt[];
-  erAdmin: boolean;
-  onEndret: () => void;
-  topp?: React.ReactNode;
-}) {
-  const [skjema, setSkjema] = useState<Tavlekontakt | "ny" | null>(null);
-  const [feil, setFeil] = useState<string | null>(null);
-
-  async function utfor(handling: () => Promise<unknown>) {
-    setFeil(null);
-    try {
-      await handling();
-      onEndret();
-    } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Noe gikk galt");
-    }
-  }
-
-  return (
-    <Kort
-      tittel="Kontaktpersoner på skjermen"
-      handling={
-        erAdmin && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setSkjema("ny")}>
-            <Plus size={14} aria-hidden /> Legg til
-          </button>
-        )
-      }
-    >
-      {topp}
-      <Feil melding={feil} />
-      {kontakter.length === 0 && (
-        <Tom tekst="Ingen kontaktpersoner. Skjermen viser borettslagets telefon og e-post." />
-      )}
-      {kontakter.map((k, i) => (
-        <Rad
-          key={k.id}
-          tittel={
-            <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span className="ot-kontakt-mini">
-                {k.harBilde ? <img src={`${oppslagstavle.kontaktbildeSti(orgId, k.id)}?v=${k.bildeVersjon}`} alt="" /> : initialer(k.navn)}
-              </span>
-              {k.navn}
-              {k.rolle && <span className="field-note">{k.rolle}</span>}
-            </span>
-          }
-          meta={
-            [k.visTelefon && k.telefon, k.visEpost && k.epost].filter(Boolean).join(" · ") ||
-            "Verken telefon eller e-post vises"
-          }
-          onClick={erAdmin ? () => setSkjema(k) : undefined}
-          hoyre={
-            erAdmin &&
-            kontakter.length > 1 && (
-              <>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  aria-label={`Flytt ${k.navn} opp`}
-                  disabled={i === 0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void utfor(() => oppslagstavle.flyttKontakt(orgId, k.id, "opp"));
-                  }}
-                >
-                  <ArrowUp size={14} aria-hidden />
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  aria-label={`Flytt ${k.navn} ned`}
-                  disabled={i === kontakter.length - 1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void utfor(() => oppslagstavle.flyttKontakt(orgId, k.id, "ned"));
-                  }}
-                >
-                  <ArrowDown size={14} aria-hidden />
-                </button>
-              </>
-            )
-          }
-        />
-      ))}
-      {skjema && (
-        <KontaktSkjema
-          orgId={orgId}
-          eksisterende={skjema === "ny" ? null : skjema}
-          onLukk={() => setSkjema(null)}
-          onLagret={() => {
-            setSkjema(null);
-            onEndret();
-          }}
-        />
-      )}
-    </Kort>
-  );
-}
-
-function KontaktSkjema({
-  orgId,
-  eksisterende: e,
-  onLukk,
-  onLagret,
-}: {
-  orgId: string;
-  eksisterende: Tavlekontakt | null;
-  onLukk: () => void;
-  onLagret: () => void;
-}) {
-  const { data: kandidater } = useOrgData((o) => oppslagstavle.kontaktkandidater(o));
-  const [brukerId, setBrukerId] = useState(e?.brukerId ?? "");
-  const [visTelefon, setVisTelefon] = useState(e?.visTelefon ?? true);
-  const [visEpost, setVisEpost] = useState(e?.visEpost ?? false);
-  const [fil, setFil] = useState<File | null>(null);
-  const [fjernBilde, setFjernBilde] = useState(false);
-  const { sender, feil, send } = useSending(onLagret);
-  const valgt = e ?? kandidater?.find((k) => k.id === brukerId) ?? null;
-  const telefon = valgt?.telefon ?? null;
-  const epost = valgt?.epost ?? null;
-
-  return (
-    <Modal tittel={e ? `Kontaktperson: ${e.navn}` : "Ny kontaktperson"} onLukk={onLukk}>
-      <form
-        onSubmit={(ev) => {
-          ev.preventDefault();
-          void send(async () => {
-            if (!e) {
-              if (!brukerId) throw new Error("Velg en person");
-              return oppslagstavle.nyKontakt(orgId, { brukerId, visTelefon, visEpost }, fil);
-            }
-            await oppslagstavle.endreKontakt(orgId, e.id, { visTelefon, visEpost });
-            if (fil) await oppslagstavle.settKontaktbilde(orgId, e.id, fil);
-            else if (fjernBilde) await oppslagstavle.fjernKontaktbilde(orgId, e.id);
-          });
-        }}
-      >
-        {!e && (
-          <Nedtrekk
-            etikett="Person"
-            verdi={brukerId}
-            onEndre={setBrukerId}
-            valg={[
-              { verdi: "", etikett: kandidater ? "Velg en bruker …" : "Henter brukere …" },
-              ...(kandidater ?? []).map((k) => ({ verdi: k.id, etikett: k.tittel ? `${k.navn} — ${k.tittel}` : k.navn })),
-            ]}
-            notat="Brukerne i borettslaget. Mangler noen, inviter dem under Brukere først."
-          />
-        )}
-        {valgt && (
-          <div className="field-note" style={{ marginBottom: "10px" }}>
-            Rolle på skjermen: <b>{"rolle" in valgt ? (valgt.rolle ?? "ingen") : (valgt.tittel ?? "ingen")}</b> — det er
-            tittelen under Brukere, og endres der. Telefon og e-post er fra personens profil.
-          </div>
-        )}
-        <Avkryssing
-          etikett={`Vis telefon${telefon ? ` (${telefon})` : ""}`}
-          verdi={visTelefon}
-          onEndre={setVisTelefon}
-          notat={valgt && !telefon ? "Profilen har ikke telefonnummer — ingenting vises før det er lagt inn." : undefined}
-        />
-        <Avkryssing etikett={`Vis e-post${epost ? ` (${epost})` : ""}`} verdi={visEpost} onEndre={setVisEpost} />
-        <Skjemafelt
-          etikett="Bilde (valgfritt)"
-          notat="Et portrett gjør det lettere for beboerne å kjenne igjen personen. Vises rundt på skjermen."
-        >
-          <input
-            className="input"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(ev) => setFil(ev.target.files?.[0] ?? null)}
-          />
-        </Skjemafelt>
-        {e?.harBilde && !fil && <Avkryssing etikett="Fjern bildet" verdi={fjernBilde} onEndre={setFjernBilde} />}
-        <div className="field-note" style={{ marginBottom: "10px" }}>
-          Navn, bilde og det du slår på over, vises offentlig i oppgangen. Legg bare inn personer som har sagt ja.
-        </div>
-        <Feil melding={feil} />
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-          {e ? (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() =>
-                window.confirm(`Fjerne ${e.navn} fra skjermene?`) && void send(() => oppslagstavle.slettKontakt(orgId, e.id))
-              }
-            >
-              Fjern
-            </button>
-          ) : (
-            <span />
-          )}
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button type="button" className="btn btn-ghost" onClick={onLukk}>
-              Avbryt
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={sender}>
-              {sender ? "Lagrer …" : "Lagre"}
-            </button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function Utseende({ orgId, utseende, onEndret }: { orgId: string; utseende: Tavleutseende; onEndret: () => void }) {
-  const [bg, setBg] = useState(utseende.background);
-  const [aksent, setAksent] = useState(utseende.accent);
-  const [offline, setOffline] = useState(utseende.offlineMode);
-  const { sender, feil, send } = useSending(onEndret);
-  // Ny logo ⇒ ny URL, ellers viser nettleseren den gamle fra hurtigbufferen.
-  const [logoVersjon, setLogoVersjon] = useState(0);
-
-  return (
-    <Kort tittel="Utseende for hele borettslaget">
-      <form
-        className="card-body"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(() => oppslagstavle.lagreUtseende(orgId, { background: bg, accent: aksent, offlineMode: offline }));
-        }}
-      >
-        <Skjemafelt etikett="Farger">
-          <div className="ot-filter" style={{ marginBottom: "10px" }}>
-            {FORVALG.map((f) => (
-              <button
-                type="button"
-                key={f.id}
-                className={`ot-chip${bg === f.background && aksent === f.accent ? " valgt" : ""}`}
-                onClick={() => {
-                  setBg(f.background);
-                  setAksent(f.accent);
-                }}
-              >
-                {f.navn}
-              </button>
-            ))}
-          </div>
-          <div className="ot-farger">
-            <label>
-              Bakgrunn
-              <input type="color" value={bg} onChange={(e) => setBg(e.target.value)} />
-            </label>
-            <label>
-              Aksent
-              <input type="color" value={aksent} onChange={(e) => setAksent(e.target.value)} />
-            </label>
-          </div>
-        </Skjemafelt>
-        <Skjemafelt etikett="Logo" notat="PNG, JPG eller WebP, gjerne kvadratisk. Uten logo vises initialene.">
-          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-            <div className="ot-logo-forh">
-              {utseende.harLogo ? <img src={`${oppslagstavle.logoSti(orgId)}?v=${logoVersjon}`} alt="Logo" /> : "—"}
-            </div>
-            <input
-              className="input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              style={{ maxWidth: "260px" }}
-              onChange={(e) => {
-                const fil = e.target.files?.[0];
-                if (fil) void send(() => oppslagstavle.lastOppLogo(orgId, fil).then(() => setLogoVersjon((v) => v + 1)));
-              }}
-            />
-            {utseende.harLogo && (
-              <button type="button" className="btn btn-ghost" onClick={() => void send(() => oppslagstavle.slettLogo(orgId))}>
-                Bruk initialer
-              </button>
-            )}
-          </div>
-        </Skjemafelt>
-        <Nedtrekk
-          etikett="Når skjermen mister nett"
-          verdi={offline}
-          onEndre={(v) => setOffline(v as "siste" | "melding")}
-          valg={[
-            { verdi: "siste", etikett: "Vis siste innhold, med en linje om at den er uten nett" },
-            { verdi: "melding", etikett: "Vis en melding om at skjermen er uten nett" },
-          ]}
-        />
-        <Feil melding={feil} />
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button type="submit" className="btn btn-primary" disabled={sender}>
-            {sender ? "Lagrer …" : "Lagre utseende"}
-          </button>
-        </div>
-      </form>
-    </Kort>
   );
 }
 
@@ -1040,6 +593,7 @@ function KobleSkjerm({
           verdi={retning}
           onEndre={(v) => setRetning(v as Retning)}
           valg={RETNINGER.map((r) => ({ verdi: r, etikett: RETNING_ETIKETT[r] }))}
+          notat="Følger hvordan skjermen er montert. Kan endres senere."
         />
         <Feil melding={feil} />
         <Knapperad onAvbryt={onLukk} sender={sender} sendEtikett="Koble til" />
@@ -1056,16 +610,27 @@ function Forhandsvisning({
   orgId,
   skjermer,
   skjerm,
+  skjermVerdi,
+  utseendeVerdi,
   onVelg,
   versjon,
   harLogo,
+  markertSone,
+  visOppslagId,
+  ulagret,
 }: {
   orgId: string | undefined;
   skjermer: Skjerm[];
   skjerm: Skjerm | null;
+  /** Utkastet: legges over det serveren svarte, så ulagrede endringer vises med en gang. */
+  skjermVerdi: SkjermEndring | null;
+  utseendeVerdi: Utseendeverdi | null;
   onVelg: (id: string) => void;
   versjon: number;
   harLogo: boolean;
+  markertSone: string | null;
+  visOppslagId: string | null;
+  ulagret: boolean;
 }) {
   const skjermId = skjerm?.id ?? null;
   const { data, feil } = useOrgData(
@@ -1076,13 +641,37 @@ function Forhandsvisning({
     () => (orgId && harLogo ? `${oppslagstavle.logoSti(orgId)}?v=${versjon}` : null),
     [orgId, harLogo, versjon],
   );
+  const innhold: Skjerminnhold | null = useMemo(() => {
+    if (!data || data.skjerm.id !== skjermId) return null;
+    return {
+      ...data,
+      skjerm: skjermVerdi
+        ? {
+            ...data.skjerm,
+            navn: skjermVerdi.navn,
+            adresse: skjermVerdi.adresse,
+            retning: skjermVerdi.retning,
+            skala: skjermVerdi.skala,
+            mal: skjermVerdi.mal,
+            soner: skjermVerdi.felt,
+          }
+        : data.skjerm,
+      utseende: { ...data.utseende, ...utseendeVerdi },
+    };
+  }, [data, skjermId, skjermVerdi, utseendeVerdi]);
 
   return (
     <div className="ot-forhand">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
         <div className="card-title">Forhåndsvisning</div>
         {skjermer.length > 1 && (
-          <select className="select" style={{ width: "auto" }} value={skjermId ?? ""} onChange={(e) => onVelg(e.target.value)}>
+          <select
+            className="select"
+            style={{ width: "auto" }}
+            aria-label="Skjerm"
+            value={skjermId ?? ""}
+            onChange={(e) => onVelg(e.target.value)}
+          >
             {skjermer.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.navn}
@@ -1095,22 +684,25 @@ function Forhandsvisning({
       {!skjerm ? (
         <Tom tekst="Koble til en skjerm for å se forhåndsvisningen." />
       ) : (
-        data && (
+        innhold && (
           <>
             <div className="ot-ramme">
               <Tavleskjerm
-                innhold={data}
+                innhold={innhold}
                 logoUrl={logo}
+                markertSone={markertSone}
+                visOppslagId={visOppslagId}
                 bildeUrl={(id) => (orgId ? oppslagstavle.bildeSti(orgId, id) : null)}
                 kontaktbildeUrl={(id) => {
-                  const k = data.kontakter.find((x) => x.id === id);
+                  const k = innhold.kontakter.find((x) => x.id === id);
                   return orgId && k ? `${oppslagstavle.kontaktbildeSti(orgId, id)}?v=${k.bildeVersjon}` : null;
                 }}
               />
             </div>
             <div className="field-note">
-              {skjerm.paaNett ? "På nett" : `Sist sett ${siden(skjerm.sistSett)}`} · {data.oppslag.length} oppslag
-              roterer. Endringer vises på skjermen innen ett minutt.
+              {ulagret
+                ? "Viser ulagrede endringer. Skjermen på veggen endres først når du lagrer."
+                : `${skjerm.paaNett ? "På nett" : sistSett(skjerm.sistSett)} · Endringer vises på skjermen innen ett minutt.`}
             </div>
           </>
         )

@@ -5,8 +5,8 @@
 
 ## Hva det gjør
 
-Vær og avganger er **innholdsblokker**: styret lager dem under «Nytt innhold» (nivå
-redigering), gir dem et navn, og plasserer dem i sonene per skjerm. En org kan ha flere —
+Vær og avganger er **innholdsblokker**: styret lager dem fra feltvelgeren under «Skjermer og
+oppsett» (nivå redigering), gir dem et navn, og orgadmin velger dem inn i et felt per skjerm. En org kan ha flere —
 for eksempel én avgangsblokk per oppgang med hver sin holdeplass.
 
 - **Vær** (`vaer`): et sted (adressesøk via Kartverket, som gir koordinater) og visning
@@ -80,4 +80,4 @@ måne der det finnes en månevariant.
 
 Fjernes vær eller avganger: slett blokktypen fra `BLOKKTYPER`/`blokkInn`, rendereren og
 filene over. Rader av en ukjent type blir blokker uten innstillinger; en migrasjon bør slette
-dem. `lesSoner` ignorerer nøkler til blokker som ikke finnes.
+dem. `slettBlokk` tar nøkkelen ut av feltene; en nøkkel uten blokk hoppes uansett over på skjermen.

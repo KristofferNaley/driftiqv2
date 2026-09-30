@@ -9,6 +9,28 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 30.09.2026 — Oppslagstavla: felt velges per skjerm, migrert i TypeScript
+
+**Hva:** (1) Hva som står i hvert felt, lagres per skjerm (`board_screens.zones`) og velges i
+et klikkbart kart over malen. Plassering per blokk (`board_placements`) er utgått. Et felt
+kan ha flere blokker, som roterer. (2) Migreringen av eksisterende skjermer er et idempotent
+TypeScript-steg i `scripts/oppstart.ts` (`lib/tavlemigrering.ts`), ikke en SQL-migrasjon.
+
+**Hvorfor:** Dette snur justeringen fra 29.09 (under). Plassering på innholdet spredte
+oppsettet over seks kort i Innhold-fanen, og styret kunne ikke se hva en skjerm viste uten å
+lese alle. Innvendingen mot sone for sone den gangen var at det var omstendelig; kartet, der
+feltet klikkes og forhåndsvisningen følger med, er svaret på den. TypeScript for migreringen
+fordi den gamle regelen (`fordelSoner`) da brukes som den er, og skjermene viser det samme
+etterpå per konstruksjon.
+
+**Alternativer:**
+- *Strengt én innholdstype per felt.* Forkastet: den gamle modellen roterte flere blokker i
+  ett felt, så migreringen ville endret det skjermene viser.
+- *Migrering i SQL.* Forkastet: en SQL-kopi av `fordelSoner` er en ny tolkning av regelen,
+  med malene gjentatt i en `CASE`.
+- *Droppe `board_placements` i samme omgang.* Utsatt: SQL-migrasjonene kjører før
+  TypeScript-steget, så tabellen må finnes til alle miljøer har kjørt det.
+
 ## 29.09.2026 — Oppslagstavla: maler med soner, eksterne data i minnet, kontakter fra brukerne
 
 **Hva:** (1) Hver skjerm velger en mal med faste soner, og styret plasserer blokker i

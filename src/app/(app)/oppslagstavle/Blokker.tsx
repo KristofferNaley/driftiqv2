@@ -1,17 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Search, Trash2, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Feil, Kort, Rad, Tom } from "@/components/felles";
 import { Felt as Skjemafelt, Knapperad, Nedtrekk, Tekstfelt, useSending } from "@/components/skjema";
-import { PlasseringFelter, plasseringTekst } from "./Plassering";
+import { Bekreft } from "./felles";
 import {
-  oppslagstavle,
   tavleblokker,
   type AvgangerKonfig,
   type BlokkInn,
-  type Plassering,
-  type Skjerm,
   type Holdeplasstreff,
   type Stedstreff,
   type Tavleblokk,
@@ -20,106 +17,60 @@ import {
 import { MAKS_HOLDEPLASSER, VAERVISNING_ETIKETT, VAERVISNINGER, type Vaervisning } from "@/lib/vaerregler";
 
 /**
- * Innholdsblokker med egne innstillinger: vær (MET/yr) og avganger (Entur). Lages under
- * «Nytt innhold», listes her, og plasseres i sonene per skjerm (SoneOppsett.tsx).
+ * Innholdsblokker med egne innstillinger: vær (MET/yr) og avganger (Entur). Lages og endres
+ * i skjermoppsettet, og velges inn i et felt per skjerm (Feltkart.tsx). Innstillingene
+ * gjelder hele borettslaget.
  * Designnotatet er `docs/entur-yr.md`.
  */
 export const BLOKKTYPE_NAVN = { vaer: "Vær", avganger: "Avganger" } as const;
 
 export function blokkBeskrivelse(b: Tavleblokk): string {
-  if (!b.konfig) return "Ugyldige innstillinger — endre blokken";
+  if (!b.konfig) return "Ugyldige innstillinger. Åpne og lagre på nytt.";
   if (b.type === "vaer") return `${b.konfig.sted} · ${VAERVISNING_ETIKETT[b.konfig.visning]}`;
   return b.konfig.holdeplasser.map((h) => h.navn).join(" og ");
 }
 
 export function BlokkListe({
-  orgId,
   blokker,
-  plasseringer,
-  skjermer,
   kanRedigere,
   onRediger,
-  onEndret,
 }: {
-  orgId: string;
   blokker: Tavleblokk[];
-  plasseringer: Plassering[];
-  skjermer: Skjerm[];
   kanRedigere: boolean;
   onRediger: (b: Tavleblokk) => void;
-  onEndret: () => void;
 }) {
-  const [feil, setFeil] = useState<string | null>(null);
   return (
     <Kort tittel="Vær og avganger">
-      <Feil melding={feil} />
-      {blokker.length === 0 && (
-        <Tom tekst="Ingen blokker ennå. Legg til vær eller avganger under «Nytt innhold»." />
-      )}
+      <div className="ot-felles">Gjelder hele borettslaget, ikke bare denne skjermen.</div>
+      {blokker.length === 0 && <Tom tekst="Ingenting satt opp ennå." />}
       {blokker.map((b) => (
         <Rad
           key={b.id}
           tittel={b.navn}
-          meta={`${BLOKKTYPE_NAVN[b.type]} · ${blokkBeskrivelse(b)} — ${plasseringTekst(
-            plasseringer.find((p) => p.nokkel === b.nokkel),
-            skjermer,
-          )}`}
+          meta={`${BLOKKTYPE_NAVN[b.type]} · ${blokkBeskrivelse(b)}`}
           onClick={kanRedigere ? () => onRediger(b) : undefined}
-          hoyre={
-            kanRedigere && (
-              <>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  aria-label={`Endre ${b.navn}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRediger(b);
-                  }}
-                >
-                  <Pencil size={14} aria-hidden />
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  aria-label={`Slett ${b.navn}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!window.confirm(`Slette «${b.navn}»? Den fjernes fra alle skjermer.`)) return;
-                    setFeil(null);
-                    tavleblokker
-                      .slett(orgId, b.id)
-                      .then(onEndret)
-                      .catch((x: unknown) => setFeil(x instanceof Error ? x.message : "Kunne ikke slette"));
-                  }}
-                >
-                  <Trash2 size={14} aria-hidden />
-                </button>
-              </>
-            )
-          }
         />
       ))}
     </Kort>
   );
 }
 
-/** Skjemaet for en vær- eller avgangsblokk. Brukes inne i «Nytt innhold»-modalen. */
+/** Skjemaet for en vær- eller avgangsblokk. Sletting ligger her, ikke i lista. */
 export function BlokkSkjema({
   orgId,
   type,
   eksisterende,
-  skjermer,
-  plassering,
   onAvbryt,
   onLagret,
+  onSlettet,
 }: {
   orgId: string;
   type: "vaer" | "avganger";
   eksisterende: Tavleblokk | null;
-  skjermer: Skjerm[];
-  /** Nåværende plassering ved redigering; ny blokk får «Sidefelt · alle skjermer». */
-  plassering: Plassering | undefined;
   onAvbryt: () => void;
-  onLagret: () => void;
+  /** Får blokken som ble lagret, så en ny kan legges rett inn i feltet den ble laget fra. */
+  onLagret: (b: Tavleblokk) => void;
+  onSlettet: () => void;
 }) {
   const e = eksisterende;
   const [navn, setNavn] = useState(e?.navn ?? (type === "vaer" ? "Været" : "Neste avganger"));
@@ -130,10 +81,9 @@ export function BlokkSkjema({
   );
   const [visning, setVisning] = useState<Vaervisning>(vaerStart?.visning ?? "timer");
   const [holdeplasser, setHoldeplasser] = useState<AvgangerKonfig["holdeplasser"]>(avgStart?.holdeplasser ?? []);
-  const [hvor, setHvor] = useState<Omit<Plassering, "nokkel">>(
-    plassering ?? { omrade: "side", alleSkjermer: true, skjermIder: [] },
-  );
-  const { sender, feil, send } = useSending(onLagret);
+  const [sletter, setSletter] = useState(false);
+  // Tom `onFerdig`: `onLagret` trenger blokken svaret ga.
+  const { sender, feil, send } = useSending(() => {});
 
   function lagre(ev: React.FormEvent) {
     ev.preventDefault();
@@ -147,9 +97,7 @@ export function BlokkSkjema({
         if (holdeplasser.length === 0) throw new Error("Velg minst én holdeplass");
         d = { type: "avganger", navn, konfig: { holdeplasser } };
       }
-      const blokk = e ? await tavleblokker.endre(orgId, e.id, d) : await tavleblokker.ny(orgId, d);
-      // Plasseringen i samme lagring — en ny blokk skal ikke kreve et ekstra steg for å vises.
-      await oppslagstavle.settPlassering(orgId, { nokkel: blokk.nokkel, ...hvor });
+      onLagret(e ? await tavleblokker.endre(orgId, e.id, d) : await tavleblokker.ny(orgId, d));
     });
   }
 
@@ -159,7 +107,7 @@ export function BlokkSkjema({
         etikett="Navn i oversikten"
         verdi={navn}
         onEndre={setNavn}
-        notat="Vises bare i appen, for å skille blokkene når du plasserer dem på skjermene."
+        notat="Vises bare i appen, når du velger innhold til feltene."
       />
       {type === "vaer" ? (
         <>
@@ -214,9 +162,29 @@ export function BlokkSkjema({
           )}
         </Skjemafelt>
       )}
-      <PlasseringFelter verdi={hvor} skjermer={skjermer} onEndre={setHvor} />
+      <div className="field-note">Innstillingene gjelder hele borettslaget. Hvor det vises, velger du i kartet for hver skjerm.</div>
       <Feil melding={feil} />
-      <Knapperad onAvbryt={onAvbryt} sender={sender} sendEtikett={e ? "Lagre" : "Legg til"} />
+      <div className="ot-skjemafot">
+        {e ? (
+          <button type="button" className="btn btn-ghost" onClick={() => setSletter(true)}>
+            Slett
+          </button>
+        ) : (
+          <span />
+        )}
+        <Knapperad onAvbryt={onAvbryt} sender={sender} sendEtikett={e ? "Lagre" : "Legg til"} />
+      </div>
+      {sletter && e && (
+        <Bekreft
+          tittel={`Slette «${e.navn}»?`}
+          etikett="Slett"
+          sender={sender}
+          onAvbryt={() => setSletter(false)}
+          onBekreft={() => void send(async () => (await tavleblokker.slett(orgId, e.id), onSlettet()))}
+        >
+          Den fjernes fra alle skjermer med en gang.
+        </Bekreft>
+      )}
     </form>
   );
 }

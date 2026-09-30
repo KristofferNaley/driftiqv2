@@ -98,25 +98,43 @@ export function finnMal(id: string | null | undefined, retning: Retning): Mal {
 }
 
 // ---------------------------------------------------------------------------------------
-// Plassering
+// Felt — hva som står hvor, per skjerm
+// ---------------------------------------------------------------------------------------
+
+/** Blokknøklene per felt: `{ a: ["oppslag"], b: ["kalender"], stripe: ["tommedager"] }`. */
+export type Felt = Record<string, string[]>;
+
+/** Feltene i malen i lesefølge, med stripen sist. */
+export const feltI = (mal: Mal): string[] => [...mal.soner, STRIPE];
+
+export const feltNavn = (mal: Mal, felt: string): string =>
+  felt === STRIPE ? "Stripe nederst" : `Felt ${mal.soner.indexOf(felt) + 1}`;
+
+/**
+ * Feltene slik de kan lagres: bare felt malen har, bare kjente nøkler (når `gyldige` er gitt),
+ * og hver nøkkel én gang per felt. Ved malbytte beholdes feltene som finnes i begge maler.
+ */
+export function ryddFelt(mal: Mal, felt: Felt | null | undefined, gyldige?: ReadonlySet<string>): Felt {
+  return Object.fromEntries(
+    feltI(mal).map((f) => {
+      const raa = felt?.[f];
+      const nokler = Array.isArray(raa) ? raa.filter((n) => typeof n === "string" && (!gyldige || gyldige.has(n))) : [];
+      return [f, [...new Set(nokler)]];
+    }),
+  );
+}
+
+/** Feltene i malen som står uten innhold. Stripen teller ikke: tom stripe tar ingen plass. */
+export const tommeFelt = (mal: Mal, felt: Felt): string[] => mal.soner.filter((f) => (felt[f] ?? []).length === 0);
+
+// ---------------------------------------------------------------------------------------
+// Standardfeltene, og den gamle plasseringen per blokk (bare for migreringen)
 // ---------------------------------------------------------------------------------------
 
 export const OMRADER = ["hoved", "side", "stripe", "av"] as const;
 export type Omrade = (typeof OMRADER)[number];
-export const OMRADE_ETIKETT: Record<Omrade, string> = {
-  hoved: "Hovedfelt",
-  side: "Sidefelt",
-  stripe: "Stripe nederst",
-  av: "Ikke vist",
-};
-export const OMRADE_BESKRIVELSE: Record<Omrade, string> = {
-  hoved: "Det store feltet. Flere i hovedfeltet roterer.",
-  side: "De mindre feltene ved siden av. Fordeles automatisk; flere enn det er plass til, roterer.",
-  stripe: "En smal linje nederst — kompakt visning, alt side om side.",
-  av: "Ligger i DriftIQ, men vises ikke på skjermene.",
-};
 
-/** Plasseringen når styret ikke har valgt noe. Egne blokker (vær, avganger) får `side`. */
+/** Hvor de innebygde blokkene havner på en ny skjerm. */
 export const STANDARD_PLASSERING: Record<InnebygdBlokk, Omrade> = {
   oppslag: "hoved",
   kalender: "side",
@@ -129,19 +147,16 @@ export const SIDE_REKKEFOLGE = (nokkel: string) =>
   nokkel === "oppslag" ? 0 : nokkel === "kalender" ? 1 : nokkel.startsWith("blokk:") ? 2 : nokkel === "kontakt" ? 3 : 4;
 
 /**
- * Hvor blokkene havner i malen. `blokker` er de som skal vises på denne skjermen, med
- * område, i rekkefølge.
+ * Fra område per blokk til felt i malen. Regelen fra da plasseringen ble valgt på innholdet;
+ * brukes nå til standardfeltene for en ny skjerm og av `migrerPlasseringerTilFelt`.
  *
- * - `hoved` → sone `a` (roterer).
- * - `side` → én per liten sone i rekkefølge; blir det flere enn sonene, roterer resten i
- *   den siste. Har malen ingen små soner (fullskjerm), roterer de i hovedfeltet.
+ * - `hoved` → felt `a` (roterer).
+ * - `side` → én per lite felt i rekkefølge; blir det flere enn feltene, roterer resten i
+ *   det siste. Har malen ingen små felt (fullskjerm), roterer de i `a`.
  * - `stripe` → stripen.
- *
- * Blir en liten sone stående tom, er malen for stor for innholdet — styret bør velge en med
- * færre soner. Den står da tom i stedet for å fylles med noe tilfeldig.
  */
-export function fordelSoner(mal: Mal, blokker: ReadonlyArray<{ nokkel: string; omrade: Omrade }>): Record<string, string[]> {
-  const ut: Record<string, string[]> = Object.fromEntries([...mal.soner, STRIPE].map((s) => [s, []]));
+export function fordelSoner(mal: Mal, blokker: ReadonlyArray<{ nokkel: string; omrade: Omrade }>): Felt {
+  const ut: Felt = Object.fromEntries(feltI(mal).map((s) => [s, []]));
   const i = (o: Omrade) => blokker.filter((b) => b.omrade === o).map((b) => b.nokkel);
   const sma = mal.soner.filter((s) => s !== "a");
   ut.a = i("hoved");
@@ -156,3 +171,12 @@ export function fordelSoner(mal: Mal, blokker: ReadonlyArray<{ nokkel: string; o
   }
   return ut;
 }
+
+/** Feltene en ny skjerm starter med: oppslag i det store, kalender og kontakt ved siden av, tømmedager i stripen. */
+export const standardFelt = (mal: Mal): Felt =>
+  fordelSoner(
+    mal,
+    [...INNEBYGDE_BLOKKER]
+      .sort((a, b) => SIDE_REKKEFOLGE(a) - SIDE_REKKEFOLGE(b))
+      .map((n) => ({ nokkel: n, omrade: STANDARD_PLASSERING[n] })),
+  );

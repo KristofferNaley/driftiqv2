@@ -7,7 +7,7 @@ dokumentert API; integrasjonen bruker de samme flatene som bir.no. BIR er ikke s
 ## Hva det gjør
 
 Styret (nivå redigering) søker opp borettslaget hos BIR og velger oppføringen (Oppslagstavle →
-Innhold → «Tømmedager fra BIR», eller «Nytt innhold» → Tømmedager). DriftIQ henter tømmekalenderen ved kobling, med «Hent nå»
+Skjermer og oppsett → velg feltet med «Tømmedager (BIR)» i kartet). DriftIQ henter tømmekalenderen ved kobling, med «Hent nå»
 og hver mandag kl. 02:40 (jobben «bir-synk» — ukentlig holder, kalenderen dekker tre
 måneder; endret fra hver natt 29.09.2026), og lagrer datoene. Skjermen viser neste tømming
 per fraksjon, med egne fraksjonsmerker (farge + ikon, `AVFALL_MERKE` — ikke BIRs grafikk), i
@@ -59,15 +59,15 @@ utsnitt (29.09.2026).
 | UI | `src/app/(app)/oppslagstavle/BirKort.tsx`, `.ot-avfall`/`.ot-sone-avfall` i `globals.css` |
 | Jobb | «bir-synk» i `lib/jobber.ts` og `instrumentation.ts` |
 | Tester | `tests/bir.test.ts`, `tests/fixtures/bir-toemmekalender.html` |
-| Koblinger inn i resten | `tommedagerForSkjerm` i `byggSkjerminnhold` (lib/oppslagstavle.ts); `"tommedager"` i `INNEBYGDE_BLOKKER` (tavlemaler.ts) og `avfall` i `Skjerminnhold` (oppslagstavleregler.ts); `Tommedager` i `Tavleskjerm.tsx`; `<BirKort />` i oppslagstavle-siden og «Nytt innhold» |
+| Koblinger inn i resten | `tommedagerForSkjerm` i `byggSkjerminnhold` (lib/oppslagstavle.ts); `"tommedager"` i `INNEBYGDE_BLOKKER` (tavlemaler.ts) og `avfall` i `Skjerminnhold` (oppslagstavleregler.ts); `Tommedager` i `Tavleskjerm.tsx`; `<BirKort />` i `Oppsett.tsx` og `bir.status` i `page.tsx` |
 
 ### Slik fjernes den
 
 1. Ny migrasjon som dropper `bir_pickups` og `bir_settings`.
 2. Slett filene over; fjern tabellnavnene fra `rls/tables.ts`, linja i `schema/index.ts`,
    `bir`-blokken i `klient.ts`, jobben i `jobber.ts`/`instrumentation.ts`.
-3. Fjern koblingene inn i resten (siste rad i tabellen). `lesSoner` ignorerer ukjente
-   blokknøkler, så lagrede skjermer med `"tommedager"` i en sone virker videre.
+3. Fjern koblingene inn i resten (siste rad i tabellen). Skjermen hopper over
+   blokknøkler uten data, så lagrede skjermer med `"tommedager"` i et felt virker videre.
 
 ## Åpent
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { Feil, Kort, Rad, Tom, dato, siden, useOrgData } from "@/components/felles";
 import { bir, type BirTreff } from "@/lib/klient";
+import { Bekreft } from "./felles";
 
 /**
  * Tømmedager fra BIR (docs/bir.md). Egen fil fordi integrasjonen er en fjernbar pakke —
@@ -12,20 +13,12 @@ import { bir, type BirTreff } from "@/lib/klient";
  * Styret VELGER oppføringen: borettslag med fellesløsning er en egen oppføring hos BIR
  * («Borettslaget Håsteinsgate 9»), og en adresse i laget kan gi en annen henteordning.
  */
-export function BirKort({
-  erAdmin,
-  onEndret,
-  topp,
-}: {
-  erAdmin: boolean;
-  onEndret: () => void;
-  /** Plasseringslinja — vises bare når borettslaget er koblet (ellers er det ingenting å plassere). */
-  topp?: ReactNode;
-}) {
+export function BirKort({ erAdmin, onEndret }: { erAdmin: boolean; onEndret: () => void }) {
   const { data: status, setData, feil, setFeil, orgId } = useOrgData((o) => bir.status(o));
   const [q, setQ] = useState("");
   const [treff, setTreff] = useState<BirTreff[] | null>(null);
   const [jobber, setJobber] = useState(false);
+  const [koblerFra, setKoblerFra] = useState(false);
 
   async function utfor<T>(handling: () => Promise<T>, etter?: (v: T) => void) {
     setJobber(true);
@@ -59,17 +52,14 @@ export function BirKort({
         )
       }
     >
+      <div className="ot-felles">Gjelder hele borettslaget, ikke bare denne skjermen.</div>
       <Feil melding={feil} />
       {status ? (
         <>
-          {topp}
           <div className="card-body" style={{ paddingBottom: 0 }}>
             <div className="list-tittel">{status.navn}</div>
-            <div className="field-note">
-              {[status.eiendom && `Eiendom ${status.eiendom}`, `Hentet ${siden(status.sistHentet, "aldri")}`]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
+            {status.eiendom && <div className="list-meta">Eiendom {status.eiendom}</div>}
+            <div className="field-note" style={{ marginTop: "6px" }}>Hentet {siden(status.sistHentet, "aldri")}</div>
             {status.feil && (
               <div className="feilmelding" style={{ marginTop: "8px" }}>
                 Siste henting feilet: {status.feil}. Skjermen viser datoene fra forrige vellykkede henting.
@@ -93,10 +83,7 @@ export function BirKort({
               <button
                 className="btn btn-ghost btn-sm"
                 disabled={jobber}
-                onClick={() =>
-                  window.confirm("Koble fra BIR? Tømmedagene forsvinner fra skjermene.") &&
-                  void utfor(() => bir.kobleFra(orgId), () => ferdig(null))
-                }
+                onClick={() => setKoblerFra(true)}
               >
                 Koble fra
               </button>
@@ -107,7 +94,7 @@ export function BirKort({
         <div className="card-body">
           <div className="field-note" style={{ marginBottom: "10px" }}>
             For borettslag og sameier i BIR-kommunene. Søk på navnet til borettslaget slik BIR har det
-            registrert (for eksempel «Borettslaget Håsteinsgate 9») — ikke bare adressen.
+            registrert (for eksempel «Borettslaget Håsteinsgate 9»), ikke bare adressen.
           </div>
           {erAdmin && orgId ? (
             <form
@@ -131,8 +118,8 @@ export function BirKort({
       {treff?.map((t) => (
         <Rad
           key={t.id}
-          tittel={t.navn}
-          meta={[t.sted, t.eiendom && `Eiendom ${t.eiendom}`].filter(Boolean).join(" · ")}
+          tittel={[t.navn, t.sted].filter(Boolean).join(", ")}
+          meta={t.eiendom ? `Eiendom ${t.eiendom}` : undefined}
           hoyre={
             orgId && (
               <button className="btn btn-primary btn-sm" disabled={jobber} onClick={() => void utfor(() => bir.koble(orgId, t), ferdig)}>
@@ -142,6 +129,20 @@ export function BirKort({
           }
         />
       ))}
+      {koblerFra && orgId && (
+        <Bekreft
+          tittel="Koble fra BIR?"
+          etikett="Koble fra"
+          sender={jobber}
+          onAvbryt={() => setKoblerFra(false)}
+          onBekreft={() => {
+            setKoblerFra(false);
+            void utfor(() => bir.kobleFra(orgId), () => ferdig(null));
+          }}
+        >
+          Tømmedagene forsvinner fra skjermene.
+        </Bekreft>
+      )}
     </Kort>
   );
 }
