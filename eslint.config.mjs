@@ -87,6 +87,8 @@ export default ts.config(
         Element: "readonly",
         HTMLAnchorElement: "readonly",
         BeforeUnloadEvent: "readonly",
+        XMLHttpRequest: "readonly",
+        HTMLImageElement: "readonly",
       },
     },
     rules: {

@@ -22,7 +22,10 @@ ENV NODE_ENV=production
 # tekstuttrekket over OCR og merker dokumentet — appen kjører videre. Skriftpakken er
 # nødvendig: uten fonter tegner pdftoppm PDF-er med ikke-innbakte skrifter som blanke sider
 # («Couldn't find a font for 'Helvetica'»), og OCR-en leser ingenting.
-RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-nor poppler-utils fontconfig font-liberation
+# vips (oppslagstavla, lib/tavlebilder.ts): gjør opplastede bilder om til WebP og skalerer dem
+# ned. `vips-heif` + `libheif-libde265` er det som leser HEIC fra iPhone.
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-nor poppler-utils fontconfig font-liberation \
+    vips-tools vips-heif libheif-libde265
 
 # Standalone-bygget tar med bare de modulene serveren faktisk bruker.
 COPY --from=builder /app/.next/standalone ./

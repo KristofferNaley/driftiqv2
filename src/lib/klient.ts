@@ -12,7 +12,7 @@
 
 import type { MinAktivitet } from "./aktivitetsslag";
 import type { Driftslogg } from "./driftsloggslag";
-import type { Kategori, Oppslagstype, Retning, Skjerminnhold, Status } from "./oppslagstavleregler";
+import type { Kategori, Oppslagstype, Retning, Skjerminnhold, Status, Tilpasning, Visningsmate } from "./oppslagstavleregler";
 
 export class ApiKlientFeil extends Error {
   constructor(
@@ -51,6 +51,30 @@ async function request<T>(sti: string, init: RequestInit = {}): Promise<T> {
     throw new ApiKlientFeil(svar.status, data?.detail ?? "Noe gikk galt");
   }
   return data as T;
+}
+
+/**
+ * Filopplasting med fremdrift (0–1). `fetch` kan ikke melde hvor mye som er sendt, derfor
+ * XMLHttpRequest — med samme feilform og samme 401-håndtering som `request()`.
+ */
+function lastOppMedFremdrift<T>(sti: string, form: FormData, onFremdrift: (andel: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api${sti}`);
+    xhr.responseType = "json";
+    xhr.upload.onprogress = (e) => e.lengthComputable && onFremdrift(e.loaded / e.total);
+    xhr.onerror = () => reject(new ApiKlientFeil(0, "Opplastingen ble avbrutt. Sjekk nettet og prøv igjen."));
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        window.location.href = `/logg-inn?retur=${encodeURIComponent(window.location.pathname)}`;
+        return reject(new ApiKlientFeil(401, "Ikke innlogget"));
+      }
+      const data = xhr.response as (T & { detail?: string }) | null;
+      if (xhr.status < 200 || xhr.status >= 300) return reject(new ApiKlientFeil(xhr.status, data?.detail ?? "Noe gikk galt"));
+      resolve(data as T);
+    };
+    xhr.send(form);
+  });
 }
 
 const org = (orgId: string, sti: string) => `/organizations/${orgId}${sti}`;
@@ -1243,24 +1267,30 @@ export const easee = {
 // Oppslagstavla (docs/oppslagstavle.md)
 // ---------------------------------------------------------------------------------------
 
+/** Én side i et bildeoppslag: bildetekst, fokuspunkt i prosent og om bildet beskjæres («dekk») eller vises helt. */
+export type Tavleside = { id: string; tekst: string | null; x: number; y: number; tilpasning: Tilpasning };
+
 export type Oppslag = {
   id: string;
   kind: Oppslagstype;
   title: string;
   body: string | null;
   category: Kategori | null;
-  originalName: string | null;
   showFrom: string;
   showUntil: string;
   allScreens: boolean;
   screenIds: string[];
   displaySeconds: number;
+  /** Bildeoppslag: sidene i rekkefølge, og om de blas gjennom eller vises i rutenett. */
+  layoutMode: Visningsmate;
+  sider: Tavleside[];
   createdBy: string;
   createdAt: string;
   status: Status;
 };
 
 export type OppslagInn = {
+  type: Oppslagstype;
   tittel: string;
   tekst?: string | null;
   kategori?: Kategori | null;
@@ -1269,6 +1299,7 @@ export type OppslagInn = {
   alleSkjermer: boolean;
   skjermIder: string[];
   sekunder: number;
+  visning?: Visningsmate;
 };
 
 /** Navn, telefon og e-post er fra brukerprofilen; rollen er medlemskapets tittel. */
@@ -1329,18 +1360,30 @@ export type Tavleutseende = {
 export const oppslagstavle = {
   oppslag: (o: string) => api.hent<Oppslag[]>(org(o, "/oppslagstavle/oppslag")),
   nyttTekstoppslag: (o: string, d: OppslagInn) => api.send<Oppslag>(org(o, "/oppslagstavle/oppslag"), d),
-  /** Bildet og feltene i ett kall — et oppslag skal aldri stå uten bildet sitt. */
-  nyttBildeoppslag: (o: string, d: OppslagInn, fil: File) => {
+  /** Kladden et nytt bildeoppslag begynner som. Legges ut med `endreOppslag`, forkastes med `slettOppslag`. */
+  nyBildekladd: (o: string) => api.send<{ id: string }>(org(o, "/oppslagstavle/oppslag/kladd"), {}),
+  /** Én fil (bilde eller PDF) inn i oppslaget, med fremdrift. Svaret er alle sidene etterpå. */
+  lastOppSide: (o: string, postId: string, fil: File, onFremdrift: (andel: number) => void) => {
     const f = new FormData();
-    f.set("data", JSON.stringify(d));
     f.set("fil", fil);
-    return api.lastOpp<Oppslag>(org(o, "/oppslagstavle/oppslag"), f);
+    return lastOppMedFremdrift<Tavleside[]>(org(o, `/oppslagstavle/oppslag/${postId}/sider`), f, onFremdrift);
   },
+  endreSide: (o: string, postId: string, s: Tavleside) =>
+    api.endre<Tavleside[]>(org(o, `/oppslagstavle/oppslag/${postId}/sider/${s.id}`), {
+      tekst: s.tekst,
+      x: s.x,
+      y: s.y,
+      tilpasning: s.tilpasning,
+    }),
+  slettSide: (o: string, postId: string, sideId: string) =>
+    request<Tavleside[]>(org(o, `/oppslagstavle/oppslag/${postId}/sider/${sideId}`), { method: "DELETE" }),
+  settSiderekkefolge: (o: string, postId: string, ider: string[]) =>
+    api.endre<Tavleside[]>(org(o, `/oppslagstavle/oppslag/${postId}/sider`), { ider }),
+  /** Til `<img src>` — cookien følger med, så bildet går gjennom de samme gatene. */
+  sideSti: (o: string, sideId: string) => `/api${org(o, `/oppslagstavle/sider/${sideId}`)}`,
   endreOppslag: (o: string, id: string, d: OppslagInn) => api.endre<Oppslag>(org(o, `/oppslagstavle/oppslag/${id}`), d),
   settRekkefolge: (o: string, ider: string[]) => api.endre<Oppslag[]>(org(o, "/oppslagstavle/oppslag/rekkefolge"), { ider }),
   slettOppslag: (o: string, id: string) => api.slett(org(o, `/oppslagstavle/oppslag/${id}`)),
-  /** Til `<img src>` — cookien følger med, så bildet går gjennom de samme gatene. */
-  bildeSti: (o: string, id: string) => `/api${org(o, `/oppslagstavle/oppslag/${id}/fil`)}`,
 
   hendelser: (o: string) => api.hent<Tavlehendelse[]>(org(o, "/oppslagstavle/hendelser")),
   nyHendelse: (o: string, d: { tittel: string; dato: string; tid: string | null; sted: string | null }) =>

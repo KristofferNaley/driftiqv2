@@ -5,6 +5,11 @@ const config: NextConfig = {
   output: "standalone",
   // `pg` er en native-ish avhengighet og skal ikke bundles inn i serverkoden.
   serverExternalPackages: ["pg"],
+  experimental: {
+    // Med middleware leser Next forespørselskroppen inn i minnet og kutter den ved 10 MB som
+    // standard. Oppslagstavla tar imot filer på inntil 20 MB (PDF, HEIC fra iPhone).
+    proxyClientMaxBodySize: "25mb",
+  },
 };
 
 export default config;

@@ -32,9 +32,12 @@ import { avfallMerke } from "@/lib/avfallsregler";
 import {
   KATEGORI_ETIKETT,
   KONTAKT_SEKUNDER,
+  RUTENETT_ANTALL,
   SONE_SEKUNDER,
   STANDARD_SEKUNDER,
   STANDARD_SKALERING,
+  finnTekstskala,
+  lengsteOrd,
   skjermpalett,
   visKode,
   type Blokkdata,
@@ -64,16 +67,21 @@ import { avgangstid, transportmiddel, vaersymbol } from "@/lib/vaerregler";
  */
 export function Tavleskjerm({
   innhold,
-  bildeUrl,
   kontaktbildeUrl,
   logoUrl,
   utenNett,
   markertSone,
   visOppslagId,
+  laasOppslag,
+  sideUrl,
+  visSideId,
 }: {
   innhold: Skjerminnhold;
-  /** URL til bildet i et bildeoppslag — blob-URL på skjermen, API-sti i appen. */
-  bildeUrl: (postId: string) => string | null;
+  /**
+   * URL til én side i et bildeoppslag — blob-URL på skjermen, API-sti i appen. `null` betyr
+   * «ikke lastet ennå»: oppslaget holdes da utenfor rotasjonen, så det ikke blinker inn halvt.
+   */
+  sideUrl: (sideId: string) => string | null;
   kontaktbildeUrl: (kontaktId: string) => string | null;
   logoUrl: string | null;
   /** Satt når skjermen ikke har fått svar på en stund: tidspunktet for siste vellykkede henting. */
@@ -82,6 +90,10 @@ export function Tavleskjerm({
   markertSone?: string | null;
   /** Bare forhåndsvisningen: hopp til dette oppslaget (raden styret klikket på). */
   visOppslagId?: string | null;
+  /** Bare forhåndsvisningen: bli stående på `visOppslagId` (utkastet som skrives) i stedet for å rotere. */
+  laasOppslag?: boolean;
+  /** Bare forhåndsvisningen: bildet som er åpent i panelet. Oppslaget står da på det, uten rutenett. */
+  visSideId?: string | null;
 }) {
   const naa = useKlokke();
   const { skjerm, utseende } = innhold;
@@ -111,7 +123,15 @@ export function Tavleskjerm({
     );
   }
 
-  const ctx: Kontekst = { innhold, naa, bildeUrl, kontaktbildeUrl, visOppslagId: visOppslagId ?? null };
+  const ctx: Kontekst = {
+    innhold,
+    naa,
+    sideUrl,
+    kontaktbildeUrl,
+    visSideId: visSideId ?? null,
+    visOppslagId: visOppslagId ?? null,
+    laasOppslag: Boolean(laasOppslag && visOppslagId),
+  };
   const harData = (n: string) => blokkHarData(n, innhold);
   const stripe = (soner[STRIPE] ?? []).filter(harData);
   const bredde = mal.omrader[0]!.split(" ").length;
@@ -146,9 +166,11 @@ export function Tavleskjerm({
 type Kontekst = {
   innhold: Skjerminnhold;
   naa: Date;
-  bildeUrl: (postId: string) => string | null;
+  sideUrl: (sideId: string) => string | null;
   kontaktbildeUrl: (kontaktId: string) => string | null;
+  visSideId: string | null;
   visOppslagId: string | null;
+  laasOppslag: boolean;
 };
 
 /** Om en blokk har noe å vise. Oppslag, kalender og kontakt viser alltid noe (også «ingen …»). */
@@ -160,15 +182,23 @@ function blokkHarData(nokkel: string, i: Skjerminnhold): boolean {
   return b.type === "vaer" ? b.varsel !== null : true;
 }
 
-/** Grensene for tekstskaleringen i et oppslag: 1 er grunnstørrelsen i `.ot-hero`. */
-const TEKSTSKALA_MIN = 0.8;
-const TEKSTSKALA_MAKS = 2.6;
+/** Bredden av `ord` i elementets egen skrift ved gjeldende skala, uten linjebryting. */
+function ordbredde(el: HTMLElement, ord: string): number {
+  if (!ord) return 0;
+  const maal = document.createElement("span");
+  maal.textContent = ord;
+  maal.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;left:0;top:0";
+  el.appendChild(maal);
+  const b = maal.getBoundingClientRect().width;
+  el.removeChild(maal);
+  return b;
+}
 
 /**
  * Skalerer teksten i et oppslag så den fyller feltet: en kort beskjed blir stor, en lang blir
- * mindre, innenfor faste grenser. Måles i nettleseren (halvering mot `scrollHeight`) fordi
- * feltets størrelse avhenger av mal, retning og skalering. Passer ikke teksten på minste
- * størrelse, klippes den som før (`klipp`).
+ * mindre, innenfor faste grenser. Utregningen er `finnTekstskala` (importfri og testet); her
+ * er bare målingen i nettleseren, fordi feltets størrelse avhenger av mal, retning og
+ * skalering. Det lengste ordet i overskrift og tekst måles først, så bredden setter taket.
  */
 function useTilpassetTekst(nokkel: string) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -176,27 +206,24 @@ function useTilpassetTekst(nokkel: string) {
     const el = ref.current;
     if (!el) return;
     const tilpass = () => {
-      const passer = (skala: number) => {
-        el.style.setProperty("--tekstskala", String(skala));
-        return el.scrollHeight <= el.clientHeight + 1;
-      };
       el.classList.remove("klipp");
       if (el.clientHeight === 0) return;
-      if (passer(TEKSTSKALA_MAKS)) return;
-      let lav = TEKSTSKALA_MIN;
-      let hoy = TEKSTSKALA_MAKS;
-      if (!passer(lav)) {
-        el.classList.add("klipp");
-        return;
-      }
-      for (let n = 0; n < 7; n++) {
-        const midt = (lav + hoy) / 2;
-        if (passer(midt)) lav = midt;
-        else hoy = midt;
-      }
-      passer(lav);
+      el.style.setProperty("--tekstskala", "1");
+      const deler = [...el.querySelectorAll<HTMLElement>("h3, p")];
+      const ord = deler.map((d) => ({ ordbredde: ordbredde(d, lengsteOrd(d.textContent ?? "")), feltbredde: d.clientWidth }));
+      const { skala, klipp } = finnTekstskala({
+        ord,
+        passerIHoyden: (x) => {
+          el.style.setProperty("--tekstskala", String(x));
+          return el.scrollHeight <= el.clientHeight + 1;
+        },
+      });
+      el.style.setProperty("--tekstskala", String(skala));
+      el.classList.toggle("klipp", klipp);
     };
     tilpass();
+    // Skriften lastes etter første maling; målingen med reserveskriften gir feil ordbredde.
+    void document.fonts?.ready.then(tilpass);
     if (typeof ResizeObserver === "undefined") return;
     // Bare bredden: høyden følger bredden (fast sideforhold), og å lytte på høyden ville
     // startet en ny måling av hver måling.
@@ -264,58 +291,125 @@ function Blokk({ nokkel, ctx, kompakt = false }: { nokkel: string; ctx: Kontekst
 // Blokkene
 // ---------------------------------------------------------------------------------------
 
+/** Om feltet oppslaget står i er stort nok til rutenett: minst 45 % av skjermens bredde og 40 % av høyden. */
+function useStortFelt(nokkel: string) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [stort, setStort] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const skjerm = el?.closest(".ot-skjerm");
+    if (!el || !skjerm) return;
+    const maal = () => setStort(el.clientWidth >= skjerm.clientWidth * 0.45 && el.clientHeight >= skjerm.clientHeight * 0.4);
+    maal();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(maal);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // Elementet byttes når oppslaget byttes (`key`), så det må måles på nytt da.
+  }, [nokkel]);
+  return [ref, stort] as const;
+}
+
 function Oppslag({ ctx }: { ctx: Kontekst }) {
-  const oppslag = ctx.innhold.oppslag;
+  // Et bildeoppslag er med i rotasjonen først når ALLE bildene er lastet — ellers blinker
+  // det inn med grå flater. Forhåndsvisningen har alltid URL-er og slipper rett gjennom.
+  const oppslag = ctx.innhold.oppslag.filter(
+    (p) => p.type === "tekst" || ((p.sider?.length ?? 0) > 0 && p.sider!.every((s) => ctx.sideUrl(s.id))),
+  );
   const [indeks, setIndeks] = useState(0);
+  /** Bildet (eller rutenett-siden) som står nå. Tekst har bare «del» 0. */
+  const [del, setDel] = useState(0);
   const aktivt = oppslag.length > 0 ? oppslag[indeks % oppslag.length]! : null;
+  const [feltRef, stort] = useStortFelt(aktivt?.id ?? "");
+  const sider = aktivt?.type === "bilder" ? (aktivt.sider ?? []) : [];
+  // Rutenettet vises bare der feltet er stort nok; i små felt blas bildene gjennom.
+  const rutenett = aktivt?.visning === "rutenett" && stort && !ctx.visSideId && sider.length > 1;
+  const deler = Math.max(1, rutenett ? Math.ceil(sider.length / RUTENETT_ANTALL) : sider.length);
   // Hvert oppslag står i SIN tid — derfor en timeout per oppslag, ikke et fast intervall.
+  // Et bildeoppslag bruker tiden per bilde og går videre til neste oppslag etter det siste.
   const sekunder = aktivt?.sekunder ?? STANDARD_SEKUNDER;
+  const laast = ctx.laasOppslag;
+  const valgtSide = ctx.visSideId ? sider.findIndex((s) => s.id === ctx.visSideId) : -1;
   useEffect(() => {
-    if (oppslag.length < 2) return;
-    const t = window.setTimeout(() => setIndeks((i) => i + 1), sekunder * 1000);
+    const flereOppslag = oppslag.length > 1 && !laast;
+    if (valgtSide >= 0 || (!flereOppslag && deler < 2)) return;
+    const t = window.setTimeout(() => {
+      if (del < deler - 1) return setDel(del + 1);
+      setDel(0);
+      if (flereOppslag) setIndeks((i) => i + 1);
+    }, sekunder * 1000);
     return () => window.clearTimeout(t);
-  }, [indeks, sekunder, oppslag.length]);
-  // Forhåndsvisningen: styret klikket på en rad i lista, og vil se akkurat det oppslaget.
+  }, [indeks, del, deler, sekunder, oppslag.length, laast, valgtSide]);
+  // Forhåndsvisningen: styret klikket på en rad i lista, eller skriver på et utkast.
   const onsket = ctx.visOppslagId ? oppslag.findIndex((p) => p.id === ctx.visOppslagId) : -1;
   useEffect(() => {
-    if (onsket >= 0) setIndeks(onsket);
+    if (onsket < 0) return;
+    setIndeks(onsket);
+    setDel(0);
   }, [onsket, ctx.visOppslagId]);
-  const tekstRef = useTilpassetTekst(aktivt ? `${aktivt.id}|${aktivt.tittel}|${aktivt.tekst ?? ""}` : "");
+  const tekstRef = useTilpassetTekst(aktivt ? `${aktivt.id}|${aktivt.tittel}|${aktivt.tekst ?? ""}|${aktivt.kategori}` : "");
 
   if (!aktivt) {
     return (
-      <div className="ot-hero info">
+      <div className="ot-hero info" ref={feltRef}>
         <div className="ot-tag">Oppslag</div>
         <h3>Ingen oppslag nå</h3>
       </div>
     );
   }
-  const bilde = aktivt.type === "bilde" ? ctx.bildeUrl(aktivt.id) : null;
+  const prikker = oppslag.length > 1 && (
+    <div className="ot-prikker">
+      {oppslag.map((p, i) => (
+        <i key={p.id} className={i === indeks % oppslag.length ? "pa" : ""} />
+      ))}
+    </div>
+  );
+  if (aktivt.type === "bilder") {
+    const naa = valgtSide >= 0 ? valgtSide : Math.min(del, deler - 1);
+    const bilde = (s: (typeof sider)[number]) => (
+      <img
+        src={ctx.sideUrl(s.id) ?? undefined}
+        alt=""
+        style={{ objectFit: s.tilpasning === "hele" ? "contain" : "cover", objectPosition: `${s.x}% ${s.y}%` }}
+      />
+    );
+    return (
+      <div key={aktivt.id} ref={feltRef} className="ot-hero ot-fade media">
+        {rutenett ? (
+          <div key={naa} className={`ot-siderutenett ot-fade n${Math.min(RUTENETT_ANTALL, sider.length - naa * RUTENETT_ANTALL)}`}>
+            {sider.slice(naa * RUTENETT_ANTALL, (naa + 1) * RUTENETT_ANTALL).map((s) => (
+              <figure key={s.id}>{bilde(s)}</figure>
+            ))}
+          </div>
+        ) : (
+          // Alle bildene ligger oppå hverandre; bare ett er synlig. Byttet blir da en myk
+          // overgang, og neste bilde er ferdig dekodet før det vises.
+          <div className="ot-sider">
+            {sider.map((s, i) => (
+              <figure key={s.id} className={i === naa ? "pa" : ""}>
+                {bilde(s)}
+                {s.tekst && <figcaption>{s.tekst}</figcaption>}
+              </figure>
+            ))}
+          </div>
+        )}
+        {prikker}
+      </div>
+    );
+  }
   return (
     <div
       key={aktivt.id}
-      ref={aktivt.type === "tekst" ? tekstRef : undefined}
-      className={`ot-hero ot-fade ${aktivt.type === "bilde" ? "media" : (aktivt.kategori ?? "info")}`}
+      ref={(el) => {
+        tekstRef.current = el;
+        feltRef.current = el;
+      }}
+      className={`ot-hero ot-fade ${aktivt.kategori ?? "info"}`}
     >
-      {aktivt.type === "bilde" ? (
-        <>
-          {bilde ? <img className="ot-bilde" src={bilde} alt="" /> : <div className="ot-bilde" />}
-          <h3 className="bildetekst">{aktivt.tittel}</h3>
-        </>
-      ) : (
-        <>
-          <div className="ot-tag">{KATEGORI_ETIKETT[aktivt.kategori ?? "info"]}</div>
-          <h3>{aktivt.tittel}</h3>
-          {aktivt.tekst && <p>{aktivt.tekst}</p>}
-        </>
-      )}
-      {oppslag.length > 1 && (
-        <div className="ot-prikker">
-          {oppslag.map((p, i) => (
-            <i key={p.id} className={i === indeks % oppslag.length ? "pa" : ""} />
-          ))}
-        </div>
-      )}
+      <div className="ot-tag">{KATEGORI_ETIKETT[aktivt.kategori ?? "info"]}</div>
+      <h3>{aktivt.tittel}</h3>
+      {aktivt.tekst && <p>{aktivt.tekst}</p>}
+      {prikker}
     </div>
   );
 }

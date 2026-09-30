@@ -13,15 +13,16 @@ et enhetstoken den får ved kobling. Tilleggsmodul (`oppslagstavle`, av som stan
 
 | Del | Hvor |
 |---|---|
-| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_events`, `board_settings`, `board_contacts`, `board_blocks` (DIREKTE), `board_pairings` (UNNTATT). `board_placements` er utgått og leses bare av migreringen |
+| Tabeller | `src/db/schema/oppslagstavle.ts` — `board_screens`, `board_posts`, `board_post_pages`, `board_events`, `board_settings`, `board_contacts`, `board_blocks` (DIREKTE), `board_pairings` (UNNTATT). `board_placements` er utgått og leses bare av migreringen |
 | Logikk | `src/lib/oppslagstavle.ts` |
 | Regler, typer, palett (importfri) | `src/lib/oppslagstavleregler.ts` |
 | Maler og felt (importfri) | `src/lib/tavlemaler.ts` |
+| Bilder og PDF → WebP-sider | `src/lib/tavlebilder.ts` (vips og pdftoppm fra imaget) |
 | Migrering plassering → felt | `src/lib/tavlemigrering.ts`, kjørt av `scripts/oppstart.ts` |
 | Vær- og avgangsblokker | `src/lib/tavleblokker.ts` — se `docs/entur-yr.md` |
 | Styrets API | `/api/organizations/{orgId}/oppslagstavle/…` via `orgRute` |
-| Skjermens API (anonymt) | `/api/skjerm/kobling`, `/kobling/status`, `/innhold`, `/fil/{postId}`, `/logo` |
-| Adminside | `src/app/(app)/oppslagstavle/` — `page.tsx` (utkast, lagrelinje, første gangs oppsett, forhåndsvisning), `Innhold.tsx`, `Oppsett.tsx`, `Feltkart.tsx`, `Blokker.tsx`, `BirKort.tsx`, `Kontaktpersoner.tsx` |
+| Skjermens API (anonymt) | `/api/skjerm/kobling`, `/kobling/status`, `/innhold`, `/side/{sideId}`, `/kontakt/{id}`, `/logo` |
+| Adminside | `src/app/(app)/oppslagstavle/` — `page.tsx` (utkast, lagrelinje, første gangs oppsett, forhåndsvisning), `Innhold.tsx` (lista og panelet), `Bildesider.tsx`, `Oppsett.tsx`, `Feltkart.tsx`, `Blokker.tsx`, `BirKort.tsx`, `Kontaktpersoner.tsx` |
 | Skjermen | `src/app/skjerm/page.tsx` + `src/components/Tavleskjerm.tsx` (samme komponent i forhåndsvisningen) |
 
 ### Kobling
@@ -41,16 +42,63 @@ et enhetstoken den får ved kobling. Tilleggsmodul (`oppslagstavle`, av som stan
 Tokenet er 32 tilfeldige byte; bare sha256 lagres. Skjermruta slår opp tokenet med
 `withoutRls("skjerm")` — ett oppslag på én kolonne, som også skriver livstegnet
 (`last_seen_at`) — og kjører deretter ALT annet i `withOrg(orgId)` som en vanlig rute.
-`filForSkjerm` gir bare bilder fra oppslag skjermen selv skal vise. Fjernes skjermen i appen,
+`sideForSkjerm` gir bare bilder fra oppslag skjermen selv skal vise. Fjernes skjermen i appen,
 svarer neste henting 401 og skjermen går tilbake til koblingsbildet.
 
 ### Oppslag, visningstid og typer
 
-Hvert oppslag har egen visningstid (`display_seconds`, fast liste i `VISNINGSTIDER`), og
-skjermen bruker en timeout per oppslag, ikke et fast intervall. Oppslag kan redigeres (tekst,
-periode, skjermer, tid); typen og bildet står fast — et nytt bilde er et nytt oppslag.
-Typene viktig/informasjon/arrangement styrer BARE merkelapp og kantfarge
-(`KATEGORI_BESKRIVELSE` forklarer dem i skjemaet), ikke rekkefølge eller tid.
+To typer: **tekst** og **bilder**. Hvert oppslag har egen visningstid (`display_seconds`), og
+skjermen bruker en timeout per oppslag, ikke et fast intervall. Typen står fast etter at
+oppslaget er laget. For tekst styrer viktig/informasjon/arrangement BARE merkelapp og
+kantfarge, ikke rekkefølge eller tid.
+
+Reglene for et oppslag (lengder, datoer, visningstid) er `oppslagFeil` i den importfrie
+`oppslagstavleregler.ts`. Skjemaet kaller den før innsending og serveren i Zod-skjemaet, så de
+aldri er uenige. Teksten er maks 200 tegn (var 400 til 30.09.2026); eldre, lengre tekster
+vises som før, men må kortes ned når de redigeres.
+
+### Bilder og PDF (30.09.2026)
+
+Et bildeoppslag er en **ordnet liste med sider** (`board_post_pages`), og en side er alltid
+et bilde. Maks `MAKS_SIDER` (10) per oppslag.
+
+- **Opplasting**: JPG, PNG, WebP, HEIC og PDF, inntil 20 MB per fil, én fil per kall med
+  fremdrift (`lastOppMedFremdrift` i klient.ts). `filFeil` er samme kontroll i skjemaet og på
+  serveren. En fil som feiler, stopper ikke de neste.
+- **Konvertering** (`lib/tavlebilder.ts`): alt blir WebP, maks 3840 px på lengste side. En PDF
+  deles i ett bilde per side og er ikke en egen enhet etterpå — sidene kan flyttes og
+  fjernes enkeltvis. En PDF med flere sider enn det er plass til, avvises HEL med antallet
+  som får plass. Originalfilene lagres ikke; kvoten regnes av WebP-filene.
+- **Kladd**: et nytt bildeoppslag opprettes som kladd (`board_posts.draft`) idet første fil
+  lastes opp. Kladder vises verken i lista eller på skjermene. «Legg ut» er `endreOppslag`
+  (krever minst ett bilde), «Avbryt» sletter kladden, og kladder som blir liggende, ryddes av
+  nattjobben «hendelsesrydding» etter 24 timer (`ryddKladder`).
+- **Per bilde**: valgfri bildetekst (maks 80 tegn, vises under bildet), fokuspunkt i prosent
+  (`object-position` når bildet beskjæres), og tilpasning: `dekk` fyller feltet, `hele` viser
+  hele bildet. Sider fra PDF får `hele` — et lysbilde skal ikke beskjæres.
+- **Lagres straks**: filer, rekkefølge, bildetekst, fokuspunkt og fjerning går rett til
+  serveren, også på et oppslag som allerede er lagt ut. Resten av skjemaet venter på knappen.
+  «Fjern» har fem sekunders angrefrist i klienten før slettingen sendes.
+- **Visning**: «Bla gjennom bildene» (myk overgang, `sekunder` per bilde) eller «Rutenett»
+  (opptil fire samtidig). Skjemaet kan ikke vite hvor stort feltet er — samme oppslag går til
+  flere skjermer — så SKJERMEN avgjør: rutenett bare når feltet er minst 45 % av bredden og
+  40 % av høyden (`useStortFelt`), ellers blas bildene gjennom.
+- **Ingen blinking**: et bildeoppslag er med i rotasjonen først når alle bildene er lastet
+  (`sideUrl` gir `null` til da), og sidene ligger oppå hverandre så neste bilde er dekodet.
+- Sekunder per bilde har egen liste (`BILDESEKUNDER`: 5, 8, 12, 20; standard 8). Et oppslag
+  med en tid utenfor lista beholder den til den endres.
+
+**Migreringen** (SQL i `drizzle/0067`): bildeoppslag fra før hadde ett bilde i selve raden.
+Hvert fikk én side som peker på samme fil, uten konvertering, med tittelen som bildetekst.
+Filkolonnene i `board_posts` er tømt (ellers telles fila to ganger i kvoten) og brukes ikke.
+
+### Panelet «Nytt innhold»
+
+Nytt innhold og redigering er samme komponent (`OppslagSkjema`), en `Skuff` uten slør fra
+høyre. Forhåndsvisningen står synlig ved siden av og viser utkastet mens man skriver: siden
+legger `Innholdsutkast` inn i oppslagene eller kalenderen skjermen tegner, og låser
+rotasjonen til utkastet. Under 1100 px tar panelet hele bredden, med «Forhåndsvis» som
+veksler mellom skjema og skjerm. Knappene står i skuffens faste fot.
 
 ### Maler og felt (lagt om 30.09.2026)
 
@@ -133,8 +181,11 @@ ellers ville et byttet bilde aldri blitt hentet på nytt.
 - **Forhåndsvisningen og skjermen deler både komponent og data** (`byggSkjerminnhold`). Lag
   aldri en egen «forhåndsvisnings-spørring» — da viser appen noe annet enn veggen.
 - **Faste soner**: plassen avhenger av malen, aldri av innholdets lengde. Teksten i et
-  oppslag skaleres så den fyller feltet (`useTilpassetTekst`, `--tekstskala` mellom 0,8 og
-  2,6); passer den ikke på minste størrelse, klippes den (`line-clamp`). Tavla måles i `--u` (1 % av bredden × skalering), ikke `--fs-*` —
+  oppslag skaleres så den fyller feltet (`finnTekstskala` i regelfila, målt av
+  `useTilpassetTekst`): FØRST så det lengste ordet får plass i bredden, deretter ned til alt
+  får plass i høyden, mellom 0,55 og 2,6. Første versjon målte bare høyden, og «arrangement»
+  ble til «ement». Et ord som er for langt selv på minste størrelse, deles over to linjer
+  (`overflow-wrap: anywhere`) — tekst klippes aldri vannrett. Tavla måles i `--u` (1 % av bredden × skalering), ikke `--fs-*` —
   unntaket gjelder bare innenfor `.ot-skjerm`.
 - En skjerm som har lagret innhold fra FØR en endring i `Skjerminnhold`, viser det etter
   omstart uten nett. Nye felt må derfor tåle å mangle i klienten (`kontakter = []`,
@@ -159,8 +210,7 @@ Rekkefølgen er et forslag; hver etappe er leverbar alene.
 - Skjermtid: skjermen blanker seg selv utenfor på/av-tidene.
 
 **Etappe 3 — mer innhold**
-- PDF-presentasjon: rastrer sidene med `pdftoppm` (finnes i imaget, se tekstuttrekk) til
-  bilder ved opplasting, maks 20 sider, bla eller bare første side.
+- PDF med lysbilder — BYGGET 30.09.2026 som del av «Bilder og PDF» over.
 - «Arbeid i bygget» fra oppgaver/avvik. Krever et eget opt-in-flagg per oppgave — ikke alle
   oppgaver hører hjemme på en offentlig vegg.
 - QR «Meld avvik» som åpner et offentlig avviksskjema med skjermens adresse forhåndsutfylt.

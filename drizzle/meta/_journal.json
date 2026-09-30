@@ -470,6 +470,13 @@
       "when": 1790777368451,
       "tag": "0066_oppslagstavle_felt",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790780171707,
+      "tag": "0067_oppslagstavle_bilder",
+      "breakpoints": true
     }
   ]
 }

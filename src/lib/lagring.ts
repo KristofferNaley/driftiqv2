@@ -90,8 +90,9 @@ export const FILTABELLER: readonly string[] = [
   "deviation_attachments",
   // Vedlegget på leverandørfakturaen (økonomimodulen).
   "supplier_invoices",
-  // Oppslagstavla: bilder i oppslag, borettslagets logo og kontaktpersonenes bilder.
+  // Oppslagstavla: sidene i bildeoppslag (`board_posts` fra før sidene fantes), logo og kontaktbilder.
   "board_posts",
+  "board_post_pages",
   "board_settings",
   "board_contacts",
 ];

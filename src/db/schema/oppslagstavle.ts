@@ -81,7 +81,7 @@ export const boardPosts = pgTable(
     orgId: varchar("org_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    /** «tekst» | «bilde» — `OPPSLAGSTYPER`. */
+    /** «tekst» | «bilder» — `OPPSLAGSTYPER`. */
     kind: varchar("kind").notNull(),
     title: varchar("title").notNull(),
     body: text("body"),
@@ -93,6 +93,14 @@ export const boardPosts = pgTable(
     fileSize: integer("file_size"),
     /** Sekunder oppslaget står før neste. Styret velger per oppslag — et bilde trenger kortere tid enn en tekst. */
     displaySeconds: integer("display_seconds").notNull().default(10),
+    /** Bildeoppslag: «bla» | «rutenett» (`VISNINGSMATER`). */
+    layoutMode: varchar("layout_mode"),
+    /**
+     * Kladd: et bildeoppslag opprettes idet første fil lastes opp, så hver fil kan lastes opp
+     * for seg med egen fremdrift. Kladder vises verken i lista eller på skjermene, og de som
+     * aldri blir lagt ut, ryddes av nattjobben (`ryddKladder`).
+     */
+    draft: boolean("draft").notNull().default(false),
     /** Plassen i rotasjonen, lavest først. Styret drar radene i lista; nye oppslag havner øverst. */
     sortOrder: integer("sort_order").notNull().default(0),
     showFrom: date("show_from").notNull(),
@@ -104,6 +112,41 @@ export const boardPosts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("board_posts_org_idx").on(t.orgId)],
+);
+
+/**
+ * Sidene i et bildeoppslag, i rekkefølge. En side er ALLTID et bilde: opplastede bilder
+ * gjøres om til WebP, og en PDF deles i ett bilde per side (lib/tavlebilder.ts) — PDF-en er
+ * ikke en egen enhet etterpå, så enkeltsider kan fjernes og flyttes.
+ *
+ * Egen `org_id` så radene teller mot lagringskvoten (`FILTABELLER`) og har egen RLS-policy.
+ */
+export const boardPostPages = pgTable(
+  "board_post_pages",
+  {
+    id: varchar("id").primaryKey(),
+    orgId: varchar("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    postId: varchar("post_id")
+      .notNull()
+      .references(() => boardPosts.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    fileName: varchar("file_name").notNull(),
+    contentType: varchar("content_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    /** Valgfri bildetekst, maks `MAKS_BILDETEKST`. */
+    caption: varchar("caption"),
+    /** Fokuspunktet i prosent — `object-position` på skjermen når bildet beskjæres. */
+    focusX: integer("focus_x").notNull().default(50),
+    focusY: integer("focus_y").notNull().default(50),
+    /** «dekk» | «hele» (`TILPASNINGER`). Sider fra PDF får «hele»: et lysbilde skal ikke beskjæres. */
+    fit: varchar("fit").notNull().default("dekk"),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("board_post_pages_org_idx").on(t.orgId), index("board_post_pages_post_idx").on(t.postId)],
 );
 
 /** En hendelse i skjermens kalenderfelt, lagt inn for hånd. Synk fra Outlook/Google kommer senere. */

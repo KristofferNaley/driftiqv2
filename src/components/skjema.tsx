@@ -110,11 +110,19 @@ export function Skuff({
   onLukk,
   children,
   fot,
+  utenSlor,
+  klasse,
 }: {
   tittel: string;
   onLukk: () => void;
   children: ReactNode;
   fot?: ReactNode;
+  /**
+   * Ingen mørk flate bak: det som står ved siden av skuffen skal kunne SES mens man skriver
+   * (oppslagstavlas forhåndsvisning). Skuffen lukkes da med ×, Esc eller knappene i foten.
+   */
+  utenSlor?: boolean;
+  klasse?: string;
 }) {
   useEffect(() => {
     const påEsc = (e: KeyboardEvent) => e.key === "Escape" && onLukk();
@@ -124,8 +132,8 @@ export function Skuff({
 
   return (
     <>
-      <div className="skuff-scrim" onClick={onLukk} />
-      <aside className="skuff" role="dialog" aria-modal="true" aria-label={tittel}>
+      {!utenSlor && <div className="skuff-scrim" onClick={onLukk} />}
+      <aside className={`skuff${klasse ? ` ${klasse}` : ""}`} role="dialog" aria-modal={!utenSlor} aria-label={tittel}>
         <div className="skuff-hode">
           <h2>{tittel}</h2>
           <button className="skuff-lukk" onClick={onLukk} aria-label="Lukk">

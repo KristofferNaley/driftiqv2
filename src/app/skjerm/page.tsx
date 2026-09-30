@@ -126,11 +126,11 @@ function Koblet({ token, onFrakoblet }: { token: string; onFrakoblet: () => void
 
   // Bildene hentes med tokenet og holdes som blob-URL-er — de overlever et nettbrudd så
   // lenge siden står. Bilder som ikke lenger er i bruk, slippes.
-  // Nøkkelen er API-stien: `/fil/{oppslag}` og `/kontakt/{person}` hentes likt. Kontakt-
+  // Nøkkelen er API-stien: `/side/{side}` og `/kontakt/{person}` hentes likt. Kontakt-
   // bildet kan byttes under samme id, så versjonen er med i nøkkelen (ruta ignorerer den).
   const kontaktNokkel = (k: Skjerminnhold["kontakter"][number]) => `/kontakt/${k.id}?v=${k.bildeVersjon}`;
   const bildeIder = [
-    ...(innhold?.oppslag ?? []).filter((p) => p.harFil).map((p) => `/fil/${p.id}`),
+    ...(innhold?.oppslag ?? []).flatMap((p) => (p.sider ?? []).map((s) => `/side/${s.id}`)),
     ...(innhold?.kontakter ?? []).filter((k) => k.harBilde).map(kontaktNokkel),
   ].join(",");
   useEffect(() => {
@@ -165,7 +165,7 @@ function Koblet({ token, onFrakoblet }: { token: string; onFrakoblet: () => void
   return (
     <Tavleskjerm
       innhold={innhold}
-      bildeUrl={(id) => bilder[`/fil/${id}`] ?? null}
+      sideUrl={(id) => bilder[`/side/${id}`] ?? null}
       kontaktbildeUrl={(id) => {
         const k = innhold.kontakter?.find((x) => x.id === id);
         return k ? (bilder[kontaktNokkel(k)] ?? null) : null;

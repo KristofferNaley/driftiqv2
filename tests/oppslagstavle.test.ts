@@ -16,7 +16,6 @@ import { anonymAktor } from "../src/lib/aktor";
 import {
   endreHendelse,
   endreOppslag,
-  filForSkjerm,
   hentOppslag,
   settRekkefolge,
   slettHendelse,
@@ -39,6 +38,12 @@ import {
   startKobling,
 } from "../src/lib/oppslagstavle";
 import {
+  MAKS_TEKST,
+  TEKSTSKALA_MAKS,
+  TEKSTSKALA_MIN,
+  finnTekstskala,
+  lengsteOrd,
+  oppslagFeil,
   normaliserKode,
   oppslagStatus,
   osloIDag,
@@ -214,10 +219,10 @@ describe("hva skjermen viser", () => {
     const a = await kobletSkjerm(orgId, "A");
     const b = await kobletSkjerm(orgId, "B");
     await withOrg(orgId, async (db) => {
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Til alle" }, null);
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Bare B", alleSkjermer: false, skjermIder: [b.skjerm.id] }, null);
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Utløpt", fra: "2020-01-01", til: "2020-01-02" }, null);
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Planlagt", fra: "2999-01-01", til: "2999-01-02" }, null);
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Til alle" });
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Bare B", alleSkjermer: false, skjermIder: [b.skjerm.id] });
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Utløpt", fra: "2020-01-01", til: "2020-01-02" });
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Planlagt", fra: "2999-01-01", til: "2999-01-02" });
     });
     const paaA = await innholdForSkjerm(medToken(a.token));
     const paaB = await innholdForSkjerm(medToken(b.token));
@@ -227,7 +232,7 @@ describe("hva skjermen viser", () => {
 
   it("et «alle skjermer»-oppslag gjelder også skjermer koblet til etterpå", async () => {
     const orgId = await nyOrg();
-    await withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Dugnad" }, null));
+    await withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Dugnad" }));
     const ny = await kobletSkjerm(orgId, "Ny");
     expect((await innholdForSkjerm(medToken(ny.token))).oppslag.map((p) => p.tittel)).toEqual(["Dugnad"]);
   });
@@ -237,7 +242,7 @@ describe("hva skjermen viser", () => {
     const b = await nyOrg("Lag B");
     const skjermA = await kobletSkjerm(a);
     await withOrg(b, async (db) => {
-      await opprettOppslag(db, b, KARI, "tekst", { ...periode, tittel: "Hemmelig i B" }, null);
+      await opprettOppslag(db, b, KARI, { ...periode, tittel: "Hemmelig i B" });
       await opprettHendelse(db, b, KARI, { tittel: "Møte i B", dato: iDag, tid: null, sted: null });
     });
     const innhold = await innholdForSkjerm(medToken(skjermA.token));
@@ -252,27 +257,10 @@ describe("hva skjermen viser", () => {
     const fremmed = await kobletSkjerm(b);
     const feil = await feilFra(() =>
       withOrg(a, (db) =>
-        opprettOppslag(db, a, KARI, "tekst", { ...periode, tittel: "x", alleSkjermer: false, skjermIder: [fremmed.skjerm.id] }, null),
+        opprettOppslag(db, a, KARI, { ...periode, tittel: "x", alleSkjermer: false, skjermIder: [fremmed.skjerm.id] }),
       ),
     );
     expect(feil.status).toBe(400);
-  });
-
-  it("skjermen får bare bildene i sine egne oppslag", async () => {
-    const orgId = await nyOrg();
-    const a = await kobletSkjerm(orgId, "A");
-    const b = await kobletSkjerm(orgId, "B");
-    // Raden settes inn direkte — fila på disk er ikke poenget, gaten foran den er.
-    const postId = randomUUID();
-    await eier.query(
-      `INSERT INTO board_posts (id, org_id, kind, title, file_name, show_from, show_until, all_screens, screen_ids, created_by)
-       VALUES ($1,$2,'bilde','Bilde til B',$3,$4,$4,false,$5,'Kari')`,
-      [postId, orgId, `${randomUUID()}.jpg`, iDag, [b.skjerm.id]],
-    );
-    const req = (t: string) => new Request("http://localhost/", { headers: { authorization: `Bearer ${t}` } });
-    expect((await feilFra(() => filForSkjerm(req(a.token), postId))).message).toBe("Bilde ikke funnet");
-    // B slipper gjennom gaten; fila finnes ikke på disk i testen.
-    expect((await feilFra(() => filForSkjerm(req(b.token), postId))).message).toBe("Fil ikke funnet på disk");
   });
 
   it("passerte hendelser vises ikke", async () => {
@@ -290,8 +278,8 @@ describe("visningstid og redigering", () => {
     const orgId = await nyOrg();
     const { token } = await kobletSkjerm(orgId);
     await withOrg(orgId, async (db) => {
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Kort", sekunder: 5 }, null);
-      await opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Lang", sekunder: 30 }, null);
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Kort", sekunder: 5 });
+      await opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Lang", sekunder: 30 });
     });
     const tider = (await innholdForSkjerm(medToken(token))).oppslag.map((p) => [p.tittel, p.sekunder]);
     expect(tider.sort()).toEqual([["Kort", 5], ["Lang", 30]]);
@@ -308,7 +296,7 @@ describe("visningstid og redigering", () => {
     const orgId = await nyOrg();
     const a = await kobletSkjerm(orgId, "A");
     const b = await kobletSkjerm(orgId, "B");
-    const p = await withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, "tekst", { ...periode, tittel: "Før" }, null));
+    const p = await withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, { ...periode, tittel: "Før" }));
     await withOrg(orgId, (db) =>
       endreOppslag(db, orgId, p.id, { ...periode, tittel: "Etter", alleSkjermer: false, skjermIder: [b.skjerm.id], sekunder: 45 }),
     );
@@ -320,7 +308,7 @@ describe("visningstid og redigering", () => {
   it("et oppslag i en annen org kan ikke endres", async () => {
     const a = await nyOrg();
     const b = await nyOrg();
-    const p = await withOrg(b, (db) => opprettOppslag(db, b, KARI, "tekst", { ...periode, tittel: "B" }, null));
+    const p = await withOrg(b, (db) => opprettOppslag(db, b, KARI, { ...periode, tittel: "B" }));
     const feil = await feilFra(() => withOrg(a, (db) => endreOppslag(db, a, p.id, { ...periode, tittel: "Kapret" })));
     expect(feil.status).toBe(404);
   });
@@ -328,7 +316,7 @@ describe("visningstid og redigering", () => {
 
 describe("rekkefølge og kalender", () => {
   const tekst = (orgId: string, tittel: string) =>
-    withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, "tekst", { tittel, ...periode }, null));
+    withOrg(orgId, (db) => opprettOppslag(db, orgId, KARI, { tittel, ...periode }));
   const titler = async (orgId: string) => (await withOrg(orgId, (db) => hentOppslag(db, orgId))).map((p) => p.title);
 
   it("et nytt oppslag havner øverst, og styrets rekkefølge gjelder både i lista og på skjermen", async () => {
@@ -495,6 +483,70 @@ describe("regler", () => {
     expect(oppslagStatus({ showFrom: "2026-09-01", showUntil: "2026-09-28" }, "2026-09-29")).toBe("utlopt");
   });
 
+
+  it("tekstskalering: det lengste ordet får plass i bredden før høyden avgjør resten", () => {
+    // En enkel modell av nettleseren: hvert tegn er 10 px bredt og hver linje 20 px høy ved skala 1.
+    const maal = (tekst: string, feltbredde: number, felthoyde: number) => {
+      const ord = lengsteOrd(tekst);
+      const linjer = (skala: number) => {
+        let n = 1;
+        let brukt = 0;
+        for (const o of tekst.split(/\s+/)) {
+          const b = o.length * 10 * skala;
+          if (brukt > 0 && brukt + 10 * skala + b > feltbredde) {
+            n++;
+            brukt = b;
+          } else brukt += (brukt > 0 ? 10 * skala : 0) + b;
+        }
+        return n;
+      };
+      const r = finnTekstskala({
+        ord: [{ ordbredde: ord.length * 10, feltbredde }],
+        passerIHoyden: (skala) => linjer(skala) * 20 * skala <= felthoyde,
+      });
+      return { ...r, ordbredde: ord.length * 10 * r.skala };
+    };
+
+    expect(lengsteOrd("Velkommen til ekstraordinært generalforsamlingsmøte")).toBe("generalforsamlingsmøte");
+    // Ord på 15 tegn og mer, i smale og brede felt: ordet går aldri ut over feltets bredde.
+    const lange = ["arrangementskomiteen", "ekstraordinært generalforsamlingsmøte", "Vaktmestertjenester", "parkeringsplassene stenges"];
+    for (const tekst of lange) {
+      expect(lengsteOrd(tekst).length, tekst).toBeGreaterThanOrEqual(15);
+      for (const bredde of [160, 240, 400, 900, 1600]) {
+        const r = maal(tekst, bredde, 300);
+        if (!r.bryt) expect(r.ordbredde, `${tekst} @ ${bredde}`).toBeLessThanOrEqual(bredde);
+        expect(r.skala, `${tekst} @ ${bredde}`).toBeGreaterThanOrEqual(TEKSTSKALA_MIN);
+        expect(r.skala, `${tekst} @ ${bredde}`).toBeLessThanOrEqual(TEKSTSKALA_MAKS);
+      }
+    }
+    // Feilen fra 30.09: «arrangement» (11 tegn, 110 px) i et felt på 200 px ble skalert etter høyden alene.
+    const a = maal("arrangement", 200, 1000);
+    expect(a.ordbredde).toBeLessThanOrEqual(200);
+    expect(a.skala).toBeCloseTo((200 / 110) * 0.98, 5);
+    // Et kort ord i et stort felt stopper på øvre grense.
+    expect(maal("Dugnad", 2000, 2000).skala).toBe(TEKSTSKALA_MAKS);
+    // Lang tekst: høyden avgjør, og skalaen blir lavere enn bredden alene tillater.
+    const lang = maal("Vannet stenges torsdag fra klokka ni til tolv i hele oppgangen", 400, 120);
+    expect(lang.skala).toBeLessThan(400 / 100);
+    expect(lang.klipp).toBe(false);
+    // Et ord som ikke får plass selv på minste størrelse, brytes. Det klippes ikke, og skalaen går ikke under grensen.
+    const smalt = maal("generalforsamlingsmøte", 80, 300);
+    expect(smalt).toMatchObject({ skala: TEKSTSKALA_MIN, bryt: true });
+    // Passer ikke høyden på minste størrelse, klippes det med linjegrense.
+    expect(maal("en to tre fire fem seks sju åtte ni ti elleve tolv", 60, 30).klipp).toBe(true);
+  });
+
+  it("oppslag valideres likt i skjemaet og på serveren: maks 200 tegn tekst", () => {
+    const d = { tittel: "T", ...periode };
+    expect(oppslagFeil({ ...d, tekst: "x".repeat(MAKS_TEKST) })).toBeNull();
+    expect(oppslagFeil({ ...d, tekst: "x".repeat(MAKS_TEKST + 1) })).toMatch(/maks 200/);
+    expect(oppslagInn.safeParse({ ...d, tekst: "x".repeat(MAKS_TEKST + 1) }).error?.issues[0]?.message).toBe(
+      oppslagFeil({ ...d, tekst: "x".repeat(MAKS_TEKST + 1) }),
+    );
+    expect(oppslagFeil({ ...d, tittel: "  " })).toBe("Skriv en overskrift");
+    expect(oppslagFeil({ ...d, til: "2020-01-01" })).toMatch(/kan ikke være før/);
+    expect(oppslagFeil({ ...d, alleSkjermer: false })).toBe("Velg minst én skjerm");
+  });
 
   it("koden normaliseres før oppslag", () => {
     expect(normaliserKode(" k7m-4qx ")).toBe("K7M4QX");

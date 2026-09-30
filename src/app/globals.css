@@ -350,6 +350,8 @@ a { color: inherit; text-decoration: none; }
   padding: 10px 14px;
   width: 100%;
 }
+/* Dempet, så et eksempel ikke ser ut som en utfylt verdi. */
+.input::placeholder, .textarea::placeholder { color: var(--muted); opacity: 0.65; }
 .input:focus,
 .select:focus,
 .textarea:focus { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: -1px; }
@@ -4708,6 +4710,12 @@ textarea.qr-input { resize: vertical; }
   width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; object-fit: cover;
   background: rgba(var(--accent-rgb), 0.1); color: var(--accent);
 }
+.ot-radikon { position: relative; overflow: hidden; }
+.ot-radikon img { width: 100%; height: 100%; display: block; }
+.ot-radikon i {
+  position: absolute; right: 0; bottom: 0; padding: 0 4px; border-top-left-radius: 6px; font-style: normal;
+  background: rgba(0, 0, 0, 0.7); color: #fff; font-size: var(--fs-label); font-weight: 700; line-height: 1.4;
+}
 .ot-radikon.viktig { background: rgba(240, 64, 64, 0.1); color: var(--danger); }
 .ot-radikon.arrangement { background: rgba(245, 166, 35, 0.1); color: var(--warn); }
 .ot-listefot { padding: 10px 20px; border-bottom: 1px solid var(--border); }
@@ -4721,6 +4729,98 @@ textarea.qr-input { resize: vertical; }
 }
 .ot-lagrelinje-feil { color: var(--danger); margin-left: 12px; font-size: var(--fs-label); }
 .ot-lagrelinje-knapper { display: flex; gap: 10px; }
+/* Panelet «Nytt innhold» (Skuff uten slør): forhåndsvisningen står synlig til venstre for
+   panelet og viser utkastet. Lista skjules mens panelet er åpent, så skjermen får plassen. */
+.ot-panel { width: 480px; }
+.ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { grid-template-columns: minmax(0, 1fr); margin-right: 480px; }
+.ot-oppsett.med-panel .ot-kolonne { display: none; }
+.ot-oppsett.med-panel .ot-forhand { width: 100%; max-width: min(380px, calc((100dvh - 250px) * 9 / 16)); margin: 0 auto; }
+.ot-oppsett.med-panel.liggende .ot-forhand { max-width: min(760px, calc((100dvh - 250px) * 16 / 9)); }
+.ot-panelskjema { display: flex; flex-direction: column; gap: 14px; }
+.ot-panel .ot-typer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Samme høyde på alle felter og nedtrekk i panelet (tekstområdet unntatt). */
+.ot-panel .input, .ot-panel .select { height: 44px; }
+.ot-panel .field { margin-bottom: 0; }
+.ot-panel .skuff-fot { flex-wrap: wrap; }
+.ot-panelfot-luft { flex: 1; }
+.ot-panelfot-tekst { flex: 1; font-size: var(--fs-label); color: var(--muted); }
+.ot-panelfot-feil { flex-basis: 100%; margin: 0; }
+.ot-bare-smal { display: none; }
+.ot-panel-skjerm { flex-direction: column; gap: 10px; }
+.ot-valg { display: flex; gap: 6px; flex-wrap: wrap; }
+.ot-valg button {
+  flex: 1; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted); font: inherit; font-size: var(--fs-sm); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
+}
+.ot-valg button:hover { color: var(--text); }
+.ot-valg button.valgt { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.ot-fargeprikk { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+.ot-fargeprikk.viktig { background: var(--danger); }
+.ot-fargeprikk.arrangement { background: var(--warn); }
+.ot-tekstnotat { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.ot-teller { font-size: var(--fs-label); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ot-teller.naer { color: var(--warn); font-weight: 600; }
+.ot-teller.over { color: var(--danger); font-weight: 600; white-space: normal; }
+.ot-flere { border: 1px solid var(--border); border-radius: 10px; }
+.ot-flere-hode {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 44px; padding: 0 12px; border: 0; background: none;
+  color: inherit; font: inherit; font-size: var(--fs-sm); cursor: pointer; text-align: left;
+}
+.ot-flere-hode span { color: var(--muted); margin-left: auto; font-size: var(--fs-label); }
+.ot-flere-kropp { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+/* Bildesidene i panelet: slippflate, kø med fremdrift per fil, miniatyrer og ett bilde stort. */
+.ot-bildesider, .ot-bildestor { display: flex; flex-direction: column; gap: 10px; }
+.ot-slipp {
+  border: 1px dashed var(--border); border-radius: 10px; padding: 16px; text-align: center; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: var(--fs-sm);
+}
+.ot-slipp.over { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); color: var(--text); }
+.ot-slipp b { color: var(--text); }
+.ot-ko { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: var(--fs-label); }
+.ot-ko.feil { border-color: rgba(240, 64, 64, 0.4); }
+.ot-ko-linje { display: flex; align-items: center; gap: 10px; }
+.ot-ko-navn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ot-ko-status { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ot-ko.feil .ot-ko-status { color: var(--danger); font-weight: 600; }
+.ot-ko-lukk { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; display: grid; }
+.ot-ko-stolpe { height: 4px; border-radius: 2px; background: var(--surface2); margin-top: 6px; overflow: hidden; }
+.ot-ko-stolpe i { display: block; height: 100%; background: var(--accent); transition: width 0.2s ease; }
+.ot-angre {
+  display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 8px;
+  background: var(--surface2); border: 1px solid var(--border); font-size: var(--fs-sm);
+}
+.ot-miniatyrer { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.ot-mini { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ot-mini.dras { opacity: 0.4; }
+.ot-mini.over .ot-mini-bilde { box-shadow: 0 0 0 2px var(--accent); }
+.ot-mini-bilde {
+  position: relative; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--surface2); padding: 0; cursor: pointer; display: block; width: 100%;
+}
+.ot-mini-bilde img { width: 100%; height: 100%; display: block; }
+.ot-mini-nr {
+  position: absolute; left: 5px; top: 5px; min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65); color: #fff; font-size: var(--fs-label); font-weight: 700;
+}
+.ot-mini-fjern { border: 0; background: none; padding: 2px 0; color: var(--muted); font: inherit; font-size: var(--fs-label); cursor: pointer; text-align: left; }
+.ot-mini-fjern:hover { color: var(--danger); }
+.ot-bildestor-topp { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ot-bildestor-ramme { display: flex; justify-content: center; background: var(--surface2); border-radius: 10px; padding: 8px; }
+/* Boksen har bildets egen form, så et klikk kan regnes om til prosent av BILDET. */
+.ot-fokus { position: relative; display: inline-block; line-height: 0; }
+.ot-fokus img { max-width: 100%; max-height: 42dvh; display: block; border-radius: 6px; cursor: crosshair; }
+.ot-fokus i {
+  position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; pointer-events: none;
+  border: 2px solid #fff; background: rgba(var(--accent-rgb), 0.55); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+@media (max-width: 1100px) {
+  .ot-panel { width: 100%; }
+  .ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { margin-right: 0; }
+  .ot-bare-smal { display: inline-flex; }
+  .ot-panel-skjerm.ot-bare-smal { display: flex; }
+  .ot-panelskjema.skjult-smal { display: none; }
+}
 /* Første gangs oppsett: tre steg som hukes av. */
 .ot-steg { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
 .ot-steg:not(.aktiv):not(.ferdig) { opacity: 0.6; }
@@ -4785,16 +4885,37 @@ textarea.qr-input { resize: vertical; }
 .ot-tag { font-size: calc(var(--u) * 2.8); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--s-accent-t); flex-shrink: 0; }
 .ot-hero.viktig .ot-tag { color: var(--s-red); }
 .ot-hero.arrangement .ot-tag { color: var(--s-sun); }
-/* Tekstoppslag skaleres av `useTilpassetTekst` (`--tekstskala`) så teksten fyller feltet.
-   Linjeklippingen gjelder bare når teksten ikke får plass på minste størrelse (`klipp`). */
+/* Tekstoppslag skaleres av `useTilpassetTekst` (`--tekstskala`) så teksten fyller feltet:
+   først så det lengste ordet får plass i bredden, så ned til alt får plass i høyden.
+   `overflow-wrap: anywhere` er sikkerhetsnettet — et ord som er for langt selv på minste
+   størrelse, deles over to linjer og klippes aldri vannrett. Linjeklippingen gjelder bare
+   når teksten ikke får plass i høyden på minste størrelse (`klipp`). */
 .ot-hero h3 {
   font-size: calc(var(--u) * 7.2 * var(--tekstskala, 1)); line-height: 1.08; margin: calc(var(--u) * 2) 0; font-weight: 800; letter-spacing: -0.02em;
-  text-wrap: balance; overflow: hidden; flex-shrink: 0;
+  text-wrap: balance; overflow: hidden; flex-shrink: 0; overflow-wrap: anywhere;
 }
-.ot-hero p { font-size: calc(var(--u) * 3.8 * var(--tekstskala, 1)); line-height: 1.4; margin: 0; color: var(--s-fg2); overflow: hidden; flex-shrink: 0; }
+.ot-hero p { font-size: calc(var(--u) * 3.8 * var(--tekstskala, 1)); line-height: 1.4; margin: 0; color: var(--s-fg2); overflow: hidden; flex-shrink: 0; overflow-wrap: anywhere; }
 .ot-hero.klipp h3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .ot-hero.klipp p { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; flex-shrink: 1; min-height: 0; }
 .ot-hero h3.bildetekst { font-size: calc(var(--u) * 3.8); font-weight: 600; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin: calc(var(--u) * 2) calc(var(--u) * 1) 0; }
+/* Bildeoppslag: sidene ligger oppå hverandre og tones inn én og én (`pa`). Fokuspunktet og
+   tilpasningen settes per bilde som inline stil — de er data, ikke layout. */
+.ot-sider { position: relative; flex: 1; min-height: 0; }
+.ot-sider figure { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity 0.8s ease; display: flex; flex-direction: column; }
+.ot-sider figure.pa { opacity: 1; }
+.ot-sider img, .ot-siderutenett img { flex: 1; min-height: 0; width: 100%; height: 100%; display: block; }
+.ot-sider img { border-radius: calc(var(--u) * 2); background: var(--s-line); }
+/* Bildeteksten står under bildet, som før sidene fantes — ikke oppå det. */
+.ot-sider figcaption {
+  flex-shrink: 0; padding: calc(var(--u) * 2) calc(var(--u) * 1) 0; background: var(--s-panel);
+  font-size: calc(var(--u) * 3.8); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ot-siderutenett { flex: 1; min-height: 0; display: grid; gap: calc(var(--u) * 1.5); grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
+.ot-siderutenett.n1 { grid-template-columns: minmax(0, 1fr); }
+.ot-siderutenett.n3 figure:first-child { grid-row: span 2; }
+.ot-siderutenett figure { margin: 0; min-height: 0; border-radius: calc(var(--u) * 2); overflow: hidden; background: var(--s-line); }
+@media (prefers-reduced-motion: reduce) { .ot-sider figure { transition: none; } }
 .ot-bilde { flex: 1; min-height: 0; width: 100%; object-fit: cover; border-radius: calc(var(--u) * 2); display: block; background: var(--s-line); }
 .ot-prikker { display: flex; gap: calc(var(--u) * 1.4); margin-top: auto; padding-top: calc(var(--u) * 2.5); flex-shrink: 0; }
 .ot-prikker i { width: calc(var(--u) * 4); height: calc(var(--u) * 0.9); border-radius: calc(var(--u) * 1); background: var(--s-line); }

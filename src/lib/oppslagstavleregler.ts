@@ -6,7 +6,11 @@
  * veggen. To kopier av «hva vises nå» ville drevet fra hverandre.
  */
 
-export const OPPSLAGSTYPER = ["tekst", "bilde"] as const;
+/**
+ * «bilder» er én type for bilder og PDF: en ordnet liste med sider, der hver side er et
+ * bilde (`board_post_pages`). Før 30.09.2026 het typen «bilde» og hadde ett bilde i raden.
+ */
+export const OPPSLAGSTYPER = ["tekst", "bilder"] as const;
 export type Oppslagstype = (typeof OPPSLAGSTYPER)[number];
 
 export const KATEGORIER = ["viktig", "info", "arrangement"] as const;
@@ -18,13 +22,74 @@ export const KATEGORI_ETIKETT: Record<Kategori, string> = {
 };
 /**
  * Typen styrer bare merkelappen og fargen på kanten — ikke rekkefølge eller visningstid.
- * Forklaringen står i skjemaet, så styret velger ut fra hva beboeren skal oppfatte.
+ * Én kort linje under valget i skjemaet, så styret velger ut fra hva beboeren skal oppfatte.
  */
 export const KATEGORI_BESKRIVELSE: Record<Kategori, string> = {
-  viktig: "Rød kant. For det beboerne MÅ få med seg: vann eller strøm stenges, stengt innkjørsel, sikkerhet.",
-  info: "Kant i aksentfargen. Vanlige beskjeder fra styret: nye regler, nøkkelbrikker, påminnelser.",
-  arrangement: "Gul kant. Noe beboerne er invitert til: dugnad, sommerfest, åpent styremøte.",
+  viktig: "Rød kant. For det beboerne må få med seg.",
+  info: "Kant i aksentfargen. Vanlige beskjeder fra styret.",
+  arrangement: "Gul kant. Noe beboerne er invitert til.",
 };
+
+// ---------------------------------------------------------------------------------------
+// Bilder og PDF
+// ---------------------------------------------------------------------------------------
+
+export const MAKS_SIDER = 10;
+export const MAKS_BILDETEKST = 80;
+/** Sekunder per bilde. Egen liste: et bilde trenger kortere tid enn en tekst. */
+export const BILDESEKUNDER = [5, 8, 12, 20] as const;
+export const STANDARD_BILDESEKUNDER = 8;
+/** Bilder vises samtidig i rutenettet. */
+export const RUTENETT_ANTALL = 4;
+
+export const VISNINGSMATER = ["bla", "rutenett"] as const;
+export type Visningsmate = (typeof VISNINGSMATER)[number];
+export const VISNINGSMATE_ETIKETT: Record<Visningsmate, string> = { bla: "Bla gjennom bildene", rutenett: "Rutenett" };
+
+/** «dekk» fyller feltet og beskjærer rundt fokuspunktet; «hele» viser hele bildet (lysbilder fra PDF). */
+export const TILPASNINGER = ["dekk", "hele"] as const;
+export type Tilpasning = (typeof TILPASNINGER)[number];
+
+export const MAKS_OPPLASTING = 20 * 1024 * 1024;
+/** Lengste kant etter konvertering til WebP på serveren. */
+export const MAKS_KANT = 3840;
+
+const OPPLASTINGSTYPER: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heic",
+  "application/pdf": "pdf",
+};
+const ENDELSER: Record<string, string> = { jpg: "jpg", jpeg: "jpg", png: "png", webp: "webp", heic: "heic", heif: "heic", pdf: "pdf" };
+export const OPPLASTING_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif";
+
+/**
+ * Hva slags fil dette er («jpg», «heic», «pdf» …), eller `null` når den ikke støttes.
+ * Endelsen er reserve: noen nettlesere sender HEIC fra iPhone uten MIME-type.
+ */
+export function opplastingstype(fil: { name: string; type: string }): string | null {
+  return OPPLASTINGSTYPER[fil.type] ?? (fil.type ? null : (ENDELSER[fil.name.split(".").pop()?.toLowerCase() ?? ""] ?? null));
+}
+
+/** Feilen på én fil før den lastes opp, eller `null`. Samme kontroll i skjemaet og på serveren. */
+export function filFeil(fil: { name: string; type: string; size: number }): string | null {
+  if (!opplastingstype(fil)) return "Filtypen støttes ikke";
+  if (fil.size > MAKS_OPPLASTING) return "For stor, maks 20 MB";
+  if (fil.size <= 0) return "Filen er tom";
+  return null;
+}
+
+/** Sekundene et bildeoppslag står i rotasjonen: alle bildene etter tur, eller fire og fire i rutenettet. */
+export function samletVisningstid(antall: number, sekunder: number, visning: Visningsmate = "bla"): number {
+  return (visning === "rutenett" ? Math.ceil(antall / RUTENETT_ANTALL) : antall) * sekunder;
+}
+
+/** «4 bilder · 8 sek per bilde · 32 sek totalt» */
+export function bildeoppsummering(antall: number, sekunder: number): string {
+  return `${antall} ${antall === 1 ? "bilde" : "bilder"} · ${sekunder} sek per bilde · ${samletVisningstid(antall, sekunder)} sek totalt`;
+}
 
 export const RETNINGER = ["staende", "liggende"] as const;
 export type Retning = (typeof RETNINGER)[number];
@@ -43,6 +108,107 @@ export const KONTAKT_SEKUNDER = 8;
 export const HENT_SEKUNDER = 60;
 /** Uten livstegn så lenge regnes skjermen som nede (tre bomskudd på rad). */
 export const NEDE_ETTER_SEKUNDER = 3 * HENT_SEKUNDER;
+
+// ---------------------------------------------------------------------------------------
+// Validering — SAMME regler i skjemaet og på serveren
+// ---------------------------------------------------------------------------------------
+
+export const MAKS_TITTEL = 80;
+/** 200 tegn siden 30.09.2026 (var 400). Eldre, lengre tekster vises som før, men må kortes ned ved redigering. */
+export const MAKS_TEKST = 200;
+/** Telleren i skjemaet blir gul herfra. */
+export const TEKST_VARSEL = 160;
+
+const erDato = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+
+export type OppslagFelter = {
+  /** Bildeoppslag kan stå uten tittel: den er bare navnet i lista. */
+  type?: Oppslagstype;
+  tittel: string;
+  tekst?: string | null;
+  fra: string;
+  til: string;
+  alleSkjermer: boolean;
+  skjermIder: string[];
+  sekunder: number;
+};
+
+/**
+ * Feilen i et oppslag, som norsk melding, eller `null`. Skjemaet kaller den før innsending
+ * og serveren kaller den i Zod-skjemaet (`oppslagInn`), så de to aldri er uenige om hva som
+ * er et gyldig oppslag.
+ */
+export function oppslagFeil(d: OppslagFelter): string | null {
+  const tittel = d.tittel.trim();
+  if (tittel.length === 0 && d.type !== "bilder") return "Skriv en overskrift";
+  if (tittel.length > MAKS_TITTEL) return `Overskriften er for lang (maks ${MAKS_TITTEL} tegn)`;
+  if ((d.tekst ?? "").trim().length > MAKS_TEKST) return `Teksten er for lang (maks ${MAKS_TEKST} tegn)`;
+  if (!erDato(d.fra) || !erDato(d.til)) return "Ugyldig dato";
+  if (d.til < d.fra) return "«Til og med» kan ikke være før «Vis fra»";
+  if (!d.alleSkjermer && d.skjermIder.length === 0) return "Velg minst én skjerm";
+  if (![...VISNINGSTIDER, ...BILDESEKUNDER].includes(d.sekunder as never)) return "Ugyldig visningstid";
+  return null;
+}
+
+export type HendelseFelter = { tittel: string; dato: string; tid?: string | null; sted?: string | null };
+
+export function hendelseFeil(d: HendelseFelter): string | null {
+  const tittel = d.tittel.trim();
+  if (tittel.length === 0) return "Skriv hva som skjer";
+  if (tittel.length > 60) return "Maks 60 tegn i «Hva»";
+  if (!erDato(d.dato)) return "Ugyldig dato";
+  if (d.tid && !/^([01]\d|2[0-3]):[0-5]\d$/.test(d.tid)) return "Ugyldig klokkeslett";
+  if ((d.sted ?? "").trim().length > 50) return "Maks 50 tegn i «Hvor»";
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------
+// Tekstskalering i oppslag
+// ---------------------------------------------------------------------------------------
+
+/** Grensene for tekstskaleringen: 1 er grunnstørrelsen i `.ot-hero`. */
+export const TEKSTSKALA_MIN = 0.55;
+export const TEKSTSKALA_MAKS = 2.6;
+
+/** Det lengste ordet i teksten — det som avgjør hvor stor skriften kan bli i bredden. */
+export function lengsteOrd(tekst: string): string {
+  return tekst.split(/\s+/).reduce((lengst, ord) => (ord.length > lengst.length ? ord : lengst), "");
+}
+
+/**
+ * Skalaen teksten i et oppslag skal ha. To steg, i den rekkefølgen:
+ *
+ * 1. **Bredden.** Det lengste ordet skal få plass på én linje: `ord` er bredden av det
+ *    lengste ordet i hver tekstdel (overskrift, brødtekst) målt ved skala 1, mot bredden
+ *    delen har. Bredden på et ord følger skriftstørrelsen lineært, så taket regnes ut.
+ * 2. **Høyden.** Derfra og ned til hele teksten får plass (`passerIHoyden`, halvering).
+ *
+ * Aldri under `min`. Får ikke ordet plass selv der, settes `bryt`: ordet deles over to
+ * linjer i stedet for å klippes. Får ikke teksten plass i høyden på `min`, settes `klipp`
+ * (linjegrense). Første versjon målte bare høyden, og «arrangement» ble til «ement».
+ */
+export function finnTekstskala(m: {
+  ord: ReadonlyArray<{ ordbredde: number; feltbredde: number }>;
+  passerIHoyden: (skala: number) => boolean;
+  min?: number;
+  maks?: number;
+}): { skala: number; bryt: boolean; klipp: boolean } {
+  const min = m.min ?? TEKSTSKALA_MIN;
+  const maks = m.maks ?? TEKSTSKALA_MAKS;
+  // 2 % margin: målingen er i hele piksler, og en avrunding skal ikke koste siste bokstav.
+  const tak = Math.min(maks, ...m.ord.filter((o) => o.ordbredde > 0).map((o) => (o.feltbredde / o.ordbredde) * 0.98));
+  const bryt = tak < min;
+  let hoy = Math.max(min, tak);
+  if (m.passerIHoyden(hoy)) return { skala: hoy, bryt, klipp: false };
+  let lav = min;
+  if (!m.passerIHoyden(lav)) return { skala: lav, bryt, klipp: true };
+  for (let n = 0; n < 8; n++) {
+    const midt = (lav + hoy) / 2;
+    if (m.passerIHoyden(midt)) lav = midt;
+    else hoy = midt;
+  }
+  return { skala: lav, bryt, klipp: false };
+}
 
 export type Status = "na" | "planlagt" | "utlopt";
 export const STATUS_ETIKETT: Record<Status, string> = { na: "Vises nå", planlagt: "Planlagt", utlopt: "Utløpt" };
@@ -173,6 +339,12 @@ export type Skjerminnhold = {
     kategori: Kategori | null;
     harFil: boolean;
     sekunder: number;
+    /**
+     * Bildeoppslag: sidene i rekkefølge, med bildetekst og fokuspunkt (prosent), og hvordan de
+     * vises. Mangler i innhold en skjerm lagret før 30.09.2026.
+     */
+    sider?: Array<{ id: string; tekst: string | null; x: number; y: number; tilpasning: Tilpasning }>;
+    visning?: Visningsmate;
   }>;
   kontakter: Array<{
     id: string;

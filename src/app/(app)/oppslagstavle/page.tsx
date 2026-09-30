@@ -19,7 +19,7 @@ import {
 } from "@/lib/klient";
 import { RETNING_ETIKETT, RETNINGER, type Retning, type Skjerminnhold } from "@/lib/oppslagstavleregler";
 import { INNEBYGDE_BLOKKER, finnMal, ryddFelt } from "@/lib/tavlemaler";
-import { Innhold, OppslagSkjema } from "./Innhold";
+import { Innhold, OppslagSkjema, type Innholdsutkast } from "./Innhold";
 import { Drift, Skjermliste, Skjermoppsett, Utseende, type Utseendeverdi } from "./Oppsett";
 import { sistSett } from "./felles";
 
@@ -37,6 +37,9 @@ import { sistSett } from "./felles";
  * det serveren har. Linja nederst vises når utkastet avviker, og forhåndsvisningen tegner
  * utkastet, så styret ser endringen før den er lagret. Forhåndsvisningen er samme komponent
  * som skjermen på veggen, med de samme dataene fra serveren.
+ *
+ * Det samme gjelder innhold: mens panelet «Nytt innhold» er åpent, legges det som skrives
+ * (`utkast`) inn i oppslagene eller kalenderen forhåndsvisningen tegner.
  */
 type Fane = "innhold" | "oppsett";
 
@@ -103,12 +106,11 @@ export default function Oppslagstavle() {
     const gyldige = new Set<string>([...INNEBYGDE_BLOKKER, ...blokker.map((b) => b.nokkel)]);
     return { ...v, felt: ryddFelt(finnMal(v.mal, v.retning), v.felt, gyldige) };
   }, [skjerm, lagretSkjerm, skjermUtkast, blokker]);
-  const lagretUtseende: Utseendeverdi | null = utseende && {
-    background: utseende.background,
-    accent: utseende.accent,
-    offlineMode: utseende.offlineMode,
-  };
-  const utseendeVerdi = lagretUtseende && { ...lagretUtseende, ...utseendeUtkast };
+  const lagretUtseende: Utseendeverdi | null = useMemo(
+    () => utseende && { background: utseende.background, accent: utseende.accent, offlineMode: utseende.offlineMode },
+    [utseende],
+  );
+  const utseendeVerdi = useMemo(() => lagretUtseende && { ...lagretUtseende, ...utseendeUtkast }, [lagretUtseende, utseendeUtkast]);
   const skjermEndret = erAdmin && skjermVerdi !== null && !lik(skjermVerdi, lagretSkjerm);
   const utseendeEndret = erAdmin && utseendeVerdi !== null && !lik(utseendeVerdi, lagretUtseende);
   const endret = skjermEndret || utseendeEndret;
@@ -205,6 +207,98 @@ export default function Oppslagstavle() {
   /** «nytt» = tomt skjema; ellers oppslaget eller hendelsen som redigeres. */
   const [redigerer, setRedigerer] = useState<{ oppslag: Oppslag } | { hendelse: Tavlehendelse } | "nytt" | null>(null);
   const [kobler, setKobler] = useState(false);
+  /** Det som skrives i panelet akkurat nå. `setUtkast` er stabil, så panelet kan ha den i en effekt. */
+  const [utkast, setUtkast] = useState<Innholdsutkast | null>(null);
+
+  // --- Forhåndsvisningen ----------------------------------------------------------------
+  const skjermId = skjerm?.id ?? null;
+  const forhand = useOrgData(
+    (o) => (skjermId ? oppslagstavle.forhandsvisning(o, skjermId) : Promise.resolve(null)),
+    [skjermId, versjon],
+  );
+  const harLogo = utseende?.harLogo ?? false;
+  const logo = useMemo(
+    () => (orgId && harLogo ? `${oppslagstavle.logoSti(orgId)}?v=${versjon}` : null),
+    [orgId, harLogo, versjon],
+  );
+  /** Serverens innhold med utkastene lagt over: skjerminnstillinger, utseende og det som skrives i panelet. */
+  const vist = useMemo(() => {
+    const data = forhand.data;
+    if (!data || data.skjerm.id !== skjermId) return null;
+    const skjermdel = skjermVerdi
+      ? {
+          ...data.skjerm,
+          navn: skjermVerdi.navn,
+          adresse: skjermVerdi.adresse,
+          retning: skjermVerdi.retning,
+          skala: skjermVerdi.skala,
+          mal: skjermVerdi.mal,
+          soner: skjermVerdi.felt,
+        }
+      : data.skjerm;
+    const iFelt = new Set(Object.values(skjermdel.soner).flat());
+    let oppslagVist = data.oppslag;
+    let hendelserVist = data.hendelser;
+    let merknad: string | null = null;
+    let laast: string | null = null;
+    if (utkast?.slag === "oppslag") {
+      const andre = data.oppslag.filter((p) => p.id !== utkast.id);
+      if (!utkast.alleSkjermer && !utkast.skjermIder.includes(skjermdel.id)) {
+        oppslagVist = andre;
+        merknad = "Oppslaget er ikke valgt for denne skjermen.";
+      } else {
+        const post: Skjerminnhold["oppslag"][number] = {
+          id: utkast.id,
+          type: utkast.type,
+          tittel: utkast.tittel,
+          tekst: utkast.type === "tekst" ? utkast.tekst : null,
+          kategori: utkast.type === "tekst" ? utkast.kategori : null,
+          harFil: false,
+          sekunder: utkast.sekunder,
+          ...(utkast.type === "bilder" ? { sider: utkast.sider, visning: utkast.visning } : {}),
+        };
+        const plass = data.oppslag.findIndex((p) => p.id === utkast.id);
+        oppslagVist = plass < 0 ? [post, ...andre] : data.oppslag.map((p) => (p.id === utkast.id ? post : p));
+        if (utkast.type === "bilder" && utkast.sider.length === 0) merknad = "Legg til bilder for å se oppslaget på skjermen.";
+        else {
+          laast = utkast.id;
+          if (!iFelt.has("oppslag")) merknad = "Denne skjermen har ikke oppslag i noe felt.";
+        }
+      }
+    } else if (utkast?.slag === "hendelse") {
+      const ny = { id: utkast.id, tittel: utkast.tittel, dato: utkast.dato, tid: utkast.tid, sted: utkast.sted };
+      hendelserVist = [...data.hendelser.filter((x) => x.id !== utkast.id), ny]
+        .sort((a, b) => `${a.dato} ${a.tid ?? ""}`.localeCompare(`${b.dato} ${b.tid ?? ""}`))
+        .slice(0, 5);
+      if (!iFelt.has("kalender")) merknad = "Denne skjermen har ikke kalenderen i noe felt.";
+    }
+    const innhold: Skjerminnhold = {
+      ...data,
+      skjerm: skjermdel,
+      utseende: { ...data.utseende, ...utseendeVerdi },
+      oppslag: oppslagVist,
+      hendelser: hendelserVist,
+    };
+    return { innhold, merknad, laast };
+  }, [forhand.data, skjermId, skjermVerdi, utseendeVerdi, utkast]);
+
+  const tavle = (medMarkering: boolean) =>
+    vist &&
+    orgId && (
+      <Tavleskjerm
+        innhold={vist.innhold}
+        logoUrl={logo}
+        markertSone={medMarkering && (iForstegang || fane === "oppsett") ? valgtFelt : null}
+        visOppslagId={vist.laast ?? visOppslagId}
+        laasOppslag={vist.laast !== null}
+        sideUrl={(id) => oppslagstavle.sideSti(orgId, id)}
+        visSideId={utkast?.slag === "oppslag" ? utkast.visSideId : null}
+        kontaktbildeUrl={(id) => {
+          const k = vist.innhold.kontakter.find((x) => x.id === id);
+          return k ? `${oppslagstavle.kontaktbildeSti(orgId, id)}?v=${k.bildeVersjon}` : null;
+        }}
+      />
+    );
 
   const oppsett = skjerm && skjermVerdi && orgId && (
     <Skjermoppsett
@@ -266,7 +360,7 @@ export default function Oppslagstavle() {
     >
       <div className="page-content">
         <Feil melding={feil} />
-        <div className={`ot-oppsett${skjermVerdi?.retning === "liggende" ? " liggende" : ""}`}>
+        <div className={`ot-oppsett${skjermVerdi?.retning === "liggende" ? " liggende" : ""}${redigerer ? " med-panel" : ""}`}>
           <div className="ot-kolonne">
             {!fersk || !orgId ? null : iForstegang ? (
               <Forstegang
@@ -330,17 +424,18 @@ export default function Oppslagstavle() {
             )}
           </div>
           <Forhandsvisning
-            orgId={orgId}
             skjermer={skjermer}
             skjerm={skjerm}
-            skjermVerdi={skjermVerdi}
-            utseendeVerdi={utseendeVerdi}
             onVelg={velgSkjerm}
-            versjon={versjon}
-            harLogo={utseende?.harLogo ?? false}
-            markertSone={iForstegang || fane === "oppsett" ? valgtFelt : null}
-            visOppslagId={visOppslagId}
-            ulagret={endret}
+            feil={forhand.feil}
+            tavle={tavle(true)}
+            notat={
+              utkast
+                ? (vist?.merknad ?? "Slik blir det på skjermen. Ingenting er lagt ut ennå.")
+                : endret
+                  ? "Viser ulagrede endringer. Skjermen på veggen endres først når du lagrer."
+                  : skjerm && `${skjerm.paaNett ? "På nett" : sistSett(skjerm.sistSett)} · Endringer vises på skjermen innen ett minutt.`
+            }
           />
         </div>
 
@@ -368,7 +463,18 @@ export default function Oppslagstavle() {
           skjermer={skjermer}
           eksisterende={redigerer !== "nytt" && "oppslag" in redigerer ? redigerer.oppslag : null}
           hendelse={redigerer !== "nytt" && "hendelse" in redigerer ? redigerer.hendelse : null}
-          onLukk={() => setRedigerer(null)}
+          onUtkast={setUtkast}
+          forhandsvisning={
+            <>
+              {tavle(false)}
+              {vist?.merknad && <div className="field-note">{vist.merknad}</div>}
+            </>
+          }
+          onLukk={() => {
+            // Bilder lagres straks i panelet, så lista kan ha endret seg selv om ingenting ble «lagret».
+            setRedigerer(null);
+            oppdater();
+          }}
           onLagret={() => {
             setRedigerer(null);
             oppdater();
@@ -607,59 +713,21 @@ function KobleSkjerm({
 // ---------------------------------------------------------------------------------------
 
 function Forhandsvisning({
-  orgId,
   skjermer,
   skjerm,
-  skjermVerdi,
-  utseendeVerdi,
   onVelg,
-  versjon,
-  harLogo,
-  markertSone,
-  visOppslagId,
-  ulagret,
+  feil,
+  tavle,
+  notat,
 }: {
-  orgId: string | undefined;
   skjermer: Skjerm[];
   skjerm: Skjerm | null;
-  /** Utkastet: legges over det serveren svarte, så ulagrede endringer vises med en gang. */
-  skjermVerdi: SkjermEndring | null;
-  utseendeVerdi: Utseendeverdi | null;
   onVelg: (id: string) => void;
-  versjon: number;
-  harLogo: boolean;
-  markertSone: string | null;
-  visOppslagId: string | null;
-  ulagret: boolean;
+  feil: string | null;
+  /** Skjermen, ferdig tegnet med utkastene lagt over (se `vist` i siden). */
+  tavle: React.ReactNode;
+  notat: React.ReactNode;
 }) {
-  const skjermId = skjerm?.id ?? null;
-  const { data, feil } = useOrgData(
-    (o) => (skjermId ? oppslagstavle.forhandsvisning(o, skjermId) : Promise.resolve(null)),
-    [skjermId, versjon],
-  );
-  const logo = useMemo(
-    () => (orgId && harLogo ? `${oppslagstavle.logoSti(orgId)}?v=${versjon}` : null),
-    [orgId, harLogo, versjon],
-  );
-  const innhold: Skjerminnhold | null = useMemo(() => {
-    if (!data || data.skjerm.id !== skjermId) return null;
-    return {
-      ...data,
-      skjerm: skjermVerdi
-        ? {
-            ...data.skjerm,
-            navn: skjermVerdi.navn,
-            adresse: skjermVerdi.adresse,
-            retning: skjermVerdi.retning,
-            skala: skjermVerdi.skala,
-            mal: skjermVerdi.mal,
-            soner: skjermVerdi.felt,
-          }
-        : data.skjerm,
-      utseende: { ...data.utseende, ...utseendeVerdi },
-    };
-  }, [data, skjermId, skjermVerdi, utseendeVerdi]);
-
   return (
     <div className="ot-forhand">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
@@ -669,7 +737,7 @@ function Forhandsvisning({
             className="select"
             style={{ width: "auto" }}
             aria-label="Skjerm"
-            value={skjermId ?? ""}
+            value={skjerm?.id ?? ""}
             onChange={(e) => onVelg(e.target.value)}
           >
             {skjermer.map((s) => (
@@ -684,26 +752,10 @@ function Forhandsvisning({
       {!skjerm ? (
         <Tom tekst="Koble til en skjerm for å se forhåndsvisningen." />
       ) : (
-        innhold && (
+        tavle && (
           <>
-            <div className="ot-ramme">
-              <Tavleskjerm
-                innhold={innhold}
-                logoUrl={logo}
-                markertSone={markertSone}
-                visOppslagId={visOppslagId}
-                bildeUrl={(id) => (orgId ? oppslagstavle.bildeSti(orgId, id) : null)}
-                kontaktbildeUrl={(id) => {
-                  const k = innhold.kontakter.find((x) => x.id === id);
-                  return orgId && k ? `${oppslagstavle.kontaktbildeSti(orgId, id)}?v=${k.bildeVersjon}` : null;
-                }}
-              />
-            </div>
-            <div className="field-note">
-              {ulagret
-                ? "Viser ulagrede endringer. Skjermen på veggen endres først når du lagrer."
-                : `${skjerm.paaNett ? "På nett" : sistSett(skjerm.sistSett)} · Endringer vises på skjermen innen ett minutt.`}
-            </div>
+            <div className="ot-ramme">{tavle}</div>
+            <div className="field-note">{notat}</div>
           </>
         )
       )}

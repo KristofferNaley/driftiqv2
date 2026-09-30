@@ -211,6 +211,9 @@ med eksplisitt lagret modulliste ute.
 - **`/* turbopackIgnore: true */`-kommentarene må stå INNE i kallene** (`mkdir`,
   `writeFile`, `path.join`, …). Uten dem kan ikke traceren avgjøre stiene statisk og tar
   med HELE prosjektet i serverbundlet.
+- Bildebehandling skjer med verktøy i imaget kjørt som prosess, ikke npm-pakker: `vips`
+  (WebP, nedskalering, HEIC) i `lib/tavlebilder.ts`, `pdftoppm`/`tesseract` i tekstuttrekket.
+  Et nytt verktøy må inn i `apk add` i Dockerfile.
 - Uploads er et navngitt Docker-volum — filene overlever `--build`, men er ikke i repoet.
 
 ### Historikk og aktør
@@ -433,6 +436,9 @@ komponenter — endres logikken, må begge med.
   bare feiler. Del det i to migrasjoner: først legg til (behold de gamle), så fjern. Trenger
   fjerningen å rydde data først (f.eks. rader som bryter en ny `NOT NULL`), legges SQL-en inn
   øverst i den genererte fila (mønster: `drizzle/0064_oppslagstavle_rydd.sql`). 29.09.2026.
+- **Next kutter forespørselskroppen ved 10 MB når det finnes middleware** (standarden for
+  `proxyClientMaxBodySize`). Den er satt til 25 MB i `next.config.ts` for oppslagstavlas
+  filer (30.09.2026); en modul som skal ta imot større filer, må heve den.
 - **En datamigrering som trenger applikasjonslogikk, er et idempotent steg i
   `scripts/oppstart.ts`**, ikke SQL (mønster: `lib/tavlemigrering.ts`, 30.09.2026). SQL-
   migrasjonene kjører FØR steget, så tabellen det leser fra kan ikke droppes i samme

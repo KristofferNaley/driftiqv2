@@ -285,11 +285,14 @@ export async function register(): Promise<void> {
             const { slettGamleHendelser, slettGamleAuthHendelser } = await import("./lib/hendelser");
             // Oppbevaringsgrensene er policy og bor som konstanter i lib/hendelser.ts.
             const naa = new Date();
-            const [hendelser, innlogginger] = await withoutRls("bakgrunnsjobb", async (db) => [
+            const { ryddKladder } = await import("./lib/oppslagstavle");
+            const [hendelser, innlogginger, kladder] = await withoutRls("bakgrunnsjobb", async (db) => [
               await slettGamleHendelser(db, naa),
               await slettGamleAuthHendelser(db, naa),
+              // Bildeoppslag som ble påbegynt, men aldri lagt ut (docs/oppslagstavle.md).
+              await ryddKladder(db, naa),
             ]);
-            const detalj = `${hendelser} hendelser, ${innlogginger} innloggingsrader slettet`;
+            const detalj = `${hendelser} hendelser, ${innlogginger} innloggingsrader og ${kladder} oppslagskladder slettet`;
             console.log(`[hendelsesrydding] Ferdig — ${detalj}.`);
             return detalj;
           });

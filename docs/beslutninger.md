@@ -9,6 +9,28 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 30.09.2026 — Oppslagstavla: bilder konverteres med vips, og bildeoppslag begynner som kladd
+
+**Hva:** (1) Opplastede bilder og PDF-sider gjøres om til WebP med `vips` fra Alpine-pakkene
+(`vips-tools`, `vips-heif`, `libheif-libde265`), kjørt som prosess fra `lib/tavlebilder.ts`.
+(2) Et nytt bildeoppslag opprettes som kladd idet første fil lastes opp, og legges ut
+etterpå. (3) `proxyClientMaxBodySize` er satt til 25 MB i `next.config.ts`.
+
+**Hvorfor:** HEIC fra iPhone må kunne lastes opp, og skjermene (TV-nettlesere) skal bare
+trenge å vise vanlige bilder. Kladden gjør at hver fil lastes opp for seg, med fremdrift og
+feil per fil, før styret trykker «Legg ut». Med middleware kutter Next forespørselskroppen
+ved 10 MB som standard; filene her kan være 20 MB.
+
+**Alternativer:**
+- *`sharp`* (ligger allerede i `node_modules` via Next). Forkastet: de ferdigbygde binærene
+  leser ikke HEIC (HEVC er ikke med), og å bygge sharp mot systemets libvips er mer
+  skjørt enn å kalle `vips` direkte. Verktøy som prosess er også mønsteret fra før
+  (`pdftoppm`, `tesseract`).
+- *Holde filene i nettleseren til «Legg ut».* Forkastet: fremdrift og feil per fil kommer da
+  først etter at man har trykket, og en PDF kan ikke vises som sider før den er konvertert.
+- *Beholde originalfilene.* Forkastet: de spiser kvote uten å bli vist, og HEIC kan uansett
+  ikke vises av skjermene.
+
 ## 30.09.2026 — Oppslagstavla: felt velges per skjerm, migrert i TypeScript
 
 **Hva:** (1) Hva som står i hvert felt, lagres per skjerm (`board_screens.zones`) og velges i

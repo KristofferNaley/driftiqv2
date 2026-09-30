@@ -20,7 +20,7 @@
 
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, asc, desc, eq, gte, lte, lt, min } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, lt, min } from "drizzle-orm";
 import { z } from "zod";
 import { withOrg, withoutRls, type Db } from "../db/client";
 import { organizations } from "../db/schema/organizations";
@@ -30,6 +30,7 @@ import {
   boardContacts,
   boardEvents,
   boardPairings,
+  boardPostPages,
   boardPosts,
   boardScreens,
   boardSettings,
@@ -38,6 +39,7 @@ import {
 import { ApiFeil, ikkeFunnet, ugyldig, type Filsvar } from "./api";
 import type { Aktor } from "./aktor";
 import { tommedagerForSkjerm } from "./birkobling";
+import { sidebilderFraFil } from "./tavlebilder";
 import { blokkdataForSkjerm } from "./tavleblokker";
 import { INNEBYGDE_BLOKKER, blokkNokkel, feltI, finnMal, ryddFelt, standardFelt } from "./tavlemaler";
 import { loggHendelse } from "./hendelser";
@@ -49,23 +51,34 @@ import {
   NEDE_ETTER_SEKUNDER,
   RETNINGER,
   SKALERINGER,
+  MAKS_BILDETEKST,
+  MAKS_SIDER,
+  OPPSLAGSTYPER,
+  STANDARD_BILDESEKUNDER,
   STANDARD_SEKUNDER,
+  TILPASNINGER,
+  VISNINGSMATER,
   STANDARD_SKALERING,
   STANDARD_UTSEENDE,
-  VISNINGSTIDER,
   erHexfarge,
+  hendelseFeil,
   normaliserKode,
+  oppslagFeil,
   oppslagStatus,
   osloIDag,
   type Kategori,
   type Oppslagstype,
   type Retning,
   type Skjerminnhold,
+  type Tilpasning,
+  type Visningsmate,
 } from "./oppslagstavleregler";
 
 /** Katalogen under `uploads/orgs/{orgId}/`. */
 const MAPPE = "oppslagstavle";
 const BILDETYPER = ["image/jpeg", "image/png", "image/webp"] as const;
+/** Kladder som aldri ble lagt ut, ryddes etter så lenge. */
+const KLADD_TIMER = 24;
 const LOGOTYPER = ["image/png", "image/jpeg", "image/webp"] as const;
 const MAKS_BILDE = 10 * 1024 * 1024;
 const MAKS_LOGO = 2 * 1024 * 1024;
@@ -79,29 +92,30 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 // Oppslag
 // ---------------------------------------------------------------------------------------
 
-const dato = z.string().date("Ugyldig dato");
-
+/**
+ * Reglene (lengder, datoer, visningstid) ligger i `oppslagFeil` i den importfrie regelfila,
+ * som skjemaet i appen også kaller. Zod står bare for formen.
+ */
 export const oppslagInn = z
   .object({
-    tittel: z.string().trim().min(1, "Skriv en overskrift").max(80, "Overskriften er for lang (maks 80 tegn)"),
-    tekst: z.string().trim().max(400, "Teksten er for lang (maks 400 tegn)").nullish(),
+    type: z.enum(OPPSLAGSTYPER).default("tekst"),
+    tittel: z.string().trim(),
+    tekst: z.string().trim().nullish(),
     kategori: z.enum(KATEGORIER).nullish(),
-    fra: dato,
-    til: dato,
+    fra: z.string(),
+    til: z.string(),
     alleSkjermer: z.boolean(),
     skjermIder: z.array(z.string()).default([]),
-    sekunder: z
-      .number()
-      .int()
-      .refine((n) => (VISNINGSTIDER as readonly number[]).includes(n), "Ugyldig visningstid")
-      .default(STANDARD_SEKUNDER),
+    sekunder: z.number().int().default(STANDARD_SEKUNDER),
+    /** Bare bildeoppslag: bla gjennom bildene, eller vis dem i rutenett. */
+    visning: z.enum(VISNINGSMATER).default("bla"),
   })
-  .refine((d) => d.til >= d.fra, { message: "«Til og med» kan ikke være før «Vis fra»", path: ["til"] })
-  .refine((d) => d.alleSkjermer || d.skjermIder.length > 0, {
-    message: "Velg minst én skjerm",
-    path: ["skjermIder"],
+  .superRefine((d, ctx) => {
+    const feil = oppslagFeil(d);
+    if (feil) ctx.addIssue({ code: "custom", message: feil });
   });
-export type OppslagInn = z.infer<typeof oppslagInn>;
+/** `type` og `visning` er valgfrie for kallere i koden; Zod fyller inn standarden for det som kommer utenfra. */
+export type OppslagInn = Omit<z.infer<typeof oppslagInn>, "type" | "visning"> & { type?: Oppslagstype; visning?: Visningsmate };
 
 /** Skjermene i utvalget må tilhøre org-en — ellers kunne et oppslag pekt på en annens skjerm. */
 async function validerSkjermer(db: Db, orgId: string, ider: string[]) {
@@ -120,6 +134,32 @@ async function validerSkjermer(db: Db, orgId: string, ider: string[]) {
  */
 const OPPSLAG_REKKEFOLGE = [asc(boardPosts.sortOrder), desc(boardPosts.showFrom), desc(boardPosts.createdAt)] as const;
 
+export type Side = { id: string; tekst: string | null; x: number; y: number; tilpasning: Tilpasning };
+
+const sideUt = (r: { id: string; caption: string | null; focusX: number; focusY: number; fit: string }): Side => ({
+  id: r.id,
+  tekst: r.caption,
+  x: r.focusX,
+  y: r.focusY,
+  tilpasning: (TILPASNINGER as readonly string[]).includes(r.fit) ? (r.fit as Tilpasning) : "dekk",
+});
+
+/** Sidene per bildeoppslag, i rekkefølge. `postIder` avgrenser; uten den: alle i orgen. */
+async function siderPerOppslag(db: Db, orgId: string, postIder?: string[]): Promise<Map<string, Side[]>> {
+  const ut = new Map<string, Side[]>();
+  if (postIder && postIder.length === 0) return ut;
+  const rader = await db
+    .select()
+    .from(boardPostPages)
+    .where(postIder ? and(eq(boardPostPages.orgId, orgId), inArray(boardPostPages.postId, postIder)) : eq(boardPostPages.orgId, orgId))
+    .orderBy(asc(boardPostPages.position), asc(boardPostPages.createdAt));
+  for (const r of rader) ut.set(r.postId, [...(ut.get(r.postId) ?? []), sideUt(r)]);
+  return ut;
+}
+
+const visningUt = (v: string | null): Visningsmate => (v === "rutenett" ? "rutenett" : "bla");
+
+/** Oppslagene i lista. Kladder er ikke med — de finnes bare mens panelet «Nytt innhold» står åpent. */
 export async function hentOppslag(db: Db, orgId: string) {
   const iDag = osloIDag();
   const rader = await db
@@ -129,69 +169,75 @@ export async function hentOppslag(db: Db, orgId: string) {
       title: boardPosts.title,
       body: boardPosts.body,
       category: boardPosts.category,
-      originalName: boardPosts.originalName,
       showFrom: boardPosts.showFrom,
       showUntil: boardPosts.showUntil,
       allScreens: boardPosts.allScreens,
       screenIds: boardPosts.screenIds,
       displaySeconds: boardPosts.displaySeconds,
+      layoutMode: boardPosts.layoutMode,
       createdBy: boardPosts.createdBy,
       createdAt: boardPosts.createdAt,
     })
     .from(boardPosts)
-    .where(eq(boardPosts.orgId, orgId))
+    .where(and(eq(boardPosts.orgId, orgId), eq(boardPosts.draft, false)))
     .orderBy(...OPPSLAG_REKKEFOLGE);
-  return rader.map((r) => ({ ...r, status: oppslagStatus(r, iDag) }));
+  const sider = await siderPerOppslag(db, orgId);
+  return rader.map((r) => ({
+    ...r,
+    layoutMode: visningUt(r.layoutMode),
+    sider: sider.get(r.id) ?? [],
+    status: oppslagStatus(r, iDag),
+  }));
 }
 
-export async function opprettOppslag(
-  db: Db,
-  orgId: string,
-  av: Aktor,
-  type: Oppslagstype,
-  data: OppslagInn,
-  fil: File | null,
-) {
-  await validerSkjermer(db, orgId, data.skjermIder);
-  if (type === "bilde" && !fil) throw ugyldig("Velg et bilde");
-
-  const lagret =
-    type === "bilde" && fil
-      ? await lagreFil(db, orgId, MAPPE, fil, { typer: BILDETYPER, maksStorrelse: MAKS_BILDE })
-      : null;
-
+async function nyRad(db: Db, orgId: string, av: Aktor, v: Omit<typeof boardPosts.$inferInsert, "id" | "orgId" | "sortOrder" | "createdBy" | "createdByUserId">) {
   // Et nytt oppslag havner øverst i rotasjonen.
   const [forst] = await db.select({ n: min(boardPosts.sortOrder) }).from(boardPosts).where(eq(boardPosts.orgId, orgId));
-
   const [rad] = await db
     .insert(boardPosts)
-    .values({
-      id: randomUUID(),
-      sortOrder: Number(forst?.n ?? 0) - 1,
-      orgId,
-      kind: type,
-      title: data.tittel,
-      body: type === "tekst" ? (data.tekst ?? null) : null,
-      category: type === "tekst" ? (data.kategori ?? "info") : null,
-      fileName: lagret?.filnavn ?? null,
-      originalName: lagret?.originalnavn ?? null,
-      contentType: lagret?.contentType ?? null,
-      fileSize: lagret?.storrelse ?? null,
-      displaySeconds: data.sekunder,
-      showFrom: data.fra,
-      showUntil: data.til,
-      allScreens: data.alleSkjermer,
-      screenIds: data.alleSkjermer ? [] : data.skjermIder,
-      createdBy: av.navn,
-      createdByUserId: av.brukerId,
-    })
+    .values({ ...v, id: randomUUID(), orgId, sortOrder: Number(forst?.n ?? 0) - 1, createdBy: av.navn, createdByUserId: av.brukerId })
     .returning();
   return rad!;
 }
 
+/** Et tekstoppslag. Bildeoppslag begynner som kladd (`opprettBildekladd`) og legges ut med `endreOppslag`. */
+export async function opprettOppslag(db: Db, orgId: string, av: Aktor, data: OppslagInn) {
+  if ((data.type ?? "tekst") !== "tekst") throw ugyldig("Bildeoppslag opprettes ved å laste opp bilder");
+  await validerSkjermer(db, orgId, data.skjermIder);
+  return nyRad(db, orgId, av, {
+    kind: "tekst",
+    title: data.tittel,
+    body: data.tekst ?? null,
+    category: data.kategori ?? "info",
+    displaySeconds: data.sekunder,
+    showFrom: data.fra,
+    showUntil: data.til,
+    allScreens: data.alleSkjermer,
+    screenIds: data.alleSkjermer ? [] : data.skjermIder,
+  });
+}
+
 /**
- * Endrer et oppslag — tekst, periode, skjermer og visningstid. Typen og bildet står fast;
- * et nytt bilde er et nytt oppslag.
+ * Kladden et nytt bildeoppslag begynner som: opprettes idet første fil lastes opp, så hver
+ * fil kan lastes opp for seg. Usynlig i lista og på skjermene til den legges ut.
+ */
+export async function opprettBildekladd(db: Db, orgId: string, av: Aktor) {
+  const iDag = osloIDag();
+  const rad = await nyRad(db, orgId, av, {
+    kind: "bilder",
+    title: "",
+    draft: true,
+    layoutMode: "bla",
+    displaySeconds: STANDARD_BILDESEKUNDER,
+    showFrom: iDag,
+    showUntil: iDag,
+  });
+  return { id: rad.id };
+}
+
+/**
+ * Endrer et oppslag — tekst, periode, skjermer, visningstid og (for bilder) visningsmåten.
+ * Typen står fast. For en kladd er dette «Legg ut»: den må ha minst ett bilde.
  */
 export async function endreOppslag(db: Db, orgId: string, id: string, data: OppslagInn) {
   await validerSkjermer(db, orgId, data.skjermIder);
@@ -202,12 +248,21 @@ export async function endreOppslag(db: Db, orgId: string, id: string, data: Opps
     .limit(1);
   if (!eksisterende) throw ikkeFunnet("Oppslag");
   const tekst = eksisterende.kind === "tekst";
+  let tittel = data.tittel;
+  if (!tekst) {
+    const sider = (await siderPerOppslag(db, orgId, [id])).get(id) ?? [];
+    if (sider.length === 0) throw ugyldig("Legg til minst ett bilde");
+    // Tittelen er bare navnet i lista: uten den brukes første bildetekst.
+    tittel ||= sider.find((s) => s.tekst)?.tekst ?? "Bilder";
+  } else if (!tittel) throw ugyldig("Skriv en overskrift");
   const [rad] = await db
     .update(boardPosts)
     .set({
-      title: data.tittel,
+      title: tittel,
       body: tekst ? (data.tekst ?? null) : null,
       category: tekst ? (data.kategori ?? "info") : null,
+      layoutMode: tekst ? null : (data.visning ?? "bla"),
+      draft: false,
       displaySeconds: data.sekunder,
       showFrom: data.fra,
       showUntil: data.til,
@@ -238,26 +293,149 @@ export async function settRekkefolge(db: Db, orgId: string, ider: string[]) {
 }
 
 /**
- * Sletter oppslaget OG bildet. Motsatt av avviksvedleggene, som blir liggende: et oppslag er
+ * Sletter oppslaget OG bildene. Motsatt av avviksvedleggene, som blir liggende: et oppslag er
  * kunngjøring, ikke dokumentasjon, og et utløpt dugnadsbilde skal ikke spise av kvoten.
  */
 export async function slettOppslag(db: Db, orgId: string, id: string) {
-  const [rad] = await db
+  // Sidene leses FØR slettingen: radene forsvinner med oppslaget (cascade), filene gjør ikke.
+  const sider = await db
+    .select({ fileName: boardPostPages.fileName })
+    .from(boardPostPages)
+    .where(and(eq(boardPostPages.postId, id), eq(boardPostPages.orgId, orgId)));
+  const slettet = await db
     .delete(boardPosts)
     .where(and(eq(boardPosts.id, id), eq(boardPosts.orgId, orgId)))
-    .returning({ fileName: boardPosts.fileName });
-  if (!rad) throw ikkeFunnet("Oppslag");
-  if (rad.fileName) await slettFil(orgId, MAPPE, rad.fileName);
+    .returning({ id: boardPosts.id });
+  if (slettet.length === 0) throw ikkeFunnet("Oppslag");
+  for (const s of sider) await slettFil(orgId, MAPPE, s.fileName);
 }
 
-export async function hentOppslagFil(db: Db, orgId: string, id: string): Promise<Filsvar> {
-  const [rad] = await db
-    .select({ fileName: boardPosts.fileName, originalName: boardPosts.originalName, contentType: boardPosts.contentType })
+/**
+ * Kladder som aldri ble lagt ut (panelet ble lukket med fanen, nettet falt ut). Kjøres av
+ * nattjobben «hendelsesrydding» på tvers av orgene. Returnerer antallet som ble slettet.
+ */
+export async function ryddKladder(db: Db, naa: Date, orgId?: string): Promise<number> {
+  const gamle = await db
+    .select({ id: boardPosts.id, orgId: boardPosts.orgId })
     .from(boardPosts)
-    .where(and(eq(boardPosts.id, id), eq(boardPosts.orgId, orgId)))
+    .where(
+      and(
+        eq(boardPosts.draft, true),
+        lt(boardPosts.createdAt, new Date(naa.getTime() - KLADD_TIMER * 3_600_000)),
+        // `orgId` avgrenser til ett borettslag — for testene, som ikke skal røre andres rader.
+        orgId ? eq(boardPosts.orgId, orgId) : undefined,
+      ),
+    );
+  for (const k of gamle) await slettOppslag(db, k.orgId, k.id);
+  return gamle.length;
+}
+
+// ---------------------------------------------------------------------------------------
+// Sidene i et bildeoppslag
+// ---------------------------------------------------------------------------------------
+
+async function bildeoppslag(db: Db, orgId: string, postId: string) {
+  const [p] = await db
+    .select({ id: boardPosts.id, kind: boardPosts.kind })
+    .from(boardPosts)
+    .where(and(eq(boardPosts.id, postId), eq(boardPosts.orgId, orgId)))
     .limit(1);
-  if (!rad?.fileName) throw ikkeFunnet("Bilde");
-  return lesFil(orgId, rad.fileName, rad.originalName ?? "bilde", rad.contentType);
+  if (!p || p.kind !== "bilder") throw ikkeFunnet("Oppslag");
+  return p;
+}
+
+const hentSider = async (db: Db, orgId: string, postId: string) => (await siderPerOppslag(db, orgId, [postId])).get(postId) ?? [];
+
+/**
+ * Legger én opplastet fil til sist i oppslaget: et bilde blir én side, en PDF én side per
+ * PDF-side. Alt konverteres til WebP først (lib/tavlebilder.ts). Kvoten sjekkes per bilde;
+ * ryker noe underveis, ryddes bildene som rakk å bli lagret, så de ikke blir liggende uten rad.
+ */
+export async function leggTilSider(db: Db, orgId: string, postId: string, fil: File) {
+  await bildeoppslag(db, orgId, postId);
+  const fra = (await hentSider(db, orgId, postId)).length;
+  const bilder = await sidebilderFraFil(fil, MAKS_SIDER - fra);
+  const lagret: string[] = [];
+  try {
+    for (const [n, b] of bilder.entries()) {
+      const f = await lagreFil(db, orgId, MAPPE, new File([new Uint8Array(b.data)], `side-${fra + n + 1}.webp`, { type: "image/webp" }), {
+        typer: ["image/webp"],
+        maksStorrelse: MAKS_BILDE * 2,
+      });
+      lagret.push(f.filnavn);
+      await db.insert(boardPostPages).values({
+        id: randomUUID(),
+        orgId,
+        postId,
+        position: fra + n,
+        fileName: f.filnavn,
+        contentType: f.contentType,
+        fileSize: f.storrelse,
+        fit: b.tilpasning,
+        width: b.bredde,
+        height: b.hoyde,
+      });
+    }
+  } catch (e) {
+    for (const navn of lagret) await slettFil(orgId, MAPPE, navn);
+    throw e;
+  }
+  return hentSider(db, orgId, postId);
+}
+
+export const sideEndring = z.object({
+  tekst: z.string().trim().max(MAKS_BILDETEKST, `Bildeteksten er for lang (maks ${MAKS_BILDETEKST} tegn)`).nullish(),
+  x: z.number().int().min(0).max(100),
+  y: z.number().int().min(0).max(100),
+  tilpasning: z.enum(TILPASNINGER),
+});
+
+export async function endreSide(db: Db, orgId: string, postId: string, sideId: string, d: z.infer<typeof sideEndring>) {
+  const endret = await db
+    .update(boardPostPages)
+    .set({ caption: d.tekst || null, focusX: d.x, focusY: d.y, fit: d.tilpasning })
+    .where(and(eq(boardPostPages.id, sideId), eq(boardPostPages.postId, postId), eq(boardPostPages.orgId, orgId)))
+    .returning({ id: boardPostPages.id });
+  if (endret.length === 0) throw ikkeFunnet("Bilde");
+  return hentSider(db, orgId, postId);
+}
+
+/** Fjerner én side og fila dens, og tetter hullet i rekkefølgen. */
+export async function slettSide(db: Db, orgId: string, postId: string, sideId: string) {
+  const [rad] = await db
+    .delete(boardPostPages)
+    .where(and(eq(boardPostPages.id, sideId), eq(boardPostPages.postId, postId), eq(boardPostPages.orgId, orgId)))
+    .returning({ fileName: boardPostPages.fileName });
+  if (!rad) throw ikkeFunnet("Bilde");
+  await slettFil(orgId, MAPPE, rad.fileName);
+  return settSiderekkefolge(db, orgId, postId, (await hentSider(db, orgId, postId)).map((s) => s.id));
+}
+
+export const siderekkefolgeInn = z.object({ ider: z.array(z.string()).max(MAKS_SIDER) });
+
+/** Rekkefølgen på sidene. `ider` må være nøyaktig sidene oppslaget har. */
+export async function settSiderekkefolge(db: Db, orgId: string, postId: string, ider: string[]) {
+  const naa = (await hentSider(db, orgId, postId)).map((s) => s.id);
+  if (ider.length !== naa.length || new Set(ider).size !== ider.length || ider.some((id) => !naa.includes(id))) {
+    throw ugyldig("Rekkefølgen må inneholde alle bildene i oppslaget");
+  }
+  for (const [n, id] of ider.entries()) {
+    await db
+      .update(boardPostPages)
+      .set({ position: n })
+      .where(and(eq(boardPostPages.id, id), eq(boardPostPages.postId, postId), eq(boardPostPages.orgId, orgId)));
+  }
+  return hentSider(db, orgId, postId);
+}
+
+export async function hentSidefil(db: Db, orgId: string, sideId: string): Promise<Filsvar> {
+  const [rad] = await db
+    .select({ fileName: boardPostPages.fileName, contentType: boardPostPages.contentType })
+    .from(boardPostPages)
+    .where(and(eq(boardPostPages.id, sideId), eq(boardPostPages.orgId, orgId)))
+    .limit(1);
+  if (!rad) throw ikkeFunnet("Bilde");
+  return lesFil(orgId, rad.fileName, "bilde", rad.contentType);
 }
 
 async function lesFil(orgId: string, filnavn: string, navn: string, type: string | null): Promise<Filsvar> {
@@ -272,16 +450,17 @@ async function lesFil(orgId: string, filnavn: string, navn: string, type: string
 // Kalender
 // ---------------------------------------------------------------------------------------
 
-export const hendelseInn = z.object({
-  tittel: z.string().trim().min(1, "Skriv hva som skjer").max(60, "Maks 60 tegn"),
-  dato,
-  tid: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Ugyldig klokkeslett")
-    .nullish()
-    .or(z.literal("").transform(() => null)),
-  sted: z.string().trim().max(50, "Maks 50 tegn").nullish(),
-});
+export const hendelseInn = z
+  .object({
+    tittel: z.string().trim(),
+    dato: z.string(),
+    tid: z.string().nullish().or(z.literal("").transform(() => null)),
+    sted: z.string().trim().nullish(),
+  })
+  .superRefine((d, ctx) => {
+    const feil = hendelseFeil(d);
+    if (feil) ctx.addIssue({ code: "custom", message: feil });
+  });
 
 /** Kommende hendelser (i dag og framover). Passerte hendelser har ingen plass på tavla. */
 export async function hentHendelser(db: Db, orgId: string) {
@@ -767,7 +946,7 @@ export async function byggSkjerminnhold(
     ? await db
         .select()
         .from(boardPosts)
-        .where(and(eq(boardPosts.orgId, orgId), lte(boardPosts.showFrom, iDag), gte(boardPosts.showUntil, iDag)))
+        .where(and(eq(boardPosts.orgId, orgId), eq(boardPosts.draft, false), lte(boardPosts.showFrom, iDag), gte(boardPosts.showUntil, iDag)))
         .orderBy(...OPPSLAG_REKKEFOLGE)
     : [];
 
@@ -781,6 +960,8 @@ export async function byggSkjerminnhold(
     : [];
 
   const utseende = await hentUtseende(db, orgId);
+  const vises = oppslag.filter((p) => p.allScreens || p.screenIds.includes(skjermId));
+  const sider = await siderPerOppslag(db, orgId, vises.filter((p) => p.kind === "bilder").map((p) => p.id));
 
   return {
     skjerm: {
@@ -799,17 +980,16 @@ export async function byggSkjerminnhold(
       epost: org?.epost ?? null,
     },
     utseende,
-    oppslag: oppslag
-      .filter((p) => p.allScreens || p.screenIds.includes(skjermId))
-      .map((p) => ({
-        id: p.id,
-        type: p.kind as Oppslagstype,
-        tittel: p.title,
-        tekst: p.body,
-        kategori: (p.category as Kategori | null) ?? null,
-        harFil: Boolean(p.fileName),
-        sekunder: p.displaySeconds,
-      })),
+    oppslag: vises.map((p) => ({
+      id: p.id,
+      type: p.kind as Oppslagstype,
+      tittel: p.title,
+      tekst: p.body,
+      kategori: (p.category as Kategori | null) ?? null,
+      harFil: false,
+      sekunder: p.displaySeconds,
+      ...(p.kind === "bilder" ? { sider: sider.get(p.id) ?? [], visning: visningUt(p.layoutMode) } : {}),
+    })),
     kontakter: iBruk.has("kontakt") ? await kontakterForSkjerm(db, orgId) : [],
     avfall: iBruk.has("tommedager") ? await tommedagerForSkjerm(db, orgId) : null,
     blokker: medEksterne ? await blokkdataForSkjerm(db, orgId, iBruk) : {},
@@ -909,15 +1089,15 @@ export async function innholdForSkjerm(req: Request): Promise<Skjerminnhold> {
 }
 
 /**
- * Et bilde til skjermen. Skjermen får bare bilder fra oppslag den selv skal vise — et
- * token for oppgang A gir ikke tilgang til bildene som bare gjelder oppgang B.
+ * Et bilde til skjermen. Skjermen får bare sider fra oppslag den selv skal vise — et token
+ * for oppgang A gir ikke tilgang til bildene som bare gjelder oppgang B.
  */
-export async function filForSkjerm(req: Request, postId: string): Promise<Filsvar> {
+export async function sideForSkjerm(req: Request, sideId: string): Promise<Filsvar> {
   const s = await skjermFraToken(req);
   return withOrg(s.orgId, async (db) => {
     const innhold = await byggSkjerminnhold(db, s.orgId, s.id, { medEksterne: false });
-    if (!innhold.oppslag.some((p) => p.id === postId && p.harFil)) throw ikkeFunnet("Bilde");
-    return hentOppslagFil(db, s.orgId, postId);
+    if (!innhold.oppslag.some((p) => p.sider?.some((x) => x.id === sideId))) throw ikkeFunnet("Bilde");
+    return hentSidefil(db, s.orgId, sideId);
   });
 }
 
