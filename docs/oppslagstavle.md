@@ -100,6 +100,12 @@ legger `Innholdsutkast` inn i oppslagene eller kalenderen skjermen tegner, og l�
 rotasjonen til utkastet. Under 1100 px tar panelet hele bredden, med «Forhåndsvis» som
 veksler mellom skjema og skjerm. Knappene står i skuffens faste fot.
 
+Utkastet sendes til siden som en OVERGANG (`startTransition`), ikke en vanlig oppdatering.
+En synkron oppdatering av siden fra en effekt for hvert tastetrykk fikk React til å kaste
+feil 185 («for mange nestede oppdateringer») ved rask skriving, og tastetrykket gikk tapt —
+bokstaver falt ut av teksten (klikkerunden 30.09.2026). Et felt som roterer mellom flere
+blokker, står stille på den det skrives på (`visBlokk`).
+
 ### Maler og felt (lagt om 30.09.2026)
 
 HVA som vises HVOR, velges **per skjerm**: skjermen har en mal, og hvert felt i malen har en

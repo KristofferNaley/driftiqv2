@@ -67,10 +67,15 @@ export const OPPLASTING_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,ima
 
 /**
  * Hva slags fil dette er («jpg», «heic», «pdf» …), eller `null` når den ikke støttes.
- * Endelsen er reserve: noen nettlesere sender HEIC fra iPhone uten MIME-type.
+ * Endelsen er reserve: noen nettlesere sender HEIC fra iPhone uten MIME-type, eller som
+ * `application/octet-stream` (sett i klikkerunden 30.09.2026).
  */
 export function opplastingstype(fil: { name: string; type: string }): string | null {
-  return OPPLASTINGSTYPER[fil.type] ?? (fil.type ? null : (ENDELSER[fil.name.split(".").pop()?.toLowerCase() ?? ""] ?? null));
+  const kjent = OPPLASTINGSTYPER[fil.type];
+  if (kjent) return kjent;
+  // «Ukjent type» (tom, eller octet-stream) er ikke det samme som «feil type»: bare da avgjør endelsen.
+  if (fil.type && fil.type !== "application/octet-stream") return null;
+  return ENDELSER[fil.name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 }
 
 /** Feilen på én fil før den lastes opp, eller `null`. Samme kontroll i skjemaet og på serveren. */

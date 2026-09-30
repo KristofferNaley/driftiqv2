@@ -287,7 +287,7 @@ export function Utseende({
 
   return (
     <Kort tittel="Utseende for hele borettslaget">
-      <div className="card-body">
+      <div className="card-body ot-skjermoppsett">
         <Skjemafelt etikett="Farger">
           <div className="ot-filter" style={{ marginBottom: "10px" }}>
             {FORVALG.map((f) => (

@@ -75,6 +75,7 @@ export function Tavleskjerm({
   laasOppslag,
   sideUrl,
   visSideId,
+  visBlokk,
 }: {
   innhold: Skjerminnhold;
   /**
@@ -94,6 +95,11 @@ export function Tavleskjerm({
   laasOppslag?: boolean;
   /** Bare forhåndsvisningen: bildet som er åpent i panelet. Oppslaget står da på det, uten rutenett. */
   visSideId?: string | null;
+  /**
+   * Bare forhåndsvisningen: blokken det skrives på akkurat nå («oppslag» eller «kalender»).
+   * Et felt som roterer mellom flere blokker, blir da stående på den.
+   */
+  visBlokk?: string | null;
 }) {
   const naa = useKlokke();
   const { skjerm, utseende } = innhold;
@@ -129,6 +135,7 @@ export function Tavleskjerm({
     sideUrl,
     kontaktbildeUrl,
     visSideId: visSideId ?? null,
+    visBlokk: visBlokk ?? null,
     visOppslagId: visOppslagId ?? null,
     laasOppslag: Boolean(laasOppslag && visOppslagId),
   };
@@ -169,6 +176,7 @@ type Kontekst = {
   sideUrl: (sideId: string) => string | null;
   kontaktbildeUrl: (kontaktId: string) => string | null;
   visSideId: string | null;
+  visBlokk: string | null;
   visOppslagId: string | null;
   laasOppslag: boolean;
 };
@@ -225,12 +233,14 @@ function useTilpassetTekst(nokkel: string) {
     // Skriften lastes etter første maling; målingen med reserveskriften gir feil ordbredde.
     void document.fonts?.ready.then(tilpass);
     if (typeof ResizeObserver === "undefined") return;
-    // Bare bredden: høyden følger bredden (fast sideforhold), og å lytte på høyden ville
-    // startet en ny måling av hver måling.
+    // Både bredde og høyde: feltet blir lavere når stripen nederst kommer til. Feltets
+    // størrelse bestemmes av rutenettet, ikke av teksten, så målingen starter ikke seg selv.
     let bredde = el.clientWidth;
+    let hoyde = el.clientHeight;
     const ro = new ResizeObserver(() => {
-      if (el.clientWidth === bredde) return;
+      if (el.clientWidth === bredde && el.clientHeight === hoyde) return;
       bredde = el.clientWidth;
+      hoyde = el.clientHeight;
       tilpass();
     });
     ro.observe(el);
@@ -252,7 +262,7 @@ function useRotasjon(antall: number, sekunder: number): number {
 
 function Sone({ navn, nokler, ctx, markert }: { navn: string; nokler: string[]; ctx: Kontekst; markert: boolean }) {
   const i = useRotasjon(nokler.length, SONE_SEKUNDER);
-  const nokkel = nokler[i];
+  const nokkel = ctx.visBlokk && nokler.includes(ctx.visBlokk) ? ctx.visBlokk : nokler[i];
   return (
     <div className={`ot-sone${markert ? " markert" : ""}`} style={{ gridArea: navn }}>
       {nokkel && (

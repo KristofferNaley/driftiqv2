@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { startTransition, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CalendarDays, ChevronDown, ChevronRight, FileText, GripVertical, Images } from "lucide-react";
 import { Feil, Kort, Rad, Tom, dato } from "@/components/felles";
 import { Avkryssing, Felt as Skjemafelt, Nedtrekk, Skuff, Tekstfelt, useSending } from "@/components/skjema";
@@ -327,29 +327,34 @@ export function OppslagSkjema({
   }
 
   // Utkastet til forhåndsvisningen, ved hver endring. Ryddes når panelet lukkes.
+  //
+  // Som OVERGANG, ikke en vanlig oppdatering: forhåndsvisningen haster ikke, og en synkron
+  // oppdatering av siden fra en effekt for hvert tastetrykk fikk React til å tro at det var en
+  // uendelig løkke ved rask skriving (feil 185) — tastetrykket ble da kastet, og bokstaver
+  // falt ut av teksten. Funnet i klikkerunden 30.09.2026.
   useEffect(() => {
-    if (type === "hendelse") {
-      onUtkast({ slag: "hendelse", id: h?.id ?? UTKAST_ID, tittel, dato: hDato, tid: hTid || null, sted: hSted || null });
-    } else {
-      onUtkast({
-        slag: "oppslag",
-        id: postId ?? UTKAST_ID,
-        type,
-        tittel,
-        tekst: tekst || null,
-        kategori,
-        sekunder,
-        alleSkjermer: alle,
-        skjermIder: utvalg,
-        sider,
-        visning,
-        visSideId: valgtSide,
-      });
-    }
+    const u: Innholdsutkast =
+      type === "hendelse"
+        ? { slag: "hendelse", id: h?.id ?? UTKAST_ID, tittel, dato: hDato, tid: hTid || null, sted: hSted || null }
+        : {
+            slag: "oppslag",
+            id: postId ?? UTKAST_ID,
+            type,
+            tittel,
+            tekst: tekst || null,
+            kategori,
+            sekunder,
+            alleSkjermer: alle,
+            skjermIder: utvalg,
+            sider,
+            visning,
+            visSideId: valgtSide,
+          };
+    startTransition(() => onUtkast(u));
     // `onUtkast` er en stabil setter hos forelderen; `e` og `h` byttes aldri mens panelet står.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, tittel, tekst, kategori, sekunder, alle, utvalg, postId, sider, visning, valgtSide, hDato, hTid, hSted]);
-  useEffect(() => () => onUtkast(null), [onUtkast]);
+  useEffect(() => () => startTransition(() => onUtkast(null)), [onUtkast]);
 
   function lagre(ev: React.FormEvent) {
     ev.preventDefault();

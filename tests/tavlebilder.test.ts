@@ -169,7 +169,7 @@ describe("konvertering", () => {
   });
 
   it("HEIC fra iPhone leses og blir WebP — også når nettleseren ikke sender MIME-type", async () => {
-    for (const fil of [heic(), heic("")]) {
+    for (const fil of [heic(), heic(""), heic("application/octet-stream")]) {
       const [side] = await sidebilderFraFil(fil, MAKS_SIDER);
       expect(erWebp(side!.data)).toBe(true);
       expect(side).toMatchObject({ bredde: 640, hoyde: 480 });
@@ -204,6 +204,7 @@ describe("konvertering", () => {
     expect(filFeil({ name: "stor.jpg", type: "image/jpeg", size: MAKS_OPPLASTING + 1 })).toBe("For stor, maks 20 MB");
     expect(filFeil({ name: "ok.jpg", type: "image/jpeg", size: MAKS_OPPLASTING })).toBeNull();
     expect(opplastingstype({ name: "IMG_1.HEIC", type: "" })).toBe("heic");
+    expect(opplastingstype({ name: "IMG_1.heic", type: "application/octet-stream" })).toBe("heic");
     // En tekstfil som utgir seg for å være HEIC, stoppes ikke av endelsen — men heller ikke av MIME-typen alene:
     expect(opplastingstype({ name: "notat.heic", type: "text/plain" })).toBeNull();
     // Riktig type, men ikke et bilde: konverteringen sier fra.

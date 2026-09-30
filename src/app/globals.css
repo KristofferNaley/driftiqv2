@@ -4673,8 +4673,10 @@ textarea.qr-input { resize: vertical; }
 .ot-kolonne { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .ot-kolonne > * { flex-shrink: 0; }
 /* Kartet over feltene i malen: samme rutenett som skjermen, med et klikkbart felt per sone. */
-.ot-kart { display: grid; gap: 6px; width: 100%; max-width: 300px; aspect-ratio: 9 / 16; }
-.ot-kart.liggende { max-width: 560px; aspect-ratio: 16 / 9; }
+.ot-skjermoppsett { display: flex; flex-direction: column; gap: 18px; }
+.ot-skjermoppsett .ot-velger { margin-bottom: 0; }
+.ot-kart { display: grid; gap: 6px; width: 100%; max-width: 250px; aspect-ratio: 9 / 16; }
+.ot-kart.liggende { max-width: 460px; aspect-ratio: 16 / 9; }
 .ot-felt {
   border: 1px solid var(--border); background: var(--surface2); color: inherit; font: inherit; border-radius: 8px;
   padding: 8px 10px; cursor: pointer; text-align: left; min-width: 0; min-height: 0; overflow: hidden;
@@ -4732,9 +4734,11 @@ textarea.qr-input { resize: vertical; }
 /* Panelet «Nytt innhold» (Skuff uten slør): forhåndsvisningen står synlig til venstre for
    panelet og viser utkastet. Lista skjules mens panelet er åpent, så skjermen får plassen. */
 .ot-panel { width: 480px; }
-.ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { grid-template-columns: minmax(0, 1fr); margin-right: 480px; }
+/* Polstring, ikke marg: direkte barn av `.page-content` har full bredde, og en marg ville
+   bare dyttet rutenettet ut til høyre under panelet. 460 = panelets 480 minus sidens egen luft. */
+.ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { grid-template-columns: minmax(0, 1fr); padding-right: 460px; box-sizing: border-box; }
 .ot-oppsett.med-panel .ot-kolonne { display: none; }
-.ot-oppsett.med-panel .ot-forhand { width: 100%; max-width: min(380px, calc((100dvh - 250px) * 9 / 16)); margin: 0 auto; }
+.ot-oppsett.med-panel .ot-forhand { width: 100%; max-width: min(380px, calc((100dvh - 190px) * 9 / 16)); margin: 0 auto; }
 .ot-oppsett.med-panel.liggende .ot-forhand { max-width: min(760px, calc((100dvh - 250px) * 16 / 9)); }
 .ot-panelskjema { display: flex; flex-direction: column; gap: 14px; }
 .ot-panel .ot-typer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -4816,7 +4820,7 @@ textarea.qr-input { resize: vertical; }
 }
 @media (max-width: 1100px) {
   .ot-panel { width: 100%; }
-  .ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { margin-right: 0; }
+  .ot-oppsett.med-panel, .ot-oppsett.med-panel.liggende { padding-right: 0; }
   .ot-bare-smal { display: inline-flex; }
   .ot-panel-skjerm.ot-bare-smal { display: flex; }
   .ot-panelskjema.skjult-smal { display: none; }
@@ -4904,7 +4908,7 @@ textarea.qr-input { resize: vertical; }
 .ot-sider figure { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity 0.8s ease; display: flex; flex-direction: column; }
 .ot-sider figure.pa { opacity: 1; }
 .ot-sider img, .ot-siderutenett img { flex: 1; min-height: 0; width: 100%; height: 100%; display: block; }
-.ot-sider img { border-radius: calc(var(--u) * 2); background: var(--s-line); }
+.ot-sider img { border-radius: calc(var(--u) * 2); }
 /* Bildeteksten står under bildet, som før sidene fantes — ikke oppå det. */
 .ot-sider figcaption {
   flex-shrink: 0; padding: calc(var(--u) * 2) calc(var(--u) * 1) 0; background: var(--s-panel);

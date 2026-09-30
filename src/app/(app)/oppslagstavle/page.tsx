@@ -293,6 +293,7 @@ export default function Oppslagstavle() {
         laasOppslag={vist.laast !== null}
         sideUrl={(id) => oppslagstavle.sideSti(orgId, id)}
         visSideId={utkast?.slag === "oppslag" ? utkast.visSideId : null}
+        visBlokk={utkast ? (utkast.slag === "hendelse" ? "kalender" : "oppslag") : null}
         kontaktbildeUrl={(id) => {
           const k = vist.innhold.kontakter.find((x) => x.id === id);
           return k ? `${oppslagstavle.kontaktbildeSti(orgId, id)}?v=${k.bildeVersjon}` : null;
@@ -431,7 +432,7 @@ export default function Oppslagstavle() {
             tavle={tavle(true)}
             notat={
               utkast
-                ? (vist?.merknad ?? "Slik blir det på skjermen. Ingenting er lagt ut ennå.")
+                ? (vist?.merknad ?? "Slik blir det på skjermen. Skjermen på veggen endres først når du lagrer eller legger ut.")
                 : endret
                   ? "Viser ulagrede endringer. Skjermen på veggen endres først når du lagrer."
                   : skjerm && `${skjerm.paaNett ? "På nett" : sistSett(skjerm.sistSett)} · Endringer vises på skjermen innen ett minutt.`
