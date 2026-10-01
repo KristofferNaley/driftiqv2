@@ -319,7 +319,8 @@ rører integrasjonen.
 Øvrige notater: `docs/oppslagstavle.md` (infoskjermene; skjermens anonyme token-inngang),
 `docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
 `docs/mobilapp.md` og `docs/modultilgang.md` (designutkast, ikke bygget), `docs/fdv.md`,
-`docs/mcp-servere.md`.
+`docs/mcp-servere.md`, `docs/plattformpanel.md` (bruksnotat for plattformadmin: kundesiden,
+aktiv vs. demo, support-sesjon, feilsøking av tom kundeapp).
 
 ## Frontend
 

@@ -80,8 +80,9 @@ rollen til en testbruker for å komme rundt det. Panelet dekkes derfor av tester
 
 **En plattformadmin med medlemskap i en org får ingen tilgang av medlemskapet.** Alle
 gatene i `lib/tilgang.ts` sjekker rollen først og krever support-sesjon uansett. Org-en
-dukker likevel opp i org-velgeren, og alle kall svarer 403 til sesjonen er startet — se
-`docs/`-notatene hvis dette skal forbedres.
+dukker likevel opp i org-velgeren, og alle kall svarer 403 til sesjonen er startet. Er
+orgen inaktiv, dukker den ikke opp i det hele tatt. Bruken av panelet og support-sesjonen
+står i `docs/plattformpanel.md`.
 
 ## Kommandoer
 
