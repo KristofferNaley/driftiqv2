@@ -53,7 +53,7 @@ import type { Metadata } from "next";
  */
 export async function generateMetadata(): Promise<Metadata> {
   await headers();
-  if (!ER_TESTMILJO) return { title: "Plattformadmin — DriftIQ" };
+  if (!ER_TESTMILJO) return { title: "Plattformadmin | DriftIQ" };
   return {
     title: "Plattformadmin TEST",
     icons: {

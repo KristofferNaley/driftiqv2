@@ -2694,7 +2694,7 @@ textarea.qr-input { resize: vertical; }
 }
 .pf-md-par dt { color: var(--muted); flex-shrink: 0; }
 .pf-md-par dd { margin: 0; text-align: right; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
-.pf-md-par dd.tom { color: var(--muted); font-weight: 400; }
+.pf-md-par dd.tom { color: var(--muted); font-weight: 400; font-style: italic; }
 .pf-md-bred { grid-column: 1 / -1; }
 
 .pf-ld-kontakt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }

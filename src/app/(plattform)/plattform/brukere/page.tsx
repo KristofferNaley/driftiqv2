@@ -96,8 +96,8 @@ export default function Plattformbrukere() {
             </button>
           </form>
           <p className="pf-dempet" style={{ marginTop: "10px" }}>
-            Du setter ikke passordet. Brukeren får en engangslenke og velger det selv — da
-            kjenner ingen andre det. Finnes adressen fra før, heves den kontoen i stedet.
+            Du setter ikke passordet. Brukeren får en engangslenke og velger det selv, så
+            ingen andre kjenner det. Finnes adressen fra før, heves den kontoen i stedet.
           </p>
         </div>
       </div>
@@ -165,7 +165,7 @@ export default function Plattformbrukere() {
 
       <p className="pf-dempet">
         Kundenes egne brukere administreres inne hos hver kunde, ikke her. Rollen
-        «kontoansvarlig» fra v1 er ikke portert — den er ikke implementert i tilgangslaget.
+        «kontoansvarlig» fra v1 er ikke portert. Den er ikke implementert i tilgangslaget.
       </p>
       {liste?.[0]?.opprettet && (
         <p className="pf-dempet">Eldste konto opprettet {datoTid(liste[0].opprettet)}.</p>

@@ -201,7 +201,7 @@ export function Fakturering({
 
         {!abonnement ? (
           <p className="pf-dempet" style={{ padding: "16px" }}>
-            Ingen avtale registrert. Kunden er ikke sperret av det — en manglende kontrakt er
+            Ingen avtale registrert. Kunden er ikke sperret av det. En manglende kontrakt er
             bokføring som mangler, ikke et signal om at tilgangen skal stenges.
           </p>
         ) : (
@@ -268,7 +268,7 @@ export function Fakturering({
           </p>
           <div className="tips-stripe" style={{ margin: "12px 0" }}>
             <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
-              🛡 Kunden mister ingen tilgang. En manglende kontrakt sperrer ingenting — den er
+              🛡 Kunden mister ingen tilgang. En manglende kontrakt sperrer ingenting. Den er
               bokføring, ikke en bryter.
             </span>
           </div>

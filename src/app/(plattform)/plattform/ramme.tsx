@@ -158,7 +158,7 @@ export function Ramme({
         <div className="pf-meny-fot">
           <div className="pf-fot-rad">
             <a className="pf-tilbake" href={appLenke}>
-              ← Tilbake til kunde-appen
+              ← Til kundeappen
             </a>
             {/* Temaveksleren står også her, som i v1 — panelet er en egen flate og man
                 skal ikke måtte innom kunde-appen for å bytte. */}

@@ -221,8 +221,8 @@ export default function System() {
 
       <p className="field-note">
         Det er ingen forespørselslogg her, i motsetning til i v1. Next.js kjører rutene i
-        flere kontekster, og en logg i minnet ville vist et tilfeldig utvalg av trafikken —
-        verre enn ingen logg, fordi den ser ut som hele bildet.
+        flere kontekster, og en logg i minnet ville vist et tilfeldig utvalg av trafikken,
+        som er verre enn ingen logg, fordi den ser ut som hele bildet.
       </p>
     </Ramme>
   );

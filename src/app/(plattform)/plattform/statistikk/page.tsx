@@ -294,7 +294,7 @@ export default function Statistikk() {
               <div className="pf-kpi-etikett">Andeler under forvaltning</div>
               <div className="pf-kpi-verdi">{kpi.andeler.toLocaleString("nb-NO")}</div>
               <div className="pf-dempet">
-                {syn.length > 0 ? `Snitt ${Math.round(kpi.andeler / syn.length)} per kunde` : "—"}
+                {syn.length > 0 ? `Snitt ${Math.round(kpi.andeler / syn.length)} per kunde` : "Ikke satt"}
               </div>
               <Sparkline serie={serier.andeler} farge="var(--pf)" />
             </div>
@@ -329,7 +329,7 @@ export default function Statistikk() {
                   </span>
                 </h3>
                 <p className="pf-dempet" style={{ margin: "4px 0 14px" }}>
-                  Registreringer i avvik, oppgaver, driftslogg, kontrakter og dokumentarkiv —
+                  Registreringer i avvik, oppgaver, driftslogg, kontrakter og dokumentarkiv:
                   tallet som forteller om produktet er i bruk eller bare kjøpt.
                 </p>
                 {stolper.length === 0 ? (
@@ -419,7 +419,7 @@ export default function Statistikk() {
                     </div>
                     {frafall.tap > 0 && (
                       <div className="pf-st-note">
-                        Største frafall er mellom <b>{frafall.fra.toLowerCase()} og {frafall.til.toLowerCase()}</b> —{" "}
+                        Største frafall er mellom <b>{frafall.fra.toLowerCase()} og {frafall.til.toLowerCase()}</b>,{" "}
                         {frafall.tap} leads kom ikke videre.
                       </div>
                     )}
@@ -467,7 +467,7 @@ export default function Statistikk() {
                   <b>{modulEtikett(verstModul.nokkel)}</b> er aktivert hos {verstModul.aktivert}{" "}
                   kunder, men brukt av {verstModul.brukt} siste 30 dager.
                   {verstModul.inntekt > 0 && (
-                    <> Verdt en samtale før neste fornyelse — den står for <b>{kroner(verstModul.inntekt)} i året</b>.</>
+                    <> Verdt en samtale før neste fornyelse. Den står for <b>{kroner(verstModul.inntekt)} i året</b>.</>
                   )}
                 </div>
               )}
@@ -501,13 +501,13 @@ export default function Statistikk() {
                         </Link>
                         {k.demo && <span className="badge muted" style={{ marginLeft: "6px" }}>Demo</span>}
                       </span>
-                      <span className="tall">{k.andeler ?? "—"}</span>
+                      <span className="tall">{k.andeler ?? "Ikke satt"}</span>
                       <span className="tall">{k.aktive30} av {k.brukere}</span>
                       <span className="tall">{k.hendelser30}</span>
                       <span style={{ color: dagerSist === null || dagerSist > 14 ? "var(--danger)" : "var(--muted)" }}>
                         {siden(k.sistInnlogget)}
                       </span>
-                      <span className="tall">{k.arssum === null ? "—" : kroner(k.arssum)}</span>
+                      <span className="tall">{k.arssum === null ? "Ikke satt" : kroner(k.arssum)}</span>
                       <span className="tall">
                         <span className={`badge ${HELSE_MERKE[h]}`}>{h}</span>
                       </span>

@@ -88,7 +88,7 @@ function modulEtikett(nokkel: string | null): string | null {
  * «hvilken nettleser omtrent», ikke være et parserbibliotek. Hele strengen ligger i title.
  */
 function lesbarUA(ua: string | null): string {
-  if (!ua) return "—";
+  if (!ua) return "Ikke satt";
   const os = ua.includes("Windows")
     ? "Windows"
     : ua.includes("Android")
@@ -312,7 +312,7 @@ export default function Saker() {
         <div className="pf-kpi">
           <div className="pf-kpi-etikett">Snitt svartid</div>
           <div className="pf-kpi-verdi">
-            {snittTimer === null ? "—" : snittTimer < 48 ? snittTimer : Math.round(snittTimer / 24)}{" "}
+            {snittTimer === null ? "Ikke satt" : snittTimer < 48 ? snittTimer : Math.round(snittTimer / 24)}{" "}
             {snittTimer !== null && (
               <small style={{ fontSize: "var(--fs-sm)", color: "var(--muted)", fontWeight: 400 }}>
                 {snittTimer < 48 ? "timer" : "dager"}
@@ -473,7 +473,7 @@ export default function Saker() {
                 <dl className="pf-md-par">
                   <div>
                     <dt>Versjon</dt>
-                    <dd className={valgt.appVersjon ? "" : "tom"}>{valgt.appVersjon ?? "—"}</dd>
+                    <dd className={valgt.appVersjon ? "" : "tom"}>{valgt.appVersjon ?? "Ikke satt"}</dd>
                   </div>
                   <div>
                     <dt>Nettleser</dt>
@@ -497,7 +497,7 @@ export default function Saker() {
                 <div className="pf-md-infokort">
                   <div>
                     <span className="pf-under">
-                      {valgt.iBacklog ? "Bekreftet — skal gjøres noe med" : "Ikke i backloggen"}
+                      {valgt.iBacklog ? "Bekreftet, skal gjøres noe med" : "Ikke i backloggen"}
                     </span>
                     <span className="pf-navn">
                       {valgt.iBacklog

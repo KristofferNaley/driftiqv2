@@ -123,8 +123,8 @@ export default function Boligbyggelag() {
                     </span>
                   )}
                 </span>
-                <span className="pf-dempet">{formatOrgNr(b.orgNr) ?? "—"}</span>
-                <span className="pf-dempet">{b.region ?? "—"}</span>
+                <span className="pf-dempet">{formatOrgNr(b.orgNr) ?? "Ikke satt"}</span>
+                <span className="pf-dempet">{b.region ?? "Ikke satt"}</span>
                 <span className="pf-tall">{b.antallKunder}</span>
                 <span>
                   {!b.active ? (
@@ -169,7 +169,7 @@ export default function Boligbyggelag() {
       </div>
 
       <p className="field-note">
-        Et lag som er i bruk kan ikke slettes — da mister kundene tilknytningen sin, og en
+        Et lag som er i bruk kan ikke slettes. Da mister kundene tilknytningen sin, og en
         årsberetning fra i fjor kan ikke lenger si hvilket lag de tilhørte. Bruk fusjon i
         stedet: kundene flyttes over, og det gamle laget blir stående som utgått.
       </p>
@@ -310,7 +310,7 @@ function FusjonModal({
   const valgbare = alle.filter((b) => b.id !== lag.id && b.active);
 
   return (
-    <Modal tittel={`Varsle fusjon — ${lag.name}`} onLukk={onLukk}>
+    <Modal tittel={`Varsle fusjon: ${lag.name}`} onLukk={onLukk}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -343,7 +343,7 @@ function FusjonModal({
         </div>
         <Tekstfelt etikett="Fusjonsdato" type="date" verdi={fusjonsdato} onEndre={setFusjonsdato} />
         <p className="field-note">
-          Dette varsler bare. Kundene flyttes først når du trykker «Gjennomfør» — en fusjon
+          Dette varsler bare. Kundene flyttes først når du trykker «Gjennomfør». En fusjon
           er en hendelse noen følger opp, og styrene skal varsles av et menneske, ikke av en
           bakgrunnsjobb.
         </p>

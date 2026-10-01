@@ -121,7 +121,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
   const trinnFeil = useMemo(() => {
     for (let i = 0; i < trinn.length; i++) {
       if (trinn[i]!.til < trinn[i]!.fra) {
-        return `Trinn ${i + 1} slutter før det begynner — «til andel» må være minst ${trinn[i]!.fra}.`;
+        return `Trinn ${i + 1} slutter før det begynner. «Til andel» må være minst ${trinn[i]!.fra}.`;
       }
     }
     return null;
@@ -227,7 +227,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
               )}
             </>
           ) : (
-            <span className="badge muted">Ingen versjoner lagret ennå — første lagring blir versjon 1</span>
+            <span className="badge muted">Ingen versjoner lagret ennå. Første lagring blir versjon 1</span>
           )}
           <span className="badge muted">{medAvtale.length} kunder med avtale</span>
         </div>
@@ -274,7 +274,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
             <div className="pf-kort-kropp">
               <h3 className="pf-kpi-etikett" style={{ margin: 0 }}>Trinn</h3>
               <p className="pf-dempet" style={{ margin: "4px 0 14px" }}>
-                Degressiv: hvert trinn gjelder bare andelene i sitt eget intervall — et lag
+                Degressiv: hvert trinn gjelder bare andelene i sitt eget intervall. Et lag
                 med 200 andeler betaler full sats for de første 50. «Fra andel» settes
                 automatisk, så det ikke kan oppstå hull eller overlapp.
               </p>
@@ -338,8 +338,8 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
               </button>
               {trinnFeil && <p style={{ color: "var(--danger)", fontSize: "var(--fs-label)", marginTop: "10px" }}>{trinnFeil}</p>}
               <p className="pf-dempet" style={{ marginTop: "10px", fontSize: "var(--fs-label)" }}>
-                Lag med flere enn {sisteTil} andeler prises kun for de første {sisteTil} —
-                utvid siste trinn hvis det dukker opp større lag.
+                Lag med flere enn {sisteTil} andeler prises kun for de første {sisteTil}.
+                Utvid siste trinn hvis det dukker opp større lag.
               </p>
             </div>
           </div>
@@ -349,7 +349,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
               <h3 className="pf-kpi-etikett" style={{ margin: 0 }}>Moduler med egen pris</h3>
               <p className="pf-dempet" style={{ margin: "4px 0 6px" }}>
                 Slå på bryteren for å inkludere modulen i grunnpakken uten ekstra pris.
-                Prisen er standard for nye avtaler — den enkelte kundes pris settes i
+                Prisen er standard for nye avtaler. Den enkelte kundes pris settes i
                 kundedetaljen.
               </p>
               {TILLEGGSMODULER.map((m) => {
@@ -412,7 +412,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
               <h3 className="pf-kpi-etikett" style={{ margin: 0 }}>Når endringen gjelder</h3>
               <p className="pf-dempet" style={{ margin: "4px 0 14px" }}>
                 Nye kunder får den nye modellen fra datoen under. Eksisterende kunder
-                beholder kontraktens pris til neste fornyelse — prisgaranti ut avtaleperioden.
+                beholder kontraktens pris til neste fornyelse, med prisgaranti ut avtaleperioden.
               </p>
               <div style={{ width: "200px" }}>
                 <label className="field-label" htmlFor="fra">Gjelder nye kunder fra</label>
@@ -478,7 +478,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
                   <div key={v.version} className="pf-pm-rad">
                     <span style={{ minWidth: 0 }}>
                       <span className="pf-navn">Versjon {v.version}</span>
-                      <span className="pf-under">{v.note ?? "—"}{v.createdBy ? ` · ${v.createdBy}` : ""}</span>
+                      <span className="pf-under">{v.note ?? "Ikke satt"}{v.createdBy ? ` · ${v.createdBy}` : ""}</span>
                     </span>
                     <span className="pf-dempet" style={{ whiteSpace: "nowrap" }}>
                       {dato(v.validFrom ?? v.createdAt)}
@@ -597,7 +597,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
         <div className="pf-pm-konsekvens">
           <div className="linje">
             <span>
-              Endringen påvirker <b>{konsekvens.length} kunder med avtale</b> — men først ved
+              Endringen påvirker <b>{konsekvens.length} kunder med avtale</b>, men først ved
               neste fornyelse.
             </span>
             <button className="btn btn-ghost" onClick={forkast}>Forkast</button>

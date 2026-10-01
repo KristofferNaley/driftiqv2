@@ -384,7 +384,7 @@ function NyMalModal({
         <Tekstfelt etikett="Navn *" verdi={navn} onEndre={setNavn} />
         <Tekstomrade etikett="Beskrivelse" verdi={beskrivelse} onEndre={setBeskrivelse} />
         <p className="field-note">
-          Malen opprettes tom. Legg til kategorier og punkter etterpå — den blir ikke standard
+          Malen opprettes tom. Legg til kategorier og punkter etterpå. Den blir ikke standard
           før du setter den til det.
         </p>
         <Knapperad onAvbryt={onLukk} sendEtikett="Opprett mal" sender={sender} deaktivert={!navn.trim()} />

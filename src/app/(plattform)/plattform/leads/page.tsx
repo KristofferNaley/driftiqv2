@@ -616,37 +616,37 @@ export default function Leads() {
                   </div>
                   <div>
                     <dt>Selskapsform</dt>
-                    <dd className={valgt.orgForm ? "" : "tom"}>{valgt.orgForm ?? "—"}</dd>
+                    <dd className={valgt.orgForm ? "" : "tom"}>{valgt.orgForm ?? "Ikke satt"}</dd>
                   </div>
                   <div>
                     <dt>Kommune</dt>
-                    <dd className={valgt.kommune ? "" : "tom"}>{valgt.kommune ?? "—"}</dd>
+                    <dd className={valgt.kommune ? "" : "tom"}>{valgt.kommune ?? "Ikke satt"}</dd>
                   </div>
                   <div className="pf-md-bred">
                     <dt>Adresse</dt>
                     <dd className={valgt.adresse ? "" : "tom"}>
                       {[valgt.adresse, [valgt.postnummer, valgt.poststed].filter(Boolean).join(" ")]
                         .filter(Boolean)
-                        .join(", ") || "—"}
+                        .join(", ") || "Ikke satt"}
                     </dd>
                   </div>
                   <div>
                     <dt>Registerets e-post</dt>
-                    <dd className={valgt.brregEpost ? "" : "tom"}>{valgt.brregEpost ?? "—"}</dd>
+                    <dd className={valgt.brregEpost ? "" : "tom"}>{valgt.brregEpost ?? "Ikke satt"}</dd>
                   </div>
                   <div>
                     <dt>Registerets telefon</dt>
-                    <dd className={valgt.brregTelefon ? "" : "tom"}>{valgt.brregTelefon ?? "—"}</dd>
+                    <dd className={valgt.brregTelefon ? "" : "tom"}>{valgt.brregTelefon ?? "Ikke satt"}</dd>
                   </div>
                   <div className="pf-md-bred">
                     <dt>Nettsted</dt>
-                    <dd className={valgt.nettsted ? "" : "tom"}>{valgt.nettsted ?? "—"}</dd>
+                    <dd className={valgt.nettsted ? "" : "tom"}>{valgt.nettsted ?? "Ikke satt"}</dd>
                   </div>
                 </dl>
                 {!valgt.orgNr && (
                   <div className="pf-ld-obs">
                     <b>Fant ikke selskapet i Enhetsregisteret.</b> Navnet er skrevet inn manuelt av
-                    interessenten. Slå opp org.nr før du oppretter kunde — ellers blir onboardingen tom.
+                    interessenten. Slå opp org.nr før du oppretter kunde, ellers blir onboardingen tom.
                   </div>
                 )}
               </div>
@@ -668,7 +668,7 @@ export default function Leads() {
                   </div>
                   <div>
                     <dt>Telefon</dt>
-                    <dd className={valgt.phone ? "" : "tom"}>{valgt.phone ?? "—"}</dd>
+                    <dd className={valgt.phone ? "" : "tom"}>{valgt.phone ?? "Ikke satt"}</dd>
                   </div>
                   <div>
                     <dt>Registrert</dt>
@@ -716,7 +716,7 @@ export default function Leads() {
                   <input
                     className="input"
                     style={{ flex: 1 }}
-                    placeholder="Skriv et notat — f.eks. hva som ble sagt i telefonen"
+                    placeholder="Skriv et notat, f.eks. hva som ble sagt i telefonen"
                     aria-label="Nytt notat"
                     value={notat}
                     onChange={(e) => setNotat(e.target.value)}
@@ -734,7 +734,7 @@ export default function Leads() {
       {avslaaApen && valgt && (
         <Modal tittel="Avslå lead" onLukk={() => setAvslaaApen(false)} bredde={460}>
           <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, marginTop: 0 }}>
-            Skriv gjerne hvorfor — det er verdt mye den dagen {valgt.name} tar kontakt igjen.
+            Skriv gjerne hvorfor. Det er verdt mye den dagen {valgt.name} tar kontakt igjen.
           </p>
           <Tekstomrade
             etikett="Begrunnelse"
@@ -805,7 +805,7 @@ export default function Leads() {
             />
             <Tekstfelt
               etikett="Org.nr"
-              notat="Ni siffer — brukes til oppslaget mot Enhetsregisteret"
+              notat="Ni siffer, brukes til oppslaget mot Enhetsregisteret"
               verdi={manuell.orgnr}
               onEndre={(v) => setManuell((m) => ({ ...m, orgnr: v }))}
             />

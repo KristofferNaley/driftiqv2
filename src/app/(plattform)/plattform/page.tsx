@@ -40,7 +40,7 @@ export default function PlattformDashbord() {
           {d.aktiveSesjoner > 0 && (
             <Link href="/plattform/support" className="pf-varsel">
               {d.aktiveSesjoner} aktiv{d.aktiveSesjoner === 1 ? "" : "e"} support-sesjon
-              {d.aktiveSesjoner === 1 ? "" : "er"} akkurat nå — se hvem og hvorfor →
+              {d.aktiveSesjoner === 1 ? "" : "er"} akkurat nå. Se hvem og hvorfor →
             </Link>
           )}
 
@@ -57,7 +57,7 @@ export default function PlattformDashbord() {
           </div>
 
           <div className="pf-kort">
-            <div className="pf-kort-hode"><span>AI-rådgiver — siste 30 dager</span></div>
+            <div className="pf-kort-hode"><span>AI-rådgiver, siste 30 dager</span></div>
             <div className="pf-kort-kropp">
               <div className="pf-felt">
                 <span className="pf-under">Spørsmål besvart</span>
@@ -70,7 +70,7 @@ export default function PlattformDashbord() {
               {/* Tokens, ikke kroner: prisen per token endres, og et lagret kronebeløp ville
                   vært feil dagen etter. */}
               <p className="pf-dempet" style={{ marginTop: "8px" }}>
-                Tokens og ikke kroner — prisen endres, og et lagret beløp ville vært feil
+                Tokens og ikke kroner: prisen endres, og et lagret beløp ville vært feil
                 dagen etter.
               </p>
             </div>
