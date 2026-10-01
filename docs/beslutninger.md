@@ -9,6 +9,31 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 01.10.2026 — Selskapsform som Postgres-enum med Brreg-koder
+
+**Hva:** `organizations.org_form_code` er enumen `orgformenum` (`BRL`, `ESEK`, `SAM`, `AS`).
+Lista og visningsnavnene bor i den importfrie `lib/selskapsform.ts`, som både skjemaet og
+nedtrekkslistene leser. Migrasjon 0068 fylte koden fra fritekstfeltet `org_form` for kjente
+varianter; resten ble NULL og listes av `scripts/selskapsform-rapport.ts`. `org_form`
+står igjen urørt til rapporten er tom, og fjernes da i egen migrasjon (drizzle-kit takler
+ikke å legge til og fjerne i samme generering). Org.nr-oppslaget setter koden fra Brreg når
+den er på lista; en ukjent kode lagres ikke, men vises i «Krever handling».
+
+**Hvorfor:** Fritekst ga «Borettslag », «borettslag» og «BRL» som tre grupper i
+statistikken, og «DEMO» ble brukt som selskapsform. Koden er det registeret selv bruker,
+så oppslaget kan sette den uten tolkning.
+
+**Alternativer:**
+- *Oppslagstabell (`org_forms`).* Forkastet: lista endres sjelden og redigeres aldri i UI.
+  En tabell måtte inn i RLS-registeret og hatt en join i hver spørring, og repoet bruker
+  allerede enum for faste lister (`roleenum`, `accesslevelenum`, `frequencyenum`).
+- *`varchar` med Zod-enum (som `affiliation_type`).* Forkastet: da håndheves lista bare
+  av appen, og et SQL-skript eller en migrering kan skrive fritekst igjen.
+- *Lagre visningsnavnet.* Forkastet: navnet er vårt (AS vises som «Boligaksjeselskap»), og
+  et omdøpt navn ville krevd datamigrering.
+
+---
+
 ## 01.10.2026 — «Krever handling»: påminnelse på e-post i stedet for invitasjon fra panelet
 
 **Hva:** Kundedetaljen viser punktene som krever handling (`lib/kundehandlinger.ts`). For

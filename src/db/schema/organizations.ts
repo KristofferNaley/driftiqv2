@@ -1,5 +1,13 @@
-import { bigint, boolean, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { SELSKAPSFORM_KODER } from "../../lib/selskapsform";
 import { bbl } from "./bbl";
+
+/**
+ * Selskapsform som Enhetsregisterets kode (BRL, ESEK, SAM, AS). Lista og visningsnavnene
+ * bor i den importfrie `lib/selskapsform.ts`. Ekte Postgres-enum: en ny kode krever
+ * `ALTER TYPE orgformenum ADD VALUE` i en migrasjon, ikke bare en ny oppføring der.
+ */
+export const orgFormEnum = pgEnum("orgformenum", SELSKAPSFORM_KODER);
 
 /** Et borettslag eller sameie. Står i UNNTATT — listes på tvers av plattformpanelet. */
 export const organizations = pgTable("organizations", {
@@ -13,7 +21,13 @@ export const organizations = pgTable("organizations", {
    * `value`/`label`, og migrerte rader har fortsatt den formen.
    */
   deviationCategories: text("deviation_categories"),
-  orgForm: varchar("org_form"),
+  /** Selskapsform som Brreg-kode, se `orgFormEnum`. NULL = ikke satt (vises i «Krever handling»). */
+  orgForm: orgFormEnum("org_form_code"),
+  /**
+   * Fritekstfeltet fra før BL-180 («Borettslag», «DEMO», …). Leses ikke av appen lenger;
+   * står igjen til `scripts/selskapsform-rapport.ts` er tom, og fjernes da i egen migrasjon.
+   */
+  orgFormGammel: varchar("org_form"),
   municipality: varchar("municipality"),
   /** Antall boliger/enheter — brukes til kostnad per enhet i vedlikeholdsplanen. */
   unitCount: integer("unit_count"),

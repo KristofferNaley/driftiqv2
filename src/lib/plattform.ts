@@ -290,13 +290,14 @@ export async function hentKunde(db: Db, orgId: string) {
   const org = rader[0];
   if (!org) throw ikkeFunnet("Organisasjon");
 
-  const [brukere, oppgaver, avvik, sesjoner] = await Promise.all([
+  const [brukere, oppgaver, avvik, sesjoner, uker] = await Promise.all([
     db
       .select({
         id: users.id,
         navn: users.name,
         epost: users.email,
         nivaa: userOrgMemberships.role,
+        rolle: users.role,
         sistInnlogget: users.lastLoginAt,
       })
       .from(userOrgMemberships)
@@ -312,16 +313,55 @@ export async function hentKunde(db: Db, orgId: string) {
       .where(eq(supportAccessLog.orgId, orgId))
       .orderBy(desc(supportAccessLog.startedAt))
       .limit(20),
+    innloggingerPerUke(db, orgId),
   ]);
+
+  // Plattformbrukere har medlemskap for å yte support; innloggingen deres sier ingenting om
+  // hvorvidt KUNDEN bruker systemet. Samme unntak som i onboardingen.
+  const kundens = brukere.filter((b) => b.rolle !== "superadmin" && b.rolle !== "kontoansvarlig");
+  const sist = kundens
+    .filter((b) => b.sistInnlogget)
+    .sort((a, b) => b.sistInnlogget!.getTime() - a.sistInnlogget!.getTime())[0];
 
   return {
     ...org,
-    brukere,
+    brukere: brukere.map(({ rolle, ...b }) => ({ ...b, plattform: rolle === "superadmin" || rolle === "kontoansvarlig" })),
+    sistAktiv: sist ? { navn: sist.navn, tid: sist.sistInnlogget } : null,
+    innloggingerPerUke: uker,
     antallOppgaver: oppgaver[0]?.n ?? 0,
     antallAvvik: avvik[0]?.n ?? 0,
     sesjoner,
     maksTimer: SUPPORT_SESJON_MAKS_TIMER,
   };
+}
+
+/**
+ * Innlogginger per uke de siste 12 ukene, for Aktivitet-kortet. Bare ANTALL — hvem og når
+ * står i `auth_events`, som bare panelets innloggingslogg viser.
+ *
+ * Teller innloggingene til kundens medlemmer, uten plattformbrukere. En bruker som sitter i
+ * to kunder, telles hos begge: innlogging er på brukernivå, ikke org-nivå. Ukene er
+ * mandag–søndag i norsk tid, og uker uten innlogging gir 0 (generate_series), så søylene
+ * alltid er 12. `auth_events` beholdes i 90 dager, som dekker 12 uker.
+ */
+async function innloggingerPerUke(db: Db, orgId: string) {
+  const svar = await db.execute<{ uke: string; antall: number }>(sql`
+    select to_char(u.uke, 'YYYY-MM-DD') as uke, count(e.id)::int as antall
+    from generate_series(
+      date_trunc('week', now() at time zone 'Europe/Oslo') - interval '11 weeks',
+      date_trunc('week', now() at time zone 'Europe/Oslo'),
+      interval '1 week'
+    ) as u(uke)
+    left join (
+      auth_events e
+      join user_org_memberships m on m.user_id = e.user_id and m.org_id = ${orgId}
+      join users b on b.id = e.user_id and b.role not in ('superadmin', 'kontoansvarlig')
+    ) on e.event = 'innlogget'
+      and date_trunc('week', e.occurred_at at time zone 'Europe/Oslo') = u.uke
+    group by u.uke
+    order by u.uke
+  `);
+  return (svar.rows ?? []).map((r) => ({ uke: r.uke, antall: Number(r.antall) }));
 }
 
 /**

@@ -36,6 +36,7 @@ import { sendOppstartspaminnelse } from "./epost";
 import { loggHendelse } from "./hendelser";
 import { ER_EPOST, PAMINNELSE } from "./kundehandlinger";
 import { normaliserOrgnr } from "./orgnr";
+import { erSelskapsform, SELSKAPSFORM_KODER } from "./selskapsform";
 import { ALLE_MODULER, modulErAktivert, type ModulNokkel } from "./moduler";
 import { grunnpakke } from "./prisregler";
 import { hentPrismodell } from "./prismodell";
@@ -47,7 +48,8 @@ import { hentPrismodell } from "./prismodell";
 export const kundeEndring = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut").optional(),
   orgNr: z.string().trim().nullish(),
-  orgForm: z.string().trim().nullish(),
+  /** Brreg-koden. Fast liste, ingen fritekst — se `lib/selskapsform.ts`. */
+  orgForm: z.enum(SELSKAPSFORM_KODER, { message: "Ukjent selskapsform" }).nullish(),
   municipality: z.string().trim().nullish(),
   unitCount: z.number().int().min(0).nullish(),
   phone: z.string().trim().nullish(),
@@ -151,6 +153,10 @@ export const orgnrOppslag = z.object({
 /**
  * «Slå opp»: setter org.nr og henter det Enhetsregisteret vet. Fyller bare felt som er
  * TOMME — en e-post plattformadmin har rettet for hånd, skal ikke overskrives av registeret.
+ *
+ * Selskapsformen er unntaket: registerets kode ER fasiten, så den settes alltid — men bare
+ * når koden er på listen vår. En ukjent kode lagres ikke; den returneres som
+ * `ukjentBrregKode`, og «Krever handling» ber om at formen velges.
  */
 export async function slaOppOrgnr(db: Db, orgId: string, orgNrInn: string) {
   await krevOrg(db, orgId);
@@ -173,8 +179,12 @@ export async function slaOppOrgnr(db: Db, orgId: string, orgNrInn: string) {
   if (!org.contactEmail && enhet.epost) felter.contactEmail = enhet.epost;
   if (!org.phone && enhet.telefon) felter.phone = enhet.telefon;
   if (!org.website && enhet.nettsted) felter.website = enhet.nettsted;
+  if (erSelskapsform(enhet.orgFormKode)) felter.orgForm = enhet.orgFormKode;
   await db.update(organizations).set(felter).where(eq(organizations.id, orgId));
-  return krevOrg(db, orgId);
+  return {
+    ...(await krevOrg(db, orgId)),
+    ukjentBrregKode: erSelskapsform(enhet.orgFormKode) ? null : enhet.orgFormKode,
+  };
 }
 
 export const paaminnelseInn = z.object({ punkt: z.string() });

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { api } from "@/lib/klient";
 import { ER_EPOST, type HandlingPunkt } from "@/lib/kundehandlinger";
+import { SELSKAPSFORMER } from "@/lib/selskapsform";
 import type { Fane } from "./deler";
 
 /**
@@ -149,9 +150,36 @@ function Punkt({
     );
   } else if (h.type === "selskapsform") {
     kontroll = (
-      <button className="btn btn-ghost" onClick={onRediger}>
-        Velg selskapsform
-      </button>
+      <form
+        className="pf-handling-fiks"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void kjor(async () => {
+            await api.endre(`/plattform/kunder/${orgId}`, { orgForm: verdi });
+            onUkjentKode(null);
+            await onEndret();
+          });
+        }}
+      >
+        <select
+          className="input"
+          aria-label="Selskapsform"
+          value={verdi}
+          onChange={(e) => setVerdi(e.target.value)}
+        >
+          <option value="" disabled>
+            Velg selskapsform …
+          </option>
+          {SELSKAPSFORMER.map((s) => (
+            <option key={s.kode} value={s.kode}>
+              {s.navn}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-primary" disabled={jobber || !verdi}>
+          Lagre
+        </button>
+      </form>
     );
   } else if (h.type === "paaminnelse") {
     kontroll = (

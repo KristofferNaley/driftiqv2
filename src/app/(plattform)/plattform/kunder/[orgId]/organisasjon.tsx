@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
 import { api } from "@/lib/klient";
 import { formatOrgNr } from "@/lib/orgnr";
+import { SELSKAPSFORMER, selskapsformNavn } from "@/lib/selskapsform";
 import { Felt, type Detalj, type Org } from "./deler";
 
 /**
@@ -25,7 +26,7 @@ export function OrgKort({ detalj, onRediger }: { detalj: Detalj; onRediger: () =
         <div className="pf-seksjon">Identitet</div>
         <Felt etikett="Navn" verdi={org.name} />
         <Felt etikett="Org.nr" verdi={formatOrgNr(org.orgNr)} />
-        <Felt etikett="Selskapsform" verdi={org.orgForm} />
+        <Felt etikett="Selskapsform" verdi={selskapsformNavn(org.orgForm)} />
         <Felt etikett="Kommune" verdi={org.municipality} />
 
         <div className="pf-seksjon">Størrelse</div>
@@ -188,7 +189,7 @@ export function OrgModal({
             api.endre(`/plattform/kunder/${org.id}`, {
               name: navn.trim(),
               orgNr: orgNr.trim() || null,
-              orgForm: orgForm.trim() || null,
+              orgForm: orgForm || null,
               municipality: kommune.trim() || null,
               unitCount: andeler.trim() ? parseInt(andeler, 10) : null,
               contactEmail: epost.trim() || null,
@@ -217,7 +218,29 @@ export function OrgModal({
         <div className="pf-seksjon">Identitet</div>
         <Tekstfelt etikett="Navn *" verdi={navn} onEndre={setNavn} />
         <Tekstfelt etikett="Organisasjonsnummer" verdi={orgNr} onEndre={setOrgNr} />
-        <Tekstfelt etikett="Selskapsform" verdi={orgForm} onEndre={setOrgForm} />
+        <div className="field">
+          <label className="field-label" htmlFor="selskapsform">
+            Selskapsform
+          </label>
+          {/* Fast liste med Brreg-koder (lib/selskapsform.ts): ingen fritekst, ikke «Annet». */}
+          <select
+            id="selskapsform"
+            className="input"
+            value={orgForm}
+            onChange={(e) => setOrgForm(e.target.value)}
+          >
+            {!orgForm && (
+              <option value="" disabled>
+                Velg selskapsform …
+              </option>
+            )}
+            {SELSKAPSFORMER.map((s) => (
+              <option key={s.kode} value={s.kode}>
+                {s.navn}
+              </option>
+            ))}
+          </select>
+        </div>
         <Tekstfelt etikett="Kommune" verdi={kommune} onEndre={setKommune} />
 
         <div className="pf-seksjon">Størrelse</div>

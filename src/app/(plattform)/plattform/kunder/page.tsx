@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/klient";
+import { selskapsformNavn } from "@/lib/selskapsform";
 import { Ramme } from "../ramme";
 
 /**
@@ -46,7 +47,7 @@ const STATUSMERKE: Record<Kunde["status"], string> = {
 
 type Sortnokkel = "navn" | "orgForm" | "andeler" | "antallModuler" | "onboarding" | "prisAar" | "sistAktiv" | "status";
 
-const kr = (n: number | null) => (n === null ? "—" : n === 0 ? "0" : n.toLocaleString("nb-NO"));
+const kr = (n: number | null) => (n === null ? "Ikke satt" : n === 0 ? "0" : n.toLocaleString("nb-NO"));
 
 function sidenAktiv(iso: string | null): string {
   if (!iso) return "Aldri";
@@ -79,7 +80,7 @@ export default function Kunder() {
     if (sok.trim()) {
       const q = sok.trim().toLowerCase();
       r = r.filter((k) =>
-        `${k.navn} ${k.kommune ?? ""} ${k.orgNr ?? ""} ${k.orgForm ?? ""}`.toLowerCase().includes(q),
+        `${k.navn} ${k.kommune ?? ""} ${k.orgNr ?? ""} ${selskapsformNavn(k.orgForm) ?? ""}`.toLowerCase().includes(q),
       );
     }
     return [...r].sort((a, b) => {
@@ -98,7 +99,9 @@ export default function Kunder() {
     if (!gruppering) return [["", synlige]] as Array<[string, Kunde[]]>;
     const kart = new Map<string, Kunde[]>();
     for (const k of synlige) {
-      const nokkel = (gruppering === "status" ? k.status : (k.orgForm ?? "Uten selskapsform")) as string;
+      // Selskapsform grupperes på KODEN (BL-180), så «BRL» og «Borettslag» aldri blir to
+      // grupper. Navnet settes først når gruppen vises.
+      const nokkel = (gruppering === "status" ? k.status : (k.orgForm ?? "ingen")) as string;
       if (!kart.has(nokkel)) kart.set(nokkel, []);
       kart.get(nokkel)!.push(k);
     }
@@ -229,7 +232,11 @@ export default function Kunder() {
                   {navn && (
                     <div className="pf-kunderad gruppe">
                       <span style={{ gridColumn: "1 / -1" }}>
-                        {navn.toUpperCase()} · {rader.length}
+                        {(gruppering === "orgForm"
+                          ? (selskapsformNavn(navn) ?? "Uten selskapsform")
+                          : navn
+                        ).toUpperCase()}{" "}
+                        · {rader.length}
                       </span>
                     </div>
                   )}
@@ -238,12 +245,12 @@ export default function Kunder() {
                       <span style={{ minWidth: 0, textAlign: "left" }}>
                         <span className="pf-navn">{k.navn}</span>
                         <span className="pf-under">
-                          {k.orgNr ?? "Uten org.nr."} · {k.kommune ?? "—"}
+                          {k.orgNr ?? "Uten org.nr."} · {k.kommune ?? "Ikke satt"}
                           {k.harAktivSupport && <span className="badge warn" style={{ marginLeft: "6px" }}>Support aktiv</span>}
                         </span>
                       </span>
-                      <span className="pf-celle">{k.orgForm ?? "—"}</span>
-                      <span className="pf-celle tall">{k.andeler ?? "—"}</span>
+                      <span className="pf-celle">{selskapsformNavn(k.orgForm) ?? "Ikke satt"}</span>
+                      <span className="pf-celle tall">{k.andeler ?? "Ikke satt"}</span>
                       <span className="pf-celle tall">{k.antallModuler}/{k.totaltModuler}</span>
                       <span className="pf-prog">
                         <span className="pf-stolpe" style={{ flex: 1, marginBottom: 0 }}>

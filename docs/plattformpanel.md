@@ -61,13 +61,22 @@ utløpstid, begrunnelse og «Avslutt».
     fanen, andeler til Rediger. Resten sender en påminnelse på e-post til kundens aktive
     orgadmins (styret: «Inviter styremedlem»). Påminnelsen logges i kundens
     hendelseslogg og nektes når punktet er oppfylt eller kunden ikke har noen orgadmin.
-- **Snarveier** til abonnement, moduler og onboarding.
+- **Nøkkeltall**: fire klikkbare kort. Abonnement (pris per år, rabatt), Moduler (antall
+  og hvilke som er av), Onboarding (prosent og hva som mangler) og Sist aktiv (kundens
+  siste innlogging, uten plattformbrukere).
 - **Organisasjon** — ett kort med én «Rediger», i fire seksjoner: Identitet (navn, org.nr,
   selskapsform, kommune), Størrelse (andeler, enheter i Enhetsregisteret, har ansatte),
   Kontakt (e-post, telefon, nettside) og Tilknytning (boligbyggelag, forretningsfører).
   Skjemaet har i tillegg lagringskvote i GB og avkrysningene **Aktiv kunde** og **Demo-
   eller testkunde** (se «Aktiv vs. demo»). Tilknytningen lagres i samme transaksjon.
   Tomme verdier vises som «Ikke satt».
+  **Selskapsform** er en nedtrekksliste med Brreg-kodene (Borettslag, Eierseksjonssameie,
+  Tingsrettslig sameie, Boligaksjeselskap), ingen fritekst. Den settes også av «Slå opp»
+  på org.nr. Kunder fra før BL-180 som ikke kunne kobles, listes av
+  `scripts/selskapsform-rapport.ts`.
+- **Aktivitet** — innlogginger per uke de siste 12 ukene (søyler, fra `auth_events`),
+  siste innlogging og antall oppgaver, avvik og kontrakter. Bare antall. Plattformbrukere
+  teller ikke; en bruker i to kunder teller hos begge.
 - **Onboarding** — sjekkliste regnet ut fra *antall* rader hos kunden (abonnement,
   andeler, Enhetsregisteret, «Om bygget», styret med minst to brukere, leverandører,
   kontrakter, …). Plattformadmins medlemskap teller ikke som kundens brukere.
@@ -76,7 +85,9 @@ utløpstid, begrunnelse og «Avslutt».
 ### Abonnement
 
 - **Moduler og pris** — brytere per modul, gruppert som i kundens sidemeny. «Lagre
-  modulvalg» skriver `organizations.enabled_modules`. Dashboard er alltid på. Kunden har
+  modulvalg» skriver `organizations.enabled_modules`. Dashboard og Brukere er alltid på.
+  Moduler uten pris står som «Inkludert». Under lista: listepris for valget, rabatt og hva
+  kunden betaler etter avtalen (frosne priser). Kunden har
   ingen egen bryter — modulvalget styres bare herfra.
 - **Abonnement** (samme fane) — den registrerte avtalen: grunnpakke (snapshot fra sist
   lagring), tilleggsmoduler med pris, rabatt, start-/sluttdato, notat. Varsler når
@@ -89,7 +100,8 @@ utløpstid, begrunnelse og «Avslutt».
 
 ### Tilgang
 
-- **Brukere** — kundens medlemmer med nivå og sist innlogget. Kun visning; her finnes
+- **Brukere** — tabell med navn, rolle og sist innlogget. Plattformadmins
+  supportmedlemskap er merket «Plattformadmin». Kun visning; her finnes
   ingen knapp for å legge til eller endre brukere (se «Ny kunde»).
 - **Innsynslogg** — de 20 siste support-sesjonene mot kunden: hvem, begrunnelse, start og
   slutt («pågår»).

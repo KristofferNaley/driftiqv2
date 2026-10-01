@@ -21,6 +21,7 @@ import { organizations } from "../db/schema/organizations";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet } from "./api";
 import { hentEnhet } from "./brreg";
+import { erSelskapsform, SELSKAPSFORMER } from "./selskapsform";
 
 export const leadInn = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut"),
@@ -339,17 +340,15 @@ export async function slettLead(db: Db, leadId: string) {
 }
 
 /**
- * Registerets beskrivelser («Eierseksjonssameie», «Tingsrettslig sameie») → de faste
- * verdiene kunden føres med. Samme mapping som v1s `_normaliser_org_form`, så konverterte
- * kunder får org-form på samme form som de migrerte.
+ * Selskapsformen den nye kunden føres med: registerets KODE når den er på listen vår
+ * (`lib/selskapsform.ts`), ellers ingenting. Leaden lagrer bare beskrivelsen, så uten et
+ * ferskt oppslag kobles bare de entydige beskrivelsene. En kunde uten form havner i
+ * «Krever handling» — bedre enn en gjetning som teller feil i statistikken.
  */
-function normaliserOrgForm(beskrivelse: string | null | undefined): string | null {
-  if (!beskrivelse) return null;
-  const b = beskrivelse.toLowerCase();
-  if (b.includes("borettslag")) return "Borettslag";
-  if (b.includes("sameie")) return "Sameie";
-  if (b.includes("boligbyggelag")) return "Boligbyggelag";
-  return "Annet";
+function selskapsformFra(kode: string | null | undefined, beskrivelse: string | null | undefined) {
+  if (erSelskapsform(kode)) return kode;
+  const b = beskrivelse?.trim().toLowerCase();
+  return SELSKAPSFORMER.find((s) => s.navn.toLowerCase() === b && s.kode !== "AS")?.kode ?? null;
 }
 
 /** Samme regler som v1s slugging, så konverterte kunder ikke skiller seg fra de migrerte. */
@@ -408,7 +407,7 @@ export async function konverterLead(db: Db, leadId: string, aktor: Aktor) {
       name: navn,
       slug,
       orgNr: lead.orgNr,
-      orgForm: normaliserOrgForm(enhet?.orgForm ?? lead.orgForm),
+      orgForm: selskapsformFra(enhet?.orgFormKode, enhet?.orgForm ?? lead.orgForm),
       municipality: enhet?.kommune ?? lead.kommune,
       phone: enhet?.telefon ?? lead.brregTelefon,
       contactEmail: enhet?.epost ?? lead.brregEpost,

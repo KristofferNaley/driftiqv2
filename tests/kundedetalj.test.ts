@@ -18,12 +18,14 @@ import {
   hentAbonnement,
   hentDetalj,
   hentOnboarding,
+  kundeEndring,
   settAbonnement,
   settModuler,
   settTilknytning,
   slettAbonnement,
 } from "../src/lib/kundedetalj";
 import { hentPrismodell, settPrismodell } from "../src/lib/prismodell";
+import { SELSKAPSFORM_KODER } from "../src/lib/selskapsform";
 
 let eierPool: Pool;
 let eier: PoolClient;
@@ -310,6 +312,30 @@ describe("tilknytning", () => {
 
     const d = await i((db) => hentDetalj(db, org));
     expect(d.org.bblNavn).toBe("Bergen og Omegn BBL");
+  });
+});
+
+// ── Selskapsform ────────────────────────────────────────────────────────────────────────
+
+describe("selskapsform", () => {
+  it("har samme koder i databasens enum som i lib/selskapsform.ts", async () => {
+    const { rows } = await eier.query(
+      "SELECT enumlabel FROM pg_enum WHERE enumtypid = 'orgformenum'::regtype ORDER BY enumsortorder",
+    );
+    expect(rows.map((r) => r.enumlabel)).toEqual([...SELSKAPSFORM_KODER]);
+  });
+
+  it("tar bare imot koder, aldri fritekst eller visningsnavn", () => {
+    expect(kundeEndring.safeParse({ orgForm: "BRL" }).success).toBe(true);
+    expect(kundeEndring.safeParse({ orgForm: "Borettslag" }).success).toBe(false);
+    expect(kundeEndring.safeParse({ orgForm: "brl" }).success).toBe(false);
+    expect(kundeEndring.safeParse({ orgForm: null }).success).toBe(true);
+  });
+
+  it("lagres som kode på kunden", async () => {
+    const org = await nyOrg();
+    const etter = await i((db) => endreKunde(db, org, { orgForm: "ESEK" }));
+    expect(etter.orgForm).toBe("ESEK");
   });
 });
 

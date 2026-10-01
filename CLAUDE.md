@@ -285,7 +285,8 @@ klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `oppgaveregler.ts`, `varselvalg.ts`, `avvikkategorier.ts`, `feilmeldingtyper.ts`,
 `orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`, `regnskap.ts`,
 `okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`,
-`oppslagstavleregler.ts`, `avfallsregler.ts`, `tavlemaler.ts`, `vaerregler.ts`. Ikke gi dem
+`oppslagstavleregler.ts`, `avfallsregler.ts`, `tavlemaler.ts`, `vaerregler.ts`,
+`selskapsform.ts`, `kundehandlinger.ts`. Ikke gi dem
 server-importer: verken tsc eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i
 bygget.
 
@@ -457,6 +458,10 @@ komponenter — endres logikken, må begge med.
 - MCP-serverne i `.mcp.json` kjøres i Docker (ingen Node på verten) med absolutt repo-sti;
   `better-auth`-serveren er pinnet eldre enn appens versjon — generert oppsett sjekkes mot
   `src/lib/auth.ts`. Se `docs/mcp-servere.md`.
+- **Selskapsform er en Brreg-kode, ikke fritekst** (`organizations.org_form_code`,
+  Postgres-enum `orgformenum`, lista i `lib/selskapsform.ts`). En ny form er en oppføring
+  der OG `ALTER TYPE orgformenum ADD VALUE` i en migrasjon; `tests/kundedetalj.test.ts`
+  feiler hvis de to drifter. Demo er flagget `demo`, aldri en selskapsform (01.10.2026).
 - `.env` committes aldri; `mockups/` er gitignorert arbeidsmateriale — layoutintensjon,
   ikke fasit for farger eller merkevare (fasiten er tokenene i `globals.css`).
 

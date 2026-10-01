@@ -88,8 +88,12 @@ export const GAMLE_ALIASER: Readonly<Partial<Record<ModulNokkel, readonly string
   vedlikehold: ["vedlikeholdsplan"],
 };
 
-/** Dashboard kan ikke slås av, og gates derfor ikke. */
-export const ALLTID_PA: ReadonlySet<ModulNokkel> = new Set(["dashboard"]);
+/**
+ * Dashboard og Brukere kan ikke slås av, og gates derfor ikke. Brukere kom med i BL-180
+ * (01.10.2026): uten den har kunden ingen vei til å invitere styret eller fjerne en som har
+ * gått av. Alle kunder hadde den på da endringen ble gjort.
+ */
+export const ALLTID_PA: ReadonlySet<ModulNokkel> = new Set(["dashboard", "brukere"]);
 
 /**
  * Menypunktet for hver modul. Gruppene følger bruksmønster, ikke alfabet — «Daglig drift»

@@ -21,6 +21,7 @@ import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet, ugyldig } from "./api";
 import { lagreFil, slettFil } from "./lagring";
 import { ALLE_MODULER, type ModulNokkel } from "./moduler";
+import { SELSKAPSFORM_KODER } from "./selskapsform";
 
 /** Felter `redigering` også kan endre. Alt annet krever `orgadmin`. */
 export const DRIFTSFELT = new Set(["buildingInfo", "hasEmployees"]);
@@ -28,7 +29,7 @@ export const DRIFTSFELT = new Set(["buildingInfo", "hasEmployees"]);
 export const orgEndring = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut").optional(),
   orgNr: z.string().trim().nullish(),
-  orgForm: z.string().trim().nullish(),
+  orgForm: z.enum(SELSKAPSFORM_KODER, { message: "Ukjent selskapsform" }).nullish(),
   municipality: z.string().trim().nullish(),
   unitCount: z.number().int().min(0).nullish(),
   buildingInfo: z.string().nullish(),

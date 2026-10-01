@@ -15,6 +15,7 @@ import { contracts } from "../db/schema/kontrakter";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet } from "./api";
 import { verktoyskjemaer } from "./ai-verktoy";
+import { selskapsformNavn } from "./selskapsform";
 
 export const MODELL = "claude-sonnet-5";
 
@@ -270,7 +271,7 @@ export async function systemprompt(db: Db, orgId: string): Promise<string> {
   const bygningsinfo = org
     ? [
         `Organisasjon: ${org.name}`,
-        org.orgForm ? `Type: ${org.orgForm}` : null,
+        org.orgForm ? `Type: ${selskapsformNavn(org.orgForm)}` : null,
         org.unitCount ? `Antall enheter: ${org.unitCount}` : null,
         org.municipality ? `Kommune: ${org.municipality}` : null,
       ]

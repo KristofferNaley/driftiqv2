@@ -4,6 +4,7 @@ import { useState } from "react";
 import { dato, datoTid } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, useSending } from "@/components/skjema";
 import { api } from "@/lib/klient";
+import { selskapsformNavn } from "@/lib/selskapsform";
 import { useAppLenke } from "../../../verter";
 import type { Detalj, Kunde } from "./deler";
 
@@ -41,7 +42,7 @@ export function Kundehode({
         <div className="pf-chips">
           <span className={`pf-chip ${org.active ? "ok" : ""}`}>{org.active ? "Aktiv" : "Inaktiv"}</span>
           {org.demo && <span className="pf-chip demo">Demo</span>}
-          {org.orgForm && <span className="pf-chip">{org.orgForm}</span>}
+          {org.orgForm && <span className="pf-chip">{selskapsformNavn(org.orgForm)}</span>}
           {org.createdAt && <span className="pf-chip">Kunde siden {dato(org.createdAt)}</span>}
           {org.unitCount ? (
             <span className="pf-chip">

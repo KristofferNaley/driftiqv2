@@ -59,13 +59,10 @@ export function ModulFane({
   return (
     <div className="pf-kort">
       <div className="pf-kort-hode">
-        <span>Moduler</span>
-        <span style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <span className="pf-under">Listepris {kroner(listepris)}/år</span>
-          <button className="btn btn-primary" disabled={!endret || lagrer} onClick={() => void lagre()}>
-            {lagrer ? "Lagrer …" : "Lagre modulvalg"}
-          </button>
-        </span>
+        <span>Moduler og pris</span>
+        <button className="btn btn-primary" disabled={!endret || lagrer} onClick={() => void lagre()}>
+          {lagrer ? "Lagrer …" : "Lagre modulvalg"}
+        </button>
       </div>
       {feil && <div className="feilmelding">{feil}</div>}
 
@@ -74,7 +71,11 @@ export function ModulFane({
           <div className="pf-modulgruppe">{gruppe}</div>
           {moduler.map((n) => {
             const alltidPa = ALLTID_PA.has(n);
-            const betalt = TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number]);
+            // Én etikett for alt uten pris: «Inkludert», også for en tilleggsmodul som står
+            // til 0 kr i prismodellen (før: «0 kr/år» ved siden av «Inkludert»).
+            const pris = TILLEGGSMODULER.includes(n as (typeof TILLEGGSMODULER)[number])
+              ? (detalj.prismodell.modulpriser[n] ?? 0)
+              : 0;
             return (
               <label key={n} className="pf-modul-valg">
                 {/* Sjekkboks i semantikken, bryter i utseendet — skjermleser og tastatur
@@ -83,7 +84,7 @@ export function ModulFane({
                   type="checkbox"
                   className="pf-bryter-input"
                   checked={alltidPa || valgte.includes(n)}
-                  // Dashboard kan ikke slås av — det er ikke en modul man selger, det er forsiden.
+                  // Dashboard og Brukere kan ikke slås av (ALLTID_PA i lib/moduler.ts).
                   disabled={alltidPa}
                   onChange={(e) =>
                     setValgte(e.target.checked ? [...valgte, n] : valgte.filter((v) => v !== n))
@@ -96,8 +97,8 @@ export function ModulFane({
                 <span>
                   {alltidPa ? (
                     <span className="pf-under">Alltid på</span>
-                  ) : betalt ? (
-                    <span className="pf-merkelapp">{kroner(detalj.prismodell.modulpriser[n] ?? 0)}/år</span>
+                  ) : pris > 0 ? (
+                    <span className="pf-merkelapp">{kroner(pris)}/år</span>
                   ) : (
                     <span className="pf-under">Inkludert</span>
                   )}
@@ -108,12 +109,40 @@ export function ModulFane({
         </div>
       ))}
 
-      <p className="field-note" style={{ padding: "12px 16px" }}>
-        Modulvalget styres bare herfra. Kundens egne innstillinger har ingen bryter — en
-        kontoadmin som kunne skru på en betalt modul selv, ville fått den gratis.
-      </p>
+      <div className="pf-prissum">
+        <div>
+          <span className="pf-under">Listepris</span>
+          <span className="pf-prissum-tall">{kroner(listepris)}/år</span>
+        </div>
+        <div>
+          <span className="pf-under">Rabatt</span>
+          <span className="pf-prissum-tall">{detalj.abonnement?.discountPercent ?? 0} %</span>
+        </div>
+        <div>
+          <span className="pf-under">Kunden betaler</span>
+          {detalj.abonnement ? (
+            <span className="pf-prissum-tall">{kroner(avtalesum(detalj.abonnement))}/år</span>
+          ) : (
+            <span className="pf-prissum-tall pf-ikke-satt">Ikke satt</span>
+          )}
+        </div>
+        <p className="field-note">
+          Avtalt pris er låst på kunden og regnes ikke om når prismodellen endres. Modulvalget
+          styres bare herfra; kunden har ingen egen bryter.
+        </p>
+      </div>
     </div>
   );
+}
+
+/** Det kunden betaler per år etter avtalen, med frosne priser og rabatt. */
+function avtalesum(a: NonNullable<Abonnement>): number {
+  return arssum({
+    grunnpakke: a.baseFee,
+    arsavgift: a.annualFee,
+    moduler: a.moduler.map((m) => ({ pris: m.price })),
+    rabattProsent: a.discountPercent,
+  });
 }
 
 // ── Fakturering ─────────────────────────────────────────────────────────────────────────
@@ -257,7 +286,7 @@ export function Fakturering({
 
 function periode(a: NonNullable<Abonnement>): string {
   if (!a.startDate && !a.endDate) return "Løpende";
-  return `${a.startDate ? dato(a.startDate) : "—"} → ${a.endDate ? dato(a.endDate) : "løpende"}`;
+  return `${a.startDate ? dato(a.startDate) : "Ikke satt"} → ${a.endDate ? dato(a.endDate) : "løpende"}`;
 }
 
 function AbonnementModal({

@@ -23,7 +23,13 @@ export type Kunde = {
     epost: string;
     nivaa: string;
     sistInnlogget: string | null;
+    /** Plattformbruker med supportmedlemskap, ikke kundens egen. */
+    plattform: boolean;
   }>;
+  /** Kundens siste innlogging, uten plattformbrukere. */
+  sistAktiv: { navn: string; tid: string } | null;
+  /** 12 uker, eldste først. Bare antall. */
+  innloggingerPerUke: Array<{ uke: string; antall: number }>;
   sesjoner: Array<{
     id: string;
     adminName: string | null;

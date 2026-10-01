@@ -40,6 +40,8 @@ export type Enhet = {
   orgNr: string;
   navn: string;
   orgForm: string | null;
+  /** Registerets kode for organisasjonsformen («BRL», «ESEK» …). Se `lib/selskapsform.ts`. */
+  orgFormKode: string | null;
   kommune: string | null;
   adresse: string | null;
   postnummer: string | null;
@@ -54,7 +56,7 @@ export type Enhet = {
 type EnhetSvar = {
   organisasjonsnummer?: string;
   navn?: string;
-  organisasjonsform?: { beskrivelse?: string };
+  organisasjonsform?: { kode?: string; beskrivelse?: string };
   forretningsadresse?: Adr;
   postadresse?: Adr;
   epostadresse?: string;
@@ -89,6 +91,7 @@ export function tolkEnhet(d: EnhetSvar): Enhet | null {
     orgNr: d.organisasjonsnummer,
     navn: d.navn,
     orgForm: d.organisasjonsform?.beskrivelse ?? null,
+    orgFormKode: d.organisasjonsform?.kode ?? null,
     kommune: adr?.kommune ?? null,
     adresse: adr?.adresse?.filter(Boolean).join(", ") || null,
     postnummer: adr?.postnummer ?? null,
