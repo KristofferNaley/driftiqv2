@@ -353,7 +353,7 @@ export async function oppdaterLeadBrreg(db: Db, leadId: string, aktor: Aktor) {
   }
 
   const enhet = await hentEnhet(lead.orgNr);
-  if (!enhet) throw new ApiFeil(502, "Fikk ikke svar fra Enhetsregisteret");
+  if (!enhet) throw new ApiFeil(503, "Fikk ikke svar fra Enhetsregisteret");
 
   const [rad] = await db
     .update(leads)
