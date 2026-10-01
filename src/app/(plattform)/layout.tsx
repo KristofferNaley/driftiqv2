@@ -82,7 +82,11 @@ export default async function PlattformLayout({ children }: { children: ReactNod
 
   return (
     <OktProvider versjon="1.0.0">
-      <VerterProvider appVert={process.env.VERT_APP ?? null}>{children}</VerterProvider>
+      {/* `data-miljo` henger «TEST» på logoen (se .pf-merke-navn i globals.css). Utledet av
+          VERT_APP i lib/miljo.ts; prod får ikke attributtet og viser aldri merket. */}
+      <div data-miljo={ER_TESTMILJO ? "test" : undefined} style={{ display: "contents" }}>
+        <VerterProvider appVert={process.env.VERT_APP ?? null}>{children}</VerterProvider>
+      </div>
     </OktProvider>
   );
 }

@@ -125,7 +125,10 @@ export function Ramme({
             {bruker ? initialer(bruker.name) : "PA"}
           </span>
           <span>
-            Drift<span className="iq">IQ</span>
+            {/* «TEST» henges på navnet med CSS når layouten setter data-miljo="test". */}
+            <span className="pf-merke-navn">
+              Drift<span className="iq">IQ</span>
+            </span>
             <span className="pf-tag">PLATTFORM</span>
           </span>
         </Link>
