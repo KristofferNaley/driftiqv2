@@ -7,6 +7,8 @@ import { api } from "@/lib/klient";
 import { ALLE_MODULER } from "@/lib/moduler";
 import { Fakturering, ModulFane } from "./abonnement";
 import { FANER, tolkFane, type Detalj, type Fane, type Kunde } from "./deler";
+import { Kundehode, SupportDialog, SupportStripe } from "./hode";
+import { OrgModal } from "./organisasjon";
 import { Oversikt } from "./oversikt";
 import { Tilgang } from "./tilgang";
 
@@ -32,6 +34,8 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
   const [detalj, setDetalj] = useState<Detalj | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
   const [fane, setFane] = useState<Fane>("oversikt");
+  const [redigerer, setRedigerer] = useState(false);
+  const [supportApen, setSupportApen] = useState(false);
 
   useEffect(() => {
     setFane(tolkFane(new URLSearchParams(window.location.search).get("fane")));
@@ -77,10 +81,23 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
   };
 
   return (
-    <Ramme tittel={kunde.name}>
+    <Ramme tittel="Kunder">
       <Link href="/plattform/kunder" className="tilbake-lenke">
         ← Alle kunder
       </Link>
+
+      <SupportStripe kunde={kunde} orgId={orgId} onEndret={last} onFeil={setFeil} />
+
+      <Kundehode
+        detalj={detalj}
+        kunde={kunde}
+        onRediger={() => {
+          // Organisasjon bor på Oversikt — den som lukker skjemaet skal se kortet de endret.
+          velgFane("oversikt");
+          setRedigerer(true);
+        }}
+        onSupport={() => setSupportApen(true)}
+      />
 
       {feil && <div className="feilmelding">{feil}</div>}
 
@@ -100,7 +117,12 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
       </div>
 
       {fane === "oversikt" && (
-        <Oversikt detalj={detalj} kunde={kunde} onGaTil={velgFane} onEndret={last} />
+        <Oversikt
+          detalj={detalj}
+          kunde={kunde}
+          onGaTil={velgFane}
+          onRediger={() => setRedigerer(true)}
+        />
       )}
       {fane === "abonnement" && (
         <>
@@ -109,7 +131,29 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
         </>
       )}
       {fane === "tilgang" && (
-        <Tilgang kunde={kunde} orgId={orgId} onEndret={last} onFeil={setFeil} />
+        <Tilgang kunde={kunde} />
+      )}
+
+      {redigerer && (
+        <OrgModal
+          org={detalj.org}
+          onLukk={() => setRedigerer(false)}
+          onLagret={() => {
+            setRedigerer(false);
+            void last();
+          }}
+        />
+      )}
+      {supportApen && (
+        <SupportDialog
+          kunde={kunde}
+          orgId={orgId}
+          onLukk={() => setSupportApen(false)}
+          onStartet={() => {
+            setSupportApen(false);
+            void last();
+          }}
+        />
       )}
     </Ramme>
   );

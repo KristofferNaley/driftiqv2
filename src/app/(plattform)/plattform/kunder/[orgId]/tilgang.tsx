@@ -1,127 +1,22 @@
 "use client";
 
-import { useState } from "react";
 import { datoTid } from "@/components/felles";
-import { api } from "@/lib/klient";
 import { NIVA_ETIKETT } from "@/lib/nivaer";
 import type { Kunde } from "./deler";
 
-/** Fanen «Tilgang»: hvem som har tilgang til kunden, og hvem fra oss som har hatt innsyn. */
-export function Tilgang({
-  kunde,
-  orgId,
-  onEndret,
-  onFeil,
-}: {
-  kunde: Kunde;
-  orgId: string;
-  onEndret: () => Promise<void>;
-  onFeil: (f: string | null) => void;
-}) {
+/**
+ * Fanen «Tilgang»: hvem som har tilgang til kunden, og hvem fra oss som har hatt innsyn.
+ * Support-modus startes fra kundehodet (`hode.tsx`) og havner i innsynsloggen her.
+ */
+export function Tilgang({ kunde }: { kunde: Kunde }) {
   return (
     <>
       <Brukere kunde={kunde} />
-      <Support kunde={kunde} orgId={orgId} onEndret={onEndret} onFeil={onFeil} />
       <Innsynslogg kunde={kunde} />
     </>
   );
 }
 
-// ── Support-modus ───────────────────────────────────────────────────────────────────────
-
-function Support({
-  kunde,
-  orgId,
-  onEndret,
-  onFeil,
-}: {
-  kunde: Kunde;
-  orgId: string;
-  onEndret: () => Promise<void>;
-  onFeil: (f: string | null) => void;
-}) {
-  const [grunn, setGrunn] = useState("");
-  const [jobber, setJobber] = useState(false);
-
-  const aktiv = kunde.sesjoner.find(
-    (s) => !s.endedAt && s.expiresAt && new Date(s.expiresAt) > new Date(),
-  );
-
-  async function kjor(handling: () => Promise<unknown>, feiltekst: string) {
-    setJobber(true);
-    onFeil(null);
-    try {
-      await handling();
-      setGrunn("");
-      await onEndret();
-    } catch (e) {
-      onFeil(e instanceof Error ? e.message : feiltekst);
-    } finally {
-      setJobber(false);
-    }
-  }
-
-  return (
-    <div className={`pf-kort support${aktiv ? " aktiv" : ""}`}>
-      <div className="pf-kort-hode">
-        <span>Support-modus</span>
-        {aktiv && <span className="badge warn">Aktiv</span>}
-      </div>
-      <div className="pf-kort-kropp">
-        {aktiv ? (
-          <>
-            <p className="pf-tekst">
-              Du har innsyn i denne kundens data til <b>{datoTid(aktiv.expiresAt)}</b>.
-              Begrunnelse: «{aktiv.reason}»
-            </p>
-            <button
-              className="btn btn-ghost fjern-knapp"
-              disabled={jobber}
-              onClick={() =>
-                void kjor(
-                  () => api.slett(`/plattform/support?orgId=${orgId}`),
-                  "Kunne ikke avslutte support-modus",
-                )
-              }
-            >
-              Avslutt support-modus
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="pf-tekst">
-              Uten support-modus har du <b>ingen</b> tilgang til kundens oppgaver, avvik eller
-              beboerdata — panelet viser bare kundeforholdet. Innsynet logges med begrunnelse og
-              utløper automatisk etter {kunde.maksTimer} timer.
-            </p>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <input
-                className="input"
-                style={{ flex: "1 1 260px" }}
-                placeholder="Hvorfor trenger du innsyn?"
-                aria-label="Begrunnelse for innsyn"
-                value={grunn}
-                onChange={(e) => setGrunn(e.target.value)}
-              />
-              <button
-                className="btn btn-primary"
-                disabled={jobber || grunn.trim().length < 3}
-                onClick={() =>
-                  void kjor(
-                    () => api.send("/plattform/support", { orgId, reason: grunn.trim() }),
-                    "Kunne ikke starte support-modus",
-                  )
-                }
-              >
-                Start support-modus
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 // ── Brukere og innsynslogg ──────────────────────────────────────────────────────────────
 
 function Brukere({ kunde }: { kunde: Kunde }) {

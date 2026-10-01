@@ -42,6 +42,11 @@ Valgt fane står i `?fane=oversikt|abonnement|tilgang`. De gamle undersidenøkle
 (`sammendrag`, `organisasjon`, `onboarding`, `brukere`, `support`, `innsyn`) sendes videre
 til riktig fane.
 
+Øverst: kundehodet med navn, chips (Aktiv/Inaktiv, Demo, selskapsform, «Kunde siden …»,
+andeler) og to handlinger, **Rediger** (åpner Organisasjon-skjemaet) og **Support-modus**
+(dialog, se «Support-sesjon»). Mens et innsyn pågår, står en stripe over hodet med navn,
+utløpstid, begrunnelse og «Avslutt».
+
 ### Oversikt
 
 - **Snarveier** til abonnement, moduler og onboarding.
@@ -74,7 +79,6 @@ til riktig fane.
 
 - **Brukere** — kundens medlemmer med nivå og sist innlogget. Kun visning; her finnes
   ingen knapp for å legge til eller endre brukere (se «Ny kunde»).
-- **Support-modus** — start/avslutt innsyn.
 - **Innsynslogg** — de 20 siste support-sesjonene mot kunden: hvem, begrunnelse, start og
   slutt («pågår»).
 
@@ -98,14 +102,14 @@ tallene; å slå av «Aktiv» gjør dem ubrukelige.
 
 ## Support-sesjon
 
-1. Kunder → <kunde> → **Support-modus**.
-2. Skriv en begrunnelse (minst 3 tegn — «Kunden ringte om …») og trykk **Start
+1. Kunder → <kunde> → **Support-modus** øverst til høyre (fra hvilken som helst fane).
+2. Skriv en begrunnelse i dialogen (minst 3 tegn — «Kunden ringte om …») og trykk **Start
    support-modus**. Det lager en rad i `support_access_log` med navnet ditt kopiert inn.
 3. Åpne kundeappen og velg orgen i orgvelgeren. En stripe øverst («Support-modus. Du ser … på
    et logget innsyn») og «Support-modus» under navnet ditt i sidemenyen viser at innsynet
    er aktivt. Stripa lenker tilbake til kundesiden i panelet.
-4. Avslutt med **Avslutt support-modus** på samme fane. Du kan bare avslutte dine egne
-   sesjoner — ikke en kollegas.
+4. Avslutt med **Avslutt** i stripen over kundehodet. Du kan bare avslutte dine egne
+   sesjoner — ikke en kollegas. Mens innsynet pågår, er knappen i hodet «Til kundeappen».
 
 Regler:
 
@@ -118,7 +122,7 @@ Regler:
 - **Orgen må ligge i orgvelgeren din.** Orgvelgeren viser bare orger du har et *medlemskap*
   i (`user_org_memberships`) og som er aktive. Sesjonen alene gir ikke orgen en plass i
   velgeren. De migrerte kundene har plattformadmin-medlemskap fra v1 («supportinnganger»).
-- Innsynet logges og vises i panelet: fanen «Innsynslogg» per kunde og siden
+- Innsynet logges og vises i panelet: «Innsynslogg» under fanen Tilgang per kunde og siden
   «Support-modus» på tvers. Loggen er laget for at kunden skal kunne se den, men per
   01.10.2026 finnes det ingen side i kundeappen som viser den.
 
@@ -183,10 +187,10 @@ ingenting. Ingen feilmelding.
 
 Sjekk i rekkefølge:
 
-1. **Er orgen aktiv?** Kunder → <kunde> → Oversikt → Organisasjon → «Rediger». Er «Aktiv kunde» ikke krysset av:
-   «Rediger» → kryss av **Aktiv kunde** → lagre. Det var årsaken 01.10.2026. Avkrysningen
+1. **Er orgen aktiv?** Kunder → <kunde> → chipen i hodet. Står det «Inaktiv»: «Rediger»
+   hodet: kryss av **Aktiv kunde** → lagre. Det var årsaken 01.10.2026. Avkrysningen
    står ved siden av «Demo», og de er lette å forveksle.
-2. **Er sesjonen fortsatt gyldig?** Fanen «Support-modus» skal ha merket «Aktiv». Etter 4
+2. **Er sesjonen fortsatt gyldig?** Stripen «Support-modus aktiv» skal stå på kundesiden. Etter 4
    timer utløper den stille; start en ny. Uten gyldig sesjon finnes orgen i velgeren, men
    alle kall gir 403 («Plattformadmin må aktivere support-modus …»).
 3. **Har du medlemskap i orgen?** Se «Orgen må ligge i orgvelgeren din» over. Gjelder

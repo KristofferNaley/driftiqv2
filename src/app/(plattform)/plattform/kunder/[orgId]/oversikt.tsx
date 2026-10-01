@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { dato } from "@/components/felles";
 import { ALLE_MODULER, TILLEGGSMODULER } from "@/lib/moduler";
 import { arssum, kroner } from "@/lib/prisregler";
 import { Felt, type Detalj, type Fane, type Kunde } from "./deler";
-import { OrgKort, OrgModal, SlettKunde } from "./organisasjon";
+import { OrgKort, SlettKunde } from "./organisasjon";
 
 /**
  * Fanen «Oversikt» svarer på «hvordan står det til med denne kunden» uten å gå inn i
@@ -15,14 +14,13 @@ export function Oversikt({
   detalj,
   kunde,
   onGaTil,
-  onEndret,
+  onRediger,
 }: {
   detalj: Detalj;
   kunde: Kunde;
   onGaTil: (f: Fane) => void;
-  onEndret: () => Promise<void>;
+  onRediger: () => void;
 }) {
-  const [redigerer, setRedigerer] = useState(false);
   const { abonnement, onboarding } = detalj;
   const gjenstaar = onboarding.punkter.filter((p) => !p.ok).length;
   // Listeprisen for dagens modulvalg — det abonnementet VILLE kostet uten rabatt.
@@ -83,7 +81,7 @@ export function Oversikt({
       </div>
 
       <div className="pf-oversikt-grid">
-        <OrgKort detalj={detalj} onRediger={() => setRedigerer(true)} />
+        <OrgKort detalj={detalj} onRediger={onRediger} />
         <div className="pf-kolonne">
           <div className="pf-kort">
             <div className="pf-kort-hode">
@@ -102,17 +100,6 @@ export function Oversikt({
       </div>
 
       <SlettKunde org={detalj.org} />
-
-      {redigerer && (
-        <OrgModal
-          org={detalj.org}
-          onLukk={() => setRedigerer(false)}
-          onLagret={() => {
-            setRedigerer(false);
-            void onEndret();
-          }}
-        />
-      )}
     </>
   );
 }
