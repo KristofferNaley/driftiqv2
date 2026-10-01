@@ -11,18 +11,14 @@ import { useAppLenke } from "../verter";
 import Temaknapp from "@/components/Temaknapp";
 import ProfilModal from "@/components/ProfilModal";
 import {
-  Activity,
+  ArrowLeft,
   BarChart3,
-  Bug,
   Building2,
-  Coins,
+  CalendarCheck,
   Inbox,
-  Landmark,
-  LayoutGrid,
-  LayoutTemplate,
   Menu,
-  Search,
-  Users,
+  MessageSquareWarning,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,30 +33,47 @@ import {
  * kunder. Lilla er valgt fordi den ikke finnes i kundepaletten i det hele tatt.
  */
 
+type Teller = "iDag" | "innmeldinger";
+type Punkt = { sti: string; etikett: string; ikon: LucideIcon; teller?: Teller };
+
 /**
- * Menypunktene, i samme rekkefølge og med samme navn og ikoner som v1.
+ * Menyen: seks punkter, gruppert etter jobb (01.10.2026).
  *
- * Navnene ble «forbedret» i første utkast — «Innmeldinger», «Henvendelser»,
- * «Plattformbrukere», «HMS-maler». Det var å finne opp nye ord for ting som allerede har
- * et navn du bruker daglig. Tilbake til v1s.
+ * Før var det elleve flate punkter i v1s rekkefølge, der det man gjør hver gang (kø, leads,
+ * kunder) sto blandet med det man setter opp en gang i halvåret (prismodell, maler, system).
+ * Det siste er samlet under Innstillinger nederst; de gamle stiene omdirigerer dit.
  *
- * Stiene er urørt: `/plattform/saker` heter fortsatt det, selv om punktet heter
- * «Feilmeldinger». En URL som byttes brekker bokmerker uten å gi noe tilbake.
+ * Punktet heter «Innmeldinger», som siden selv — det dekker feil, forslag og spørsmål, og
+ * «Feilmeldinger» i menyen over en side som heter noe annet var å ha to navn på én ting.
+ * Stien er fortsatt `/plattform/saker`: en URL som byttes brekker bokmerker.
  */
-const MENY: ReadonlyArray<{ sti: string; etikett: string; ikon: LucideIcon }> = [
-  { sti: "/plattform", etikett: "Dashboard", ikon: LayoutGrid },
-  { sti: "/plattform/statistikk", etikett: "Statistikk", ikon: BarChart3 },
-  { sti: "/plattform/leads", etikett: "Leads", ikon: Inbox },
-  { sti: "/plattform/saker", etikett: "Feilmeldinger", ikon: Bug },
-  { sti: "/plattform/kunder", etikett: "Kunder", ikon: Building2 },
-  { sti: "/plattform/boligbyggelag", etikett: "Boligbyggelag", ikon: Landmark },
-  { sti: "/plattform/prismodell", etikett: "Prismodell", ikon: Coins },
-  { sti: "/plattform/brukere", etikett: "Brukere", ikon: Users },
-  { sti: "/plattform/support", etikett: "Support-modus", ikon: Search },
-  { sti: "/plattform/maler", etikett: "Maler", ikon: LayoutTemplate },
-  // Ikke i v1s meny, men bygget i v2 — systemhelse hører hjemme her og ikke gjemt bort.
-  { sti: "/plattform/system", etikett: "System", ikon: Activity },
+const MENY: ReadonlyArray<{ gruppe: string | null; punkter: ReadonlyArray<Punkt> }> = [
+  {
+    gruppe: null,
+    punkter: [
+      { sti: "/plattform", etikett: "I dag", ikon: CalendarCheck, teller: "iDag" },
+      { sti: "/plattform/saker", etikett: "Innmeldinger", ikon: MessageSquareWarning, teller: "innmeldinger" },
+    ],
+  },
+  {
+    gruppe: "Salg og kunder",
+    punkter: [
+      { sti: "/plattform/leads", etikett: "Leads", ikon: Inbox },
+      { sti: "/plattform/kunder", etikett: "Kunder", ikon: Building2 },
+    ],
+  },
+  {
+    gruppe: "Innsikt",
+    punkter: [{ sti: "/plattform/statistikk", etikett: "Statistikk", ikon: BarChart3 }],
+  },
 ];
+
+const INNSTILLINGER: Punkt = { sti: "/plattform/innstillinger", etikett: "Innstillinger", ikon: Settings };
+
+const TELLER_TEKST: Record<Teller, (n: number) => string> = {
+  iDag: (n) => `${n} ${n === 1 ? "punkt krever" : "punkter krever"} handling`,
+  innmeldinger: (n) => `${n} ${n === 1 ? "sak venter" : "saker venter"} på svar`,
+};
 
 export function Ramme({
   tittel,
@@ -101,20 +114,44 @@ export function Ramme({
    * til profilen, temaet eller kunde-appen fra telefonen i det hele tatt.
    *
    * Ingen `collapsed`-variant som i appen: panelet har ingen ikonmodus å slå over til, og
-   * en tilstand som huskes mellom besøk gir lite når menyen uansett bare er 11 punkter.
+   * en tilstand som huskes mellom besøk gir lite når menyen uansett bare er seks punkter.
    */
   const [menyApen, setMenyApen] = useState(false);
 
-  // Åpne saker som teller på «Feilmeldinger» — innboksen skal synes uten å åpnes.
-  // Feiler kallet, vises bare ingen teller; menyen skal aldri velte på det.
-  const [apneSaker, setApneSaker] = useState(0);
+  // Tellerne på «I dag» og «Innmeldinger». Hentes på nytt ved hvert sidebytte, så et
+  // svar på en sak eller en løst regel synes i menyen uten omlasting. Feiler kallet, vises
+  // bare ingen teller; menyen skal aldri velte på det.
+  const [tellere, setTellere] = useState<Partial<Record<Teller, number>>>({});
   useEffect(() => {
     if (!bruker || !erPlattformadminRolle(bruker.role)) return;
     api
-      .hent<{ antall: number }>("/plattform/saker/antall")
-      .then((r) => setApneSaker(r.antall))
+      .hent<Partial<Record<Teller, number>>>("/plattform/tellere")
+      .then(setTellere)
       .catch(() => {});
-  }, [bruker]);
+  }, [bruker, sti]);
+
+  // Eksakt treff på forsiden, prefiks ellers — uten det ville «I dag» stått markert på hver
+  // eneste underside.
+  const lenke = (p: Punkt) => {
+    const aktiv = p.sti === "/plattform" ? sti === p.sti : sti.startsWith(p.sti);
+    const Ikon = p.ikon;
+    const n = p.teller ? (tellere[p.teller] ?? 0) : 0;
+    return (
+      <Link
+        key={p.sti}
+        href={p.sti}
+        className={`pf-lenke${aktiv ? " aktiv" : ""}`}
+        aria-current={aktiv ? "page" : undefined}
+        onClick={() => setMenyApen(false)}
+      >
+        <Ikon size={17} strokeWidth={1.9} aria-hidden />
+        <span>{p.etikett}</span>
+        {p.teller && n > 0 && (
+          <span className="pf-cnt" aria-label={TELLER_TEKST[p.teller](n)}>{n}</span>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <div className="pf-side">
@@ -133,37 +170,22 @@ export function Ramme({
           </span>
         </Link>
 
-        <div className="pf-meny-gruppe">Plattformadmin</div>
-        {MENY.map((p) => {
-          // Eksakt treff på forsiden, prefiks ellers — uten det ville «Dashboard» stått
-          // markert på hver eneste underside.
-          const aktiv = p.sti === "/plattform" ? sti === p.sti : sti.startsWith(p.sti);
-          const Ikon = p.ikon;
-          return (
-            <Link
-              key={p.sti}
-              href={p.sti}
-              className={`pf-lenke${aktiv ? " aktiv" : ""}`}
-              onClick={() => setMenyApen(false)}
-            >
-              <Ikon size={17} strokeWidth={1.9} aria-hidden />
-              <span>{p.etikett}</span>
-              {p.sti === "/plattform/saker" && apneSaker > 0 && (
-                <span className="pf-cnt" aria-label={`${apneSaker} åpne saker`}>{apneSaker}</span>
-              )}
-            </Link>
-          );
-        })}
+        {MENY.map((g, i) => (
+          <div key={g.gruppe ?? i} className="pf-meny-blokk">
+            {g.gruppe && <div className="pf-meny-gruppe">{g.gruppe}</div>}
+            {g.punkter.map(lenke)}
+          </div>
+        ))}
 
         <div className="pf-meny-fot">
-          <div className="pf-fot-rad">
-            <a className="pf-tilbake" href={appLenke}>
-              ← Til kundeappen
-            </a>
-            {/* Temaveksleren står også her, som i v1 — panelet er en egen flate og man
-                skal ikke måtte innom kunde-appen for å bytte. */}
-            <Temaknapp kompakt />
-          </div>
+          {lenke(INNSTILLINGER)}
+          <a className="pf-lenke pf-lenke-dempet" href={appLenke}>
+            <ArrowLeft size={17} strokeWidth={1.9} aria-hidden />
+            <span>Til kundeappen</span>
+          </a>
+          {/* Temaveksleren står også her — panelet er en egen flate, og man skal ikke måtte
+              innom kunde-appen for å bytte. */}
+          <Temaknapp />
           {bruker && (
             <button
               type="button"

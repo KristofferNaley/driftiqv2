@@ -1534,19 +1534,24 @@ textarea.qr-input { resize: vertical; }
 .pf-lenke:hover { background: var(--surface2); }
 .pf-lenke.aktiv { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); font-weight: 600; }
 
-.pf-meny-fot { margin-top: auto; padding: 0 8px; }
-.pf-tilbake {
-  display: block; padding: 10px 12px; border-radius: 9px;
-  font-size: var(--fs-sm); color: var(--muted); text-decoration: none;
-  border: 1px solid var(--border);
+/* Innstillinger, «Til kundeappen» og temaet nederst, i samme form som menypunktene over. */
+.pf-meny-fot {
+  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column;
 }
-.pf-tilbake:hover { background: var(--surface2); color: var(--text); }
+.pf-meny-blokk { display: flex; flex-direction: column; }
+.pf-meny-blokk:first-of-type { padding-top: 10px; }
+.pf-lenke-dempet { color: var(--muted); }
+.pf-lenke-dempet:hover { color: var(--text); }
+.pf-meny-fot .tema-knapp {
+  width: calc(100% - 16px); margin: 0 8px 2px; padding: 10px 16px;
+}
 /* Er en <button> (åpner profilen), og da må font, farge og bakgrunn settes eksplisitt —
    knapper arver ingen av delene, og `background: none` alene har gitt svart tekst på mørk
    flate tre ganger i dette repoet. */
 .pf-bruker-blokk {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-  padding: 13px 8px 0; margin-top: 13px; border: none; border-top: 1px solid var(--border);
+  padding: 13px 16px 0; margin-top: 11px; border: none; border-top: 1px solid var(--border);
   background: none; color: inherit; font-family: var(--font-sans); cursor: pointer;
 }
 .pf-bruker-blokk:hover .pf-navn { color: var(--pf); }
@@ -3103,12 +3108,6 @@ textarea.qr-input { resize: vertical; }
 
 /* Plattformmenyen: ikon + tekst, som i kunde-appen. */
 .pf-lenke { display: flex; align-items: center; gap: 11px; }
-.pf-fot-rad { display: flex; align-items: center; gap: 8px; }
-.pf-fot-rad .pf-tilbake { flex: 1; }
-.tema-knapp.kompakt {
-  width: auto; margin: 0; padding: 9px 11px; flex-shrink: 0;
-  border: 1px solid var(--border); border-radius: 9px;
-}
 
 /* Meldingen til leverandøren.
  *

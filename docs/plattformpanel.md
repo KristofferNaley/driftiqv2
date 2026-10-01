@@ -26,7 +26,7 @@ medlemskapet.
 | Dashboard | Plattformtall: antall kunder (aktive/inaktive), bruk, AI-forbruk (tokens), aktive support-sesjoner. |
 | Statistikk | Forretning og produktbruk: nøkkeltall, kundehelse, ukesaktivitet, modulbruk. Demo-kunder kan slås av og på i nøkkeltallene; grafene holder dem alltid utenfor. Inaktive kunder regnes ikke som «ekte». |
 | Leads | Salgsløpet ny → kontaktet → kvalifisert → kunde. Her opprettes nye kunder (se «Ny kunde»). |
-| Feilmeldinger | Innmeldinger fra «Meld feil» i appen, med tråd mot melderen og interne notater. «Løst» sender e-post til melderen. |
+| Innmeldinger | Innmeldinger fra «Meld feil» i appen (feil, forslag, spørsmål), med tråd mot melderen og interne notater. «Løst» sender e-post til melderen. Telleren i menyen er saker der kunden venter på svar: ikke løst og ingen melding til kunden ennå, samme regel som «Ubesvart» på siden. Stien er fortsatt `/plattform/saker`. |
 | Kunder | Kundelista og kundesiden — se under. |
 | Boligbyggelag | Registeret over boligbyggelag. Globalt; brukes til tilknytning og forretningsfører på kundesiden. Flere kunder kan peke på samme lag, og lag kan fusjoneres. |
 | Prismodell | Standardprisene nye avtaler regnes fra (gulvpris, trinn per andel, modulpriser). Hver lagring blir en versjon. Kundens faktiske avtale redigeres på kundesiden, ikke her. |

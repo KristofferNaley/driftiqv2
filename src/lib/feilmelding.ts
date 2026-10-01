@@ -14,7 +14,7 @@
  * feilsorterte saker og færre innmeldinger.
  */
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -247,11 +247,26 @@ export async function settBacklog(db: Db, sakId: string, iBacklog: boolean) {
   return rad;
 }
 
-/** Antall saker som ikke er lukket. Til merket i panelmenyen. */
-export async function antallApne(db: Db): Promise<number> {
+/** Ingen melding til kunden på saken. Delt av telleren og «I dag». */
+const utenSvar = sql`not exists (
+  select 1 from ${feedbackMessages}
+  where ${feedbackMessages.reportId} = ${feedbackReports.id} and not ${feedbackMessages.internal}
+)`;
+
+/**
+ * Saker der kunden venter på svar fra oss — telleren på «Innmeldinger» i menyen.
+ *
+ * Samme definisjon som «Ubesvart» på siden (`erUbesvart` i saker/page.tsx): ikke løst, og
+ * ingen melding til kunden ennå. Interne notater teller ikke som svar.
+ *
+ * Erstatter `antallApne`, som talte alt som ikke var løst. Da viste menyen 1 mens siden sa
+ * «Ubesvart 0» — en sak vi hadde svart på og jobbet videre med, ble stående som et rødt tall
+ * som ikke krevde noe av deg (01.10.2026).
+ */
+export async function antallVenterPaSvar(db: Db): Promise<number> {
   const rader = await db
     .select({ n: sql<string>`count(*)` })
     .from(feedbackReports)
-    .where(and(sql`${feedbackReports.status} <> 'lost'`));
+    .where(and(ne(feedbackReports.status, "lost"), utenSvar));
   return Number(rader[0]?.n ?? 0);
 }

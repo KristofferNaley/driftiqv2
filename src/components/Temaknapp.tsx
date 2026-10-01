@@ -14,7 +14,7 @@ import { Moon, Sun } from "lucide-react";
  * en sol rendret på serveren ville blitt en måne i det React overtok — og React klager på at
  * HTML-en ikke stemmer.
  */
-export default function Temaknapp({ kompakt = false }: { kompakt?: boolean } = {}) {
+export default function Temaknapp() {
   const [tema, setTema] = useState<"dark" | "light" | null>(null);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function Temaknapp({ kompakt = false }: { kompakt?: boolean } = {
 
   return (
     <button
-      className={kompakt ? "tema-knapp kompakt" : "tema-knapp"}
+      className="tema-knapp"
       onClick={veksle}
       aria-label={tilLys ? "Bytt til lys modus" : "Bytt til mørk modus"}
       title={tilLys ? "Lys modus" : "Mørk modus"}
@@ -49,9 +49,7 @@ export default function Temaknapp({ kompakt = false }: { kompakt?: boolean } = {
       ) : (
         <Moon size={15} strokeWidth={1.9} aria-hidden />
       )}
-      {/* I plattformpanelet står knappen ved siden av «Tilbake»-lenka og har bare ikonet —
-          teksten ville sprengt raden. */}
-      {!kompakt && <span className="nav-tekst">{tilLys ? "Lys modus" : "Mørk modus"}</span>}
+      <span className="nav-tekst">{tilLys ? "Lys modus" : "Mørk modus"}</span>
     </button>
   );
 }
