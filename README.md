@@ -106,9 +106,9 @@ docker compose exec app npm run test
 
 ## Verktøy
 
-`.mcp.json` setter opp to MCP-servere for Claude Code — Next.js-devtools og Better Auth.
-Begge kjøres i Docker fordi det ikke er installert Node på verten. Se
-[docs/mcp-servere.md](docs/mcp-servere.md) for hva de faktisk gir, og hva de ikke gir.
+`.mcp.json` setter opp eksterne MCP-servere for Claude Code (Context7 og Cloudflare). De
+lokale Docker-serverne (Next.js-devtools, Better Auth) er fjernet — se
+[docs/mcp-servere.md](docs/mcp-servere.md) for hvorfor.
 
 ## Hva som er annerledes fra v1, og hvorfor
 

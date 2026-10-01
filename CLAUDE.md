@@ -455,9 +455,10 @@ komponenter — endres logikken, må begge med.
   svar var gyldige, bare ulike).
 - TOTP: hemmeligheten i `totpURI` er base32-kodet, `createOTP` tar den rå — glemmes
   dekodingen, er hver kode «Invalid code» uten annet spor.
-- MCP-serverne i `.mcp.json` kjøres i Docker (ingen Node på verten) med absolutt repo-sti;
-  `better-auth`-serveren er pinnet eldre enn appens versjon — generert oppsett sjekkes mot
-  `src/lib/auth.ts`. Se `docs/mcp-servere.md`.
+- `.mcp.json` har bare eksterne servere (Context7, Cloudflare). De lokale Docker-serverne
+  (`nextjs`, `better-auth`) er fjernet 01.10.2026 — `docker run -i`-containerne ble stående
+  igjen etter endte økter. Legges en lokal server til igjen, må den stoppes ved økt-slutt.
+  Se `docs/mcp-servere.md`.
 - **Selskapsform er en Brreg-kode, ikke fritekst** (`organizations.org_form_code`,
   Postgres-enum `orgformenum`, lista i `lib/selskapsform.ts`). En ny form er en oppføring
   der OG `ALTER TYPE orgformenum ADD VALUE` i en migrasjon; `tests/kundedetalj.test.ts`
