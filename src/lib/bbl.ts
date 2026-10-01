@@ -15,12 +15,14 @@ import type { Db } from "../db/client";
 import { bbl } from "../db/schema/bbl";
 import { organizations } from "../db/schema/organizations";
 import { ikkeFunnet, ugyldig } from "./api";
+import { FYLKESNR, type Fylkesnr } from "./fylker";
 import { normaliserOrgnr } from "./orgnr";
 
 export const bblInn = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut"),
   orgNr: z.string().trim().nullish(),
-  region: z.string().trim().nullish(),
+  /** Fylkesnummer, ett eller flere. Fritekst-`region` tas ikke imot lenger. */
+  countyCodes: z.array(z.enum(FYLKESNR)).nullish(),
   website: z.string().trim().nullish(),
   notes: z.string().nullish(),
   active: z.boolean().default(true),
@@ -68,6 +70,12 @@ async function oppslag(db: Db) {
 
 type Rad = typeof bbl.$inferSelect;
 
+/** Unike, sortert; tom liste lagres som NULL («ikke satt»). */
+function fylker(koder: ReadonlyArray<Fylkesnr> | null | undefined): Fylkesnr[] | null {
+  const unike = [...new Set(koder ?? [])].sort();
+  return unike.length > 0 ? unike : null;
+}
+
 function ut(rad: Rad, o: Awaited<ReturnType<typeof oppslag>>) {
   return {
     ...rad,
@@ -113,7 +121,7 @@ export async function opprett(db: Db, data: z.infer<typeof bblInn>): Promise<Bbl
       id: randomUUID(),
       name: data.name,
       orgNr,
-      region: data.region ?? null,
+      countyCodes: fylker(data.countyCodes),
       website: data.website ?? null,
       notes: data.notes ?? null,
       active: data.active,
@@ -131,7 +139,11 @@ export async function endre(
 
   const felter: Partial<Rad> = {};
   if (data.name !== undefined) felter.name = data.name;
-  if (data.region !== undefined) felter.region = data.region ?? null;
+  if (data.countyCodes !== undefined) {
+    felter.countyCodes = fylker(data.countyCodes);
+    // Fritekst fra før fylkeslista ryddes så snart noen har valgt fylke.
+    if (felter.countyCodes) felter.region = null;
+  }
   if (data.website !== undefined) felter.website = data.website ?? null;
   if (data.notes !== undefined) felter.notes = data.notes ?? null;
   if (data.active !== undefined) felter.active = data.active;
@@ -163,7 +175,7 @@ export async function varsleFusjon(
 ): Promise<BblUt> {
   await hentEn(db, bblId);
   if (data.successorId === bblId) {
-    throw ugyldig("Et boligbyggelag kan ikke fusjoneres med seg selv");
+    throw ugyldig("Et boligbyggelag kan ikke slås sammen med seg selv");
   }
   const etterfolger = await db
     .select({ id: bbl.id, successorId: bbl.successorId })
@@ -198,7 +210,7 @@ export async function avlysFusjon(db: Db, bblId: string): Promise<BblUt> {
  */
 export async function gjennomforFusjon(db: Db, bblId: string): Promise<BblUt> {
   const rad = await hentEn(db, bblId);
-  if (!rad.successorId) throw ugyldig("Ingen fusjon er varslet for dette laget");
+  if (!rad.successorId) throw ugyldig("Ingen sammenslåing er varslet for dette laget");
 
   await db
     .update(organizations)
@@ -237,7 +249,7 @@ export async function slett(db: Db, bblId: string): Promise<void> {
   const antall = iBruk[0]?.n ?? 0;
   if (antall > 0) {
     throw ugyldig(
-      `${antall} kunde${antall === 1 ? "" : "r"} er koblet til dette laget. Registrer en fusjon i stedet for å slette.`,
+      `${antall} kunde${antall === 1 ? "" : "r"} er koblet til dette laget. Slå det sammen med et annet lag i stedet for å slette.`,
     );
   }
 

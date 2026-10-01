@@ -463,6 +463,10 @@ komponenter — endres logikken, må begge med.
   Postgres-enum `orgformenum`, lista i `lib/selskapsform.ts`). En ny form er en oppføring
   der OG `ALTER TYPE orgformenum ADD VALUE` i en migrasjon; `tests/kundedetalj.test.ts`
   feiler hvis de to drifter. Demo er flagget `demo`, aldri en selskapsform (01.10.2026).
+- **Fylke på boligbyggelag er SSB-fylkesnummer, ikke fritekst** (`bbl.county_codes`,
+  `fylkeenum[]`, lista i `lib/fylker.ts`) — samme regel som selskapsform: nytt fylke er en
+  oppføring der OG `ALTER TYPE fylkeenum ADD VALUE`; `tests/bbl-fylker.test.ts` fanger drift.
+  Gammel fritekst i `bbl.region` som ikke lot seg tolke listes av `scripts/fylke-rapport.ts`.
 - `.env` committes aldri; `mockups/` er gitignorert arbeidsmateriale — layoutintensjon,
   ikke fasit for farger eller merkevare (fasiten er tokenene i `globals.css`).
 

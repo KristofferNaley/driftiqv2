@@ -334,11 +334,15 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
 
           <div className="pf-kort">
             <div className="pf-kort-kropp">
-              <h3 className="pf-kpi-etikett" style={{ margin: 0 }}>Moduler med egen pris</h3>
+              {/* På = egen pris (feltet vises), av = inkludert i grunnpakken. Før var det
+                  omvendt, og en bryter som er PÅ for «koster ingenting ekstra» leste feil. */}
+              <h3 className="pf-kpi-etikett pf-pm-modulhode" style={{ margin: 0 }}>
+                <span>Moduler</span>
+                <span className="pf-pm-modulhint">Av = inkludert i grunnpakken</span>
+              </h3>
               <p className="pf-dempet" style={{ margin: "4px 0 6px" }}>
-                Slå på bryteren for å inkludere modulen i grunnpakken uten ekstra pris.
-                Prisen er standard for nye avtaler. Den enkelte kundes pris settes i
-                kundedetaljen.
+                Slå på bryteren for å gi modulen egen pris. Prisen er standard for nye avtaler.
+                Den enkelte kundes pris settes i kundedetaljen.
               </p>
               {TILLEGGSMODULER.map((m) => {
                 const inkludert = (modulpriser[m] ?? 0) === 0;
@@ -348,21 +352,22 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
                       type="checkbox"
                       role="switch"
                       className="bryter-boks"
-                      id={`inkl-${m}`}
-                      checked={inkludert}
+                      id={`egenpris-${m}`}
+                      aria-label={`Egen pris for ${modulNavn(m)}`}
+                      checked={!inkludert}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setHuskPris({ ...huskPris, [m]: modulpriser[m] ?? 0 });
-                          setModulpriser({ ...modulpriser, [m]: 0 });
-                        } else {
                           setModulpriser({
                             ...modulpriser,
                             [m]: huskPris[m] || STANDARD_MODULPRISER[m] || 5000,
                           });
+                        } else {
+                          setHuskPris({ ...huskPris, [m]: modulpriser[m] ?? 0 });
+                          setModulpriser({ ...modulpriser, [m]: 0 });
                         }
                       }}
                     />
-                    <label className="bryter" htmlFor={`inkl-${m}`} aria-hidden />
+                    <label className="bryter" htmlFor={`egenpris-${m}`} aria-hidden />
                     <span style={{ minWidth: 0 }}>
                       <span className="pf-navn">{modulNavn(m)}</span>
                       <span className="pf-under">
@@ -400,7 +405,7 @@ function Redigering({ panel, onLagret }: { panel: Panel; onLagret: (p: Panel) =>
               <h3 className="pf-kpi-etikett" style={{ margin: 0 }}>Når endringen gjelder</h3>
               <p className="pf-dempet" style={{ margin: "4px 0 14px" }}>
                 Nye kunder får den nye modellen fra datoen under. Eksisterende kunder
-                beholder kontraktens pris til neste fornyelse, med prisgaranti ut avtaleperioden.
+                beholder kontraktens pris til neste fornyelse. Prisen er garantert ut avtaleperioden.
               </p>
               <div style={{ width: "200px" }}>
                 <label className="field-label" htmlFor="fra">Gjelder nye kunder fra</label>

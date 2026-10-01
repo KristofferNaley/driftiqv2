@@ -9,6 +9,33 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 01.10.2026 — Fylke på boligbyggelag som enum-liste, «Siden sist» fra innloggingsloggen
+
+**Hva:** `bbl.county_codes` er `fylkeenum[]` med SSB-fylkesnummer (`03`, `46`, …), lista og
+navnene i den importfrie `lib/fylker.ts`. Det er en LISTE fordi et boligbyggelag ofte dekker
+flere fylker. Migrasjon 0069 tolket kjente skrivemåter av fritekstfeltet `region`
+(fylkesnavnene, og «Vestlandet» som Vestland etter avklaring med eier) og tømte `region` der
+den ble tolket. Resten blir stående, vises som «Ukjent» i panelet og listes av
+`scripts/fylke-rapport.ts`; `region` droppes i egen migrasjon når rapporten er tom.
+
+Samme dag: «Siden sist du var her» på I dag regnes fra nest siste `innlogget`-rad i
+`auth_events`, ikke fra en ny kolonne på `users`.
+
+**Hvorfor:** Fritekst ga både «Vestland» og «Vestlandet». Enum følger presedensen fra
+selskapsformen over: lista håndheves av databasen, ikke bare av appen. Nummer og ikke navn,
+så et fylke som skifter navn igjen er én linje i `fylker.ts`. For «Siden sist» finnes
+tidspunktet allerede: krokene i `auth.ts` skriver hver innlogging til `auth_events`.
+
+**Alternativer:**
+- *Ett fylke per lag.* Forkastet: Vestbo og OBOS har kunder i flere fylker, og et valg ville
+  vært tilfeldig.
+- *Koblingstabell `bbl_counties`.* Forkastet: lista leses alltid sammen med laget og
+  filtreres aldri på; en tabell måtte inn i RLS-registeret for ingenting.
+- *`users.previous_login_at` satt i innloggingskroken.* Forkastet foreløpig: krever
+  migrasjon og en ekstra skriving i innloggingen for noe loggen allerede har. Prisen er
+  oppbevaringen på 90 dager; er forrige innlogging eldre, viser siden «siste 90 dager».
+  Blir det et problem, er kolonnen løsningen.
+
 ## 01.10.2026 — Selskapsform som Postgres-enum med Brreg-koder
 
 **Hva:** `organizations.org_form_code` er enumen `orgformenum` (`BRL`, `ESEK`, `SAM`, `AS`).

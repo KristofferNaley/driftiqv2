@@ -181,7 +181,8 @@ function MalDetaljvisning({
   onFeil: (f: string | null) => void;
 }) {
   const [nyKategori, setNyKategori] = useState("");
-  const [nyttPunkt, setNyttPunkt] = useState<{ kategoriId: string; tekst: string } | null>(null);
+  /** Feltet nederst i hver kategori, per kategori-id. */
+  const [nyttPunkt, setNyttPunkt] = useState<Record<string, string>>({});
 
   async function kjor(handling: () => Promise<unknown>, feiltekst: string) {
     onFeil(null);
@@ -201,18 +202,17 @@ function MalDetaljvisning({
         <div className="pf-kort-hode">
           <span>{mal.name}</span>
           <span style={{ display: "flex", gap: "6px" }}>
-            <button
-              className="btn btn-ghost"
-              disabled={mal.isDefault}
-              title={
-                mal.isDefault
-                  ? "Dette er allerede standardmalen"
-                  : "Gjør denne til standard for nye runder"
-              }
-              onClick={() => void onEndreMal(mal.id, { isDefault: true })}
-            >
-              Sett som standard
-            </button>
+            {/* Ingen knapp på malen som allerede er standard — en grå «Sett som standard»
+                der sa ingenting knappen ikke viste bedre ved å være borte. */}
+            {!mal.isDefault && (
+              <button
+                className="btn btn-ghost"
+                title="Gjør denne til standard for nye runder"
+                onClick={() => void onEndreMal(mal.id, { isDefault: true })}
+              >
+                Gjør til standard
+              </button>
+            )}
             <button
               className="btn btn-ghost"
               onClick={() => void onEndreMal(mal.id, { active: !mal.active })}
@@ -257,56 +257,49 @@ function MalDetaljvisning({
                 <span>{p.text}</span>
                 {p.hint && <span className="pf-under">{p.hint}</span>}
               </span>
+              {/* × vises ved mus over raden eller tastaturfokus (CSS). */}
               <button
-                className="btn btn-ghost"
+                type="button"
+                className="pf-punkt-x"
                 aria-label={`Slett punktet «${p.text}»`}
+                title="Slett punktet"
                 onClick={() =>
                   void kjor(() => api.slett(`/templates/items/${p.id}`), "Kunne ikke slette punktet")
                 }
               >
-                Slett
+                ×
               </button>
             </div>
           ))}
 
-          {nyttPunkt?.kategoriId === k.id ? (
-            <form
-              className="pf-punkt-rad"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const tekst = nyttPunkt.tekst.trim();
-                if (!tekst) return;
-                setNyttPunkt(null);
-                void kjor(
-                  () =>
-                    api.send(`/templates/categories/${k.id}/items`, {
-                      text: tekst,
-                      order: k.punkter.length,
-                    }),
-                  "Kunne ikke legge til punktet",
-                );
-              }}
-            >
-              <input
-                className="input"
-                autoFocus
-                placeholder="Hva skal kontrolleres?"
-                aria-label="Nytt punkt"
-                value={nyttPunkt.tekst}
-                onChange={(e) => setNyttPunkt({ kategoriId: k.id, tekst: e.target.value })}
-              />
-              <button className="btn btn-primary">Legg til</button>
-            </form>
-          ) : (
-            <div className="pf-punkt-rad">
-              <button
-                className="btn btn-ghost"
-                onClick={() => setNyttPunkt({ kategoriId: k.id, tekst: "" })}
-              >
-                ＋ Nytt punkt
-              </button>
-            </div>
-          )}
+          {/* Nytt punkt: skriv og trykk Enter. Feltet blir stående, så flere punkter kan
+              legges inn etter hverandre. */}
+          <form
+            className="pf-punkt-rad"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const tekst = (nyttPunkt[k.id] ?? "").trim();
+              if (!tekst) return;
+              setNyttPunkt({ ...nyttPunkt, [k.id]: "" });
+              void kjor(
+                () =>
+                  api.send(`/templates/categories/${k.id}/items`, {
+                    text: tekst,
+                    order: k.punkter.length,
+                  }),
+                "Kunne ikke legge til punktet",
+              );
+            }}
+          >
+            <input
+              className="input"
+              style={{ flex: 1, minWidth: 0 }}
+              placeholder="Nytt punkt, trykk Enter"
+              aria-label={`Nytt punkt i ${k.label}`}
+              value={nyttPunkt[k.id] ?? ""}
+              onChange={(e) => setNyttPunkt({ ...nyttPunkt, [k.id]: e.target.value })}
+            />
+          </form>
         </div>
       ))}
 

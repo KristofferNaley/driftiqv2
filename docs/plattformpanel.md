@@ -41,9 +41,9 @@ omdirigerer hit, så bokmerker virker.
 
 | Underside | Hva den er til |
 |---|---|
-| Prismodell | Standardprisene nye avtaler regnes fra (gulvpris, trinn per andel, modulpriser). Hver lagring blir en versjon. Kundens faktiske avtale redigeres på kundesiden, ikke her. |
-| Boligbyggelag | Registeret over boligbyggelag. Globalt; brukes til tilknytning og forretningsfører på kundesiden. Flere kunder kan peke på samme lag, og lag kan slås sammen. Kundetallet teller unike kunder med laget som tilknytning ELLER forretningsfører; testbasen har ingen slike koblinger og viser 0 overalt. |
-| HMS-maler | Spørsmålslistene for vernerunde og risikovurdering. Felles for alle kunder; kunden velger mal, men kan ikke endre punktene. Endringer slår ikke tilbake på gjennomførte runder. |
+| Prismodell | Standardprisene nye avtaler regnes fra (gulvpris, trinn per andel, modulpriser). Hver lagring blir en versjon. Kundens faktiske avtale redigeres på kundesiden, ikke her. Modulbryteren: på = egen pris, av = inkludert i grunnpakken. |
+| Boligbyggelag | Registeret over boligbyggelag. Globalt; brukes til tilknytning og forretningsfører på kundesiden. Flere kunder kan peke på samme lag, og lag kan slås sammen (⋯-menyen per rad: Rediger, «Slå sammen med …», Slett; Slett er grå med forklaring når laget har kunder). Fylke er en fast liste med flervalg (`lib/fylker.ts`); gammel fritekst som ikke lot seg tolke vises som «Ukjent». Kundetallet teller unike kunder med laget som tilknytning ELLER forretningsfører; testbasen har ingen slike koblinger og viser 0 overalt. |
+| HMS-maler | Spørsmålslistene for vernerunde og risikovurdering. Nytt punkt: skriv i feltet nederst i kategorien og trykk Enter; × for å slette vises ved mus over eller tastaturfokus. Felles for alle kunder; kunden velger mal, men kan ikke endre punktene. Endringer slår ikke tilbake på gjennomførte runder. |
 | Varsler | Hvem som får e-post om nye leads og innmeldinger (`pricing_config.leads_notify_emails`). Tom liste faller tilbake på `LEADS_NOTIFY_EMAIL`. |
 | Plattformadmins | **DriftIQs egne plattformadmins**, ikke kundenes brukere. Kundebrukere administreres inne i kundeappen. `kontoansvarlig` fra v1 tilbys ikke; rollen er ikke implementert i tilgangslaget. |
 | Innsynslogg | Support-økter på tvers av alle kunder: hvem har innsyn nå, og hvem har hatt det. Økter startes fra kundesiden. |

@@ -2297,6 +2297,26 @@ textarea.qr-input { resize: vertical; }
   text-transform: uppercase; color: var(--muted);
 }
 .pf-handlinger { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+/* ⋯-menyen per lag: Rediger, Slå sammen med …, Slett. */
+.pf-bbl-meny { position: relative; display: flex; justify-content: flex-end; }
+.pf-bbl-pop {
+  position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 30; min-width: 220px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3); padding: 4px;
+  display: flex; flex-direction: column;
+}
+.pf-bbl-pop button {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border: none; border-radius: 6px;
+  background: none; color: var(--text); font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer;
+}
+.pf-bbl-pop button:hover:not(:disabled) { background: var(--surface2); }
+.pf-bbl-pop button.farlig { color: var(--danger); }
+.pf-bbl-pop button:disabled { color: var(--muted); cursor: not-allowed; }
+.pf-bbl-pop small { display: block; color: var(--muted); font-size: var(--fs-label); }
+/* Fylkesvalget i skjemaet: avkryssingsbokser i kolonner som tilpasser seg bredden. */
+.pf-bbl-fylkevalg { border: none; padding: 0; margin: 0; min-width: 0; }
+.pf-bbl-fylker { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; }
+.pf-bbl-fylker label { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); cursor: pointer; }
 .pf-merkelapp {
   display: inline-block; padding: 2px 8px; border-radius: 10px;
   font-size: var(--fs-label); font-weight: 600;
@@ -2314,6 +2334,8 @@ textarea.qr-input { resize: vertical; }
      tre ulikt brede knapper høyrestilt under hverandre. Egen rad i full bredde i stedet,
      samme grep som `.pf-brukerrad` bruker lenger nede. */
   .pf-handlinger { grid-column: 1 / -1; justify-content: flex-start; }
+  .pf-bbl-meny { grid-column: 1 / -1; justify-content: flex-start; }
+  .pf-bbl-pop { left: 0; right: auto; }
   .pf-trinn-hode { display: none; }
   .pf-trinn-rad { grid-template-columns: 1fr 1fr; }
 }
@@ -2517,6 +2539,20 @@ textarea.qr-input { resize: vertical; }
 @media (max-width: 640px) {
   .pf-handling { grid-template-columns: 22px minmax(0, 1fr); }
   .pf-handling-kontroll { grid-column: 2; justify-content: flex-start; }
+}
+/* Prismodell: «Av = inkludert i grunnpakken» til høyre i modulkortets overskrift. */
+.pf-pm-modulhode { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pf-pm-modulhint { margin-left: auto; font-weight: 400; letter-spacing: 0; text-transform: none; }
+/* System: bakgrunnsjobbene. Tre kolonner som krymper og bryter i stedet for å kutte. */
+.pf-jobb-rad {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px; align-items: baseline; border-top: 1px solid var(--border);
+}
+.pf-jobb-rad > * { min-width: 0; overflow-wrap: anywhere; }
+.pf-jobb-siste { text-align: right; }
+@media (max-width: 700px) {
+  .pf-jobb-rad { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .pf-jobb-siste { text-align: left; }
 }
 /* Innstillinger: undermeny til venstre, innholdet til høyre. Under 900px blir undermenyen
    en rad med lenker over innholdet, uten gruppenavn. */
@@ -2834,6 +2870,16 @@ textarea.qr-input { resize: vertical; }
   padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm);
 }
 .pf-punkt-rad:last-child { border-bottom: none; }
+/* Slett-× på et malpunkt: skjult til musa er over raden eller knappen har tastaturfokus.
+   På berøringsskjerm (ingen hover) står den alltid. */
+.pf-punkt-x {
+  border: none; background: none; color: var(--muted); cursor: pointer; flex-shrink: 0;
+  font-family: var(--font-sans); font-size: var(--fs-lg); line-height: 1; padding: 2px 8px;
+  border-radius: 6px; opacity: 0;
+}
+.pf-punkt-rad:hover .pf-punkt-x, .pf-punkt-x:focus-visible { opacity: 1; }
+.pf-punkt-x:hover { color: var(--danger); background: var(--surface2); }
+@media (hover: none) { .pf-punkt-x { opacity: 1; } }
 .pf-punkt-rad > span:first-child, .pf-punkt-rad .input { flex: 1; min-width: 0; }
 @media (max-width: 900px) { .pf-mal-layout { grid-template-columns: 1fr; } }
 

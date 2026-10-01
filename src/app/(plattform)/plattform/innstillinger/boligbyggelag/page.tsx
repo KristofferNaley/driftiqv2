@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/klient";
 import { formatOrgNr } from "@/lib/orgnr";
+import { FYLKER_ALFABETISK, fylkesliste } from "@/lib/fylker";
 import { dato } from "@/components/felles";
 import { Modal, Knapperad, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
 import { Underside } from "../underside";
@@ -18,7 +19,9 @@ type Bbl = {
   id: string;
   name: string;
   orgNr: string | null;
+  /** Fritekst fra før fylkeslista; satt bare når den ikke lot seg tolke. */
   region: string | null;
+  countyCodes: string[] | null;
   website: string | null;
   notes: string | null;
   successorId: string | null;
@@ -68,7 +71,7 @@ export default function Boligbyggelag() {
       await api.send(`/plattform/bbl/${b.id}/fusjon/gjennomfor`, {});
       await last();
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke gjennomføre fusjonen");
+      setFeil(e instanceof Error ? e.message : "Kunne ikke gjennomføre sammenslåingen");
     }
   }
 
@@ -78,7 +81,7 @@ export default function Boligbyggelag() {
       await api.slett(`/plattform/bbl/${b.id}/fusjon`);
       await last();
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : "Kunne ikke avlyse fusjonen");
+      setFeil(e instanceof Error ? e.message : "Kunne ikke avlyse sammenslåingen");
     }
   }
 
@@ -107,7 +110,7 @@ export default function Boligbyggelag() {
             <div className="pf-bbl-rad hode">
               <span>Navn</span>
               <span>Org.nr</span>
-              <span>Region</span>
+              <span>Fylke</span>
               <span>Kunder</span>
               <span>Status</span>
               <span />
@@ -118,50 +121,64 @@ export default function Boligbyggelag() {
                   <span className="pf-navn">{b.name}</span>
                   {b.successorId && (
                     <span className="pf-under">
-                      Fusjoneres inn i {b.successorName}
+                      Slås sammen med {b.successorName}
                       {b.mergeDate ? ` · ${dato(b.mergeDate)}` : ""}
                     </span>
                   )}
                 </span>
                 <span className="pf-dempet">{formatOrgNr(b.orgNr) ?? "Ikke satt"}</span>
-                <span className="pf-dempet">{b.region ?? "Ikke satt"}</span>
+                <span className="pf-dempet">
+                  {b.countyCodes?.length
+                    ? fylkesliste(b.countyCodes)
+                    : b.region
+                      ? `Ukjent («${b.region}»)`
+                      : "Ikke satt"}
+                </span>
                 <span className="pf-tall">{b.antallKunder}</span>
                 <span>
                   {!b.active ? (
                     <span className="pf-merkelapp utgatt">Utgått</span>
                   ) : b.successorId ? (
-                    <span className="pf-merkelapp varsel">Fusjon varslet</span>
+                    <span className="pf-merkelapp varsel">Sammenslåing varslet</span>
                   ) : (
                     <span className="pf-merkelapp aktiv">Aktiv</span>
                   )}
                 </span>
-                <span className="pf-handlinger">
-                  <button className="btn btn-ghost" onClick={() => setRediger(b)}>
-                    Rediger
-                  </button>
-                  {b.active &&
-                    (b.successorId ? (
-                      <>
-                        <button className="btn btn-ghost" onClick={() => setBekreft({ lag: b, slag: "gjennomfor" })}>
-                          Gjennomfør
-                        </button>
-                        <button className="btn btn-ghost" onClick={() => void avlys(b)}>
-                          Avlys
-                        </button>
-                      </>
-                    ) : (
-                      <button className="btn btn-ghost" onClick={() => setFusjon(b)}>
-                        Fusjon
-                      </button>
-                    ))}
-                  {/* Sletting er bare for feilregistreringer. Er laget i bruk, avviser
-                      API-et det uansett — knappen skjules så man ikke prøver. */}
-                  {b.antallKunder === 0 && (
-                    <button className="btn btn-ghost" onClick={() => setBekreft({ lag: b, slag: "slett" })}>
-                      Slett
-                    </button>
-                  )}
-                </span>
+                <Radmeny
+                  etikett={`Valg for ${b.name}`}
+                  valg={[
+                    { etikett: "Rediger", onVelg: () => setRediger(b) },
+                    ...(b.active && b.successorId
+                      ? [
+                          {
+                            etikett: "Gjennomfør sammenslåing",
+                            under: `Kundene flyttes til ${b.successorName}`,
+                            onVelg: () => setBekreft({ lag: b, slag: "gjennomfor" as const }),
+                          },
+                          { etikett: "Avlys sammenslåing", onVelg: () => void avlys(b) },
+                        ]
+                      : b.active
+                        ? [
+                            {
+                              etikett: "Slå sammen med …",
+                              under: "Kundene flyttes, laget blir stående som utgått",
+                              onVelg: () => setFusjon(b),
+                            },
+                          ]
+                        : []),
+                    {
+                      etikett: "Slett",
+                      farlig: true,
+                      // Sletting er bare for feilregistreringer. API-et avviser et lag i bruk
+                      // uansett; her sier menyen hvorfor i stedet for å skjule valget.
+                      deaktivert:
+                        b.antallKunder > 0
+                          ? `Har ${b.antallKunder} ${b.antallKunder === 1 ? "kunde" : "kunder"}. Bruk sammenslåing.`
+                          : undefined,
+                      onVelg: () => setBekreft({ lag: b, slag: "slett" }),
+                    },
+                  ]}
+                />
               </div>
             ))}
           </>
@@ -170,8 +187,9 @@ export default function Boligbyggelag() {
 
       <p className="field-note">
         Et lag som er i bruk kan ikke slettes. Da mister kundene tilknytningen sin, og en
-        årsberetning fra i fjor kan ikke lenger si hvilket lag de tilhørte. Bruk fusjon i
-        stedet: kundene flyttes over, og det gamle laget blir stående som utgått.
+        årsberetning fra i fjor kan ikke lenger si hvilket lag de tilhørte. Slå det heller
+        sammen med et annet lag: kundene flyttes over, og det gamle laget blir stående som
+        utgått.
       </p>
 
       {rediger && (
@@ -187,7 +205,7 @@ export default function Boligbyggelag() {
 
       {bekreft && (
         <Modal
-          tittel={bekreft.slag === "slett" ? "Slett boligbyggelag" : "Gjennomfør fusjon"}
+          tittel={bekreft.slag === "slett" ? "Slett boligbyggelag" : "Gjennomfør sammenslåing"}
           onLukk={() => setBekreft(null)}
           bredde={420}
         >
@@ -214,7 +232,7 @@ export default function Boligbyggelag() {
           )}
           <Knapperad
             onAvbryt={() => setBekreft(null)}
-            sendEtikett={bekreft.slag === "slett" ? "Slett laget" : "Gjennomfør fusjonen"}
+            sendEtikett={bekreft.slag === "slett" ? "Slett laget" : "Gjennomfør sammenslåingen"}
             farlig
             onSend={() =>
               void (bekreft.slag === "slett" ? slett(bekreft.lag) : gjennomfor(bekreft.lag))
@@ -249,7 +267,7 @@ function RedigerModal({
 }) {
   const [navn, setNavn] = useState(lag?.name ?? "");
   const [orgNr, setOrgNr] = useState(lag?.orgNr ?? "");
-  const [region, setRegion] = useState(lag?.region ?? "");
+  const [fylker, setFylker] = useState<string[]>(lag?.countyCodes ?? []);
   const [nettsted, setNettsted] = useState(lag?.website ?? "");
   const [notat, setNotat] = useState(lag?.notes ?? "");
   const { sender, feil, send } = useSending(onLagret);
@@ -263,7 +281,7 @@ function RedigerModal({
             const kropp = {
               name: navn.trim(),
               orgNr: orgNr.trim() || null,
-              region: region.trim() || null,
+              countyCodes: fylker,
               website: nettsted.trim() || null,
               notes: notat.trim() || null,
             };
@@ -281,7 +299,29 @@ function RedigerModal({
           plassholder="938 765 432"
           notat="Lagres uten mellomrom, så samme lag ikke kan registreres to ganger."
         />
-        <Tekstfelt etikett="Region" verdi={region} onEndre={setRegion} plassholder="F.eks. «Vestland»" />
+        <fieldset className="field pf-bbl-fylkevalg">
+          <legend className="field-label">Fylker</legend>
+          <div className="pf-bbl-fylker">
+            {FYLKER_ALFABETISK.map((f) => (
+              <label key={f.nr}>
+                <input
+                  type="checkbox"
+                  checked={fylker.includes(f.nr)}
+                  onChange={(e) =>
+                    setFylker(e.target.checked ? [...fylker, f.nr] : fylker.filter((n) => n !== f.nr))
+                  }
+                />
+                {f.navn}
+              </label>
+            ))}
+          </div>
+          <div className="field-note">
+            {lag?.region && !lag.countyCodes?.length
+              ? `Sto før som «${lag.region}», som ikke kunne tolkes som et fylke. `
+              : ""}
+            Velg alle fylkene laget har kunder i.
+          </div>
+        </fieldset>
         <Tekstfelt etikett="Nettsted" verdi={nettsted} onEndre={setNettsted} />
         <Tekstomrade etikett="Notat" verdi={notat} onEndre={setNotat} />
         <Knapperad onAvbryt={onLukk} sender={sender} deaktivert={!navn.trim()} />
@@ -310,7 +350,7 @@ function FusjonModal({
   const valgbare = alle.filter((b) => b.id !== lag.id && b.active);
 
   return (
-    <Modal tittel={`Varsle fusjon: ${lag.name}`} onLukk={onLukk}>
+    <Modal tittel={`Slå sammen: ${lag.name}`} onLukk={onLukk}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -325,7 +365,7 @@ function FusjonModal({
         {feil && <div className="feilmelding">{feil}</div>}
         <div className="field">
           <label className="field-label" htmlFor="etterfolger">
-            Fusjoneres inn i *
+            Slås sammen med *
           </label>
           <select
             id="etterfolger"
@@ -343,17 +383,92 @@ function FusjonModal({
         </div>
         <Tekstfelt etikett="Fusjonsdato" type="date" verdi={fusjonsdato} onEndre={setFusjonsdato} />
         <p className="field-note">
-          Dette varsler bare. Kundene flyttes først når du trykker «Gjennomfør». En fusjon
-          er en hendelse noen følger opp, og styrene skal varsles av et menneske, ikke av en
-          bakgrunnsjobb.
+          Dette varsler bare. Kundene flyttes først når du velger «Gjennomfør sammenslåing» i
+          ⋯-menyen. En sammenslåing er en hendelse noen følger opp, og styrene skal varsles av
+          et menneske, ikke av en bakgrunnsjobb.
         </p>
         <Knapperad
           onAvbryt={onLukk}
-          sendEtikett="Varsle fusjon"
+          sendEtikett="Varsle sammenslåing"
           sender={sender}
           deaktivert={!etterfolger}
         />
       </form>
     </Modal>
+  );
+}
+
+type Menyvalg = {
+  etikett: string;
+  /** Forklaring under etiketten. */
+  under?: string;
+  farlig?: boolean;
+  /** Satt = valget er grått, og teksten sier hvorfor. */
+  deaktivert?: string;
+  onVelg: () => void;
+};
+
+/**
+ * ⋯-menyen på en rad. Lukkes med Esc, klikk utenfor eller når et valg er tatt; fokus går
+ * tilbake til knappen så tastaturbrukere ikke mister plassen sin.
+ */
+function Radmeny({ etikett, valg }: { etikett: string; valg: Menyvalg[] }) {
+  const [apen, setApen] = useState(false);
+  const rot = useRef<HTMLSpanElement>(null);
+  const knapp = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!apen) return;
+    const klikk = (e: MouseEvent) => {
+      if (!rot.current?.contains(e.target as Node)) setApen(false);
+    };
+    const tast = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setApen(false);
+        knapp.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", klikk);
+    document.addEventListener("keydown", tast);
+    return () => {
+      document.removeEventListener("mousedown", klikk);
+      document.removeEventListener("keydown", tast);
+    };
+  }, [apen]);
+
+  return (
+    <span className="pf-bbl-meny" ref={rot}>
+      <button
+        ref={knapp}
+        type="button"
+        className="btn btn-ghost"
+        aria-label={etikett}
+        aria-haspopup="menu"
+        aria-expanded={apen}
+        onClick={() => setApen(!apen)}
+      >
+        ⋯
+      </button>
+      {apen && (
+        <div className="pf-bbl-pop" role="menu">
+          {valg.map((v) => (
+            <button
+              key={v.etikett}
+              type="button"
+              role="menuitem"
+              className={v.farlig ? "farlig" : undefined}
+              disabled={!!v.deaktivert}
+              onClick={() => {
+                setApen(false);
+                v.onVelg();
+              }}
+            >
+              {v.etikett}
+              {(v.deaktivert ?? v.under) && <small>{v.deaktivert ?? v.under}</small>}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }

@@ -164,8 +164,7 @@ export default function Plattformbrukere() {
       )}
 
       <p className="pf-dempet">
-        Kundenes egne brukere administreres inne hos hver kunde, ikke her. Rollen
-        «kontoansvarlig» fra v1 er ikke portert. Den er ikke implementert i tilgangslaget.
+        Kundenes egne brukere administreres inne hos hver kunde, ikke her.
       </p>
       {liste?.[0]?.opprettet && (
         <p className="pf-dempet">Eldste konto opprettet {datoTid(liste[0].opprettet)}.</p>

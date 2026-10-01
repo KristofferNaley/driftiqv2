@@ -153,16 +153,15 @@ export default function System() {
         {/* Alle jobbene — appens egne (med logget kjøringsstatus) og vertens crontab
             (status leses i loggfilene på verten; registeret i lib/jobber.ts dokumenterer dem). */}
         {helse.jobber.map((j) => (
-          <div
-            key={j.nokkel}
-            className="pf-kort-kropp"
-            style={{ borderTop: "1px solid var(--border)", display: "flex", gap: "14px", alignItems: "baseline", flexWrap: "wrap" }}
-          >
-            <div style={{ flex: 1, minWidth: "220px" }}>
+          // Grid med tekst som bryter, ikke flex med faste minimumsbredder: da ble siste
+          // kolonne presset og teksten kuttet, og detaljen fra siste kjøring fantes bare
+          // som tooltip (01.10.2026).
+          <div key={j.nokkel} className="pf-kort-kropp pf-jobb-rad">
+            <div>
               <div>{j.navn} <span className="badge muted">{j.kilde === "app" ? "appen" : "verten"}</span></div>
               <div className="field-note">{j.beskrivelse}</div>
             </div>
-            <div style={{ minWidth: "170px" }}>
+            <div>
               <div>{j.plan}</div>
               {j.neste && (
                 <div className="field-note">
@@ -170,15 +169,16 @@ export default function System() {
                 </div>
               )}
             </div>
-            <div style={{ minWidth: "180px", textAlign: "right" }}>
+            <div className="pf-jobb-siste">
               {j.siste ? (
                 <>
                   <span className={`badge ${j.siste.ok ? "ok" : "danger"}`}>
                     {j.siste.ok ? "OK" : "Feilet"}
                   </span>
-                  <div className="field-note" title={j.siste.detail ?? undefined}>
+                  <div className="field-note">
                     sist {new Date(j.siste.naar).toLocaleString("nb-NO", NAAR)}
                   </div>
+                  {j.siste.detail && <div className="field-note">{j.siste.detail}</div>}
                 </>
               ) : j.kilde === "vert" ? (
                 <div className="field-note">status i {j.logg} på verten</div>
