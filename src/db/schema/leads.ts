@@ -1,5 +1,10 @@
-import { date, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { date, index, pgEnum, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { AVSLAGSGRUNN_NOKLER, LEADKILDE_NOKLER } from "../../lib/leadregler";
 import { organizations } from "./organizations";
+
+/** Faste lister fra `lib/leadregler.ts` — se kommentaren der. */
+export const leadKildeEnum = pgEnum("leadkildeenum", LEADKILDE_NOKLER);
+export const avslagsgrunnEnum = pgEnum("avslagsgrunnenum", AVSLAGSGRUNN_NOKLER);
 
 /**
  * Henvendelser fra landingssiden.
@@ -62,6 +67,18 @@ export const leads = pgTable("leads", {
   nextAction: varchar("next_action"),
   nextDate: date("next_date"),
 
+  /**
+   * Hvor leaden kom fra. Settes til «nettsiden» av landingsskjemaet og velges ved manuell
+   * registrering. NULL = ikke satt (eldre leads som ikke kunne utledes).
+   */
+  source: leadKildeEnum("source"),
+  /**
+   * Hvorfor de sa nei. Påkrevd når leaden avslås (`oppdaterLead`), og nullstilles hvis den
+   * gjenåpnes — en gjenåpnet lead skal ikke telle blant avslagene. Den gamle grunnen står
+   * fortsatt i aktivitetsloggen.
+   */
+  rejectionReason: avslagsgrunnEnum("rejection_reason"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -87,6 +104,29 @@ export const leadActivities = pgTable("lead_activities", {
   actorUserId: varchar("actor_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Statusbyttene per lead, med tidspunkt — grunnlaget for «tid i hvert trinn» og trakten i
+ * Statistikk (BL-182). Skrives av serveren i samme transaksjon som byttet (`oppdaterLead`,
+ * `konverterLead`), aldri av klienten.
+ *
+ * Egen tabell og ikke tolkning av `lead_activities.text`: den teksten er norsk prosa skrevet
+ * for mennesker, og en endret formulering ville stille brutt statistikken. Bytter fra før
+ * tabellen fantes er lest ut av den teksten én gang (migrasjon 0070).
+ *
+ * Opprettelsen er IKKE en rad — tiden i «ny» regnes fra `leads.created_at`.
+ */
+export const leadStatusChanges = pgTable("lead_status_changes", {
+  id: varchar("id").primaryKey(),
+  leadId: varchar("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  fromStatus: varchar("from_status").notNull(),
+  toStatus: varchar("to_status").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("idx_lead_status_changes_lead_tid").on(t.leadId, t.changedAt),
+]);
 
 export type Lead = typeof leads.$inferSelect;
 export type LeadAktivitet = typeof leadActivities.$inferSelect;

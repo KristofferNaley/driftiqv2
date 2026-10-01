@@ -16,12 +16,18 @@ import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { leadActivities, leads } from "../db/schema/leads";
+import { leadActivities, leadStatusChanges, leads } from "../db/schema/leads";
 import { organizations } from "../db/schema/organizations";
 import type { Aktor } from "./aktor";
 import { ApiFeil, ikkeFunnet } from "./api";
 import { hentEnhet } from "./brreg";
 import { erSelskapsform, SELSKAPSFORMER } from "./selskapsform";
+import {
+  AVSLAGSGRUNN_NOKLER,
+  avslagsgrunnEtikett,
+  kildeEtikett,
+  LEADKILDE_NOKLER,
+} from "./leadregler";
 
 export const leadInn = z.object({
   name: z.string().trim().min(1, "Navn må fylles ut"),
@@ -67,6 +73,15 @@ function utenRaa<T extends { brregRaa?: string | null }>(rad: T): Omit<T, "brreg
   return kopi;
 }
 
+/**
+ * Statusbyttet som rad i `lead_status_changes` — grunnlaget for trakten og «tid i hvert
+ * trinn» i Statistikk. Skrives ved SIDEN av aktivitetsloggen, ikke i stedet for: loggen er
+ * for mennesker, denne er for tellingen.
+ */
+async function loggStatusbytte(db: Db, leadId: string, fra: string, til: string) {
+  await db.insert(leadStatusChanges).values({ id: randomUUID(), leadId, fromStatus: fra, toStatus: til });
+}
+
 /** Én rad i aktivitetsloggen. `aktor: null` = systemet selv (landingssiden). */
 async function loggAktivitet(
   db: Db,
@@ -110,6 +125,7 @@ export async function registrerLead(db: Db, data: z.infer<typeof leadInn>) {
       brregTelefon: data.brregTelefon ?? null,
       nettsted: data.brregNettsted ?? null,
       brregRaa: data.brregRaa ?? null,
+      source: "nettsiden",
     })
     .returning();
 
@@ -132,6 +148,8 @@ export const leadManuellInn = z.object({
   company: z.string().trim().max(200).nullish(),
   message: z.string().trim().max(4000).nullish(),
   orgNr: z.string().trim().max(20).nullish(),
+  /** Fast liste (`lib/leadregler.ts`). Valgfri: en lead uten kjent kilde er bedre enn en gjettet. */
+  kilde: z.enum(LEADKILDE_NOKLER).nullish(),
 });
 
 /**
@@ -165,10 +183,11 @@ export async function opprettLeadManuelt(
       brregTelefon: enhet?.telefon ?? null,
       nettsted: enhet?.nettsted ?? null,
       brregRaa: enhet?.raa ?? null,
+      source: data.kilde ?? null,
     })
     .returning();
 
-  await loggAktivitet(db, rad!.id, "Lead lagt inn manuelt", null, aktor);
+  await loggAktivitet(db, rad!.id, "Lead lagt inn manuelt", kildeEtikett(data.kilde), aktor);
   return utenRaa(rad!);
 }
 
@@ -197,6 +216,8 @@ export async function hentLeads(db: Db) {
       nettsted: leads.nettsted,
       nextAction: leads.nextAction,
       nextDate: leads.nextDate,
+      source: leads.source,
+      rejectionReason: leads.rejectionReason,
     })
     .from(leads)
     .orderBy(desc(leads.createdAt))
@@ -219,6 +240,10 @@ export const leadOppdaterInn = z.object({
     .nullish(),
   /** Utdypning som følger loggraden — avslagsgrunnen, hva som ble avtalt. */
   notat: z.string().trim().max(2000).nullish(),
+  /** Påkrevd når statusen blir `avslatt` — fast liste, se `lib/leadregler.ts`. */
+  avslagsgrunn: z.enum(AVSLAGSGRUNN_NOKLER).optional(),
+  /** Kilden kan settes eller rettes i ettertid. `null` fjerner den. */
+  kilde: z.enum(LEADKILDE_NOKLER).nullish(),
 });
 
 /**
@@ -240,6 +265,10 @@ export async function oppdaterLead(
   if (nyStatus && lead.status === "konvertert") {
     throw new ApiFeil(400, "Leaden er konvertert til kunde og kan ikke flyttes tilbake");
   }
+  if (nyStatus === "avslatt" && !data.avslagsgrunn) {
+    throw new ApiFeil(400, "Velg hvorfor leaden avslås");
+  }
+  const nyKilde = data.kilde !== undefined && data.kilde !== lead.source ? data.kilde : undefined;
 
   const endringer: Partial<typeof leads.$inferInsert> = {};
   if (nyStatus) {
@@ -248,7 +277,11 @@ export async function oppdaterLead(
     // kall, skal den gamle ikke bli hengende igjen som om den fortsatt gjaldt.
     endringer.nextAction = null;
     endringer.nextDate = null;
+    // Grunnen hører til avslaget. Gjenåpnes leaden, skal den ikke telle blant avslagene i
+    // Statistikk; den gamle grunnen står fortsatt i aktivitetsloggen.
+    endringer.rejectionReason = nyStatus === "avslatt" ? data.avslagsgrunn! : null;
   }
+  if (nyKilde !== undefined) endringer.source = nyKilde;
   if (data.neste !== undefined) {
     endringer.nextAction = data.neste?.tekst ?? null;
     endringer.nextDate = data.neste?.dato ?? null;
@@ -264,7 +297,16 @@ export async function oppdaterLead(
         : lead.status === "avslatt"
           ? `Gjenåpnet som ${STATUS_ETIKETT[nyStatus]}`
           : `Flyttet til ${STATUS_ETIKETT[nyStatus]}`;
-    await loggAktivitet(db, leadId, tekst, data.notat ?? null, aktor);
+    // Ved avslag står grunnen først i notatet: «Pris: Bundet i annen avtale til 2028».
+    const notat =
+      nyStatus === "avslatt"
+        ? [avslagsgrunnEtikett(data.avslagsgrunn), data.notat].filter(Boolean).join(": ")
+        : (data.notat ?? null);
+    await loggAktivitet(db, leadId, tekst, notat, aktor);
+    await loggStatusbytte(db, leadId, lead.status, nyStatus);
+  }
+  if (nyKilde !== undefined) {
+    await loggAktivitet(db, leadId, nyKilde ? `Kilde satt til ${kildeEtikett(nyKilde)}` : "Kilde fjernet", null, aktor);
   }
   if (data.neste) {
     await loggAktivitet(
@@ -421,5 +463,6 @@ export async function konverterLead(db: Db, leadId: string, aktor: Aktor) {
     .where(eq(leads.id, leadId));
 
   await loggAktivitet(db, leadId, "Opprettet som kunde", org!.name, aktor);
+  await loggStatusbytte(db, leadId, lead.status, "konvertert");
   return org!;
 }

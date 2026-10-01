@@ -83,7 +83,7 @@ export function klokke(d: Date): string {
 }
 
 /** Kalenderdatoen i norsk tid som «2026-10-01». */
-function osloDato(d: Date): string {
+export function osloDato(d: Date): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: SONE }).format(d);
 }
 

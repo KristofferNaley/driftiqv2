@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { dato, datoTid, dagerSiden } from "@/components/felles";
-import { Knapperad, Modal, Tekstfelt, Tekstomrade } from "@/components/skjema";
+import { Knapperad, Modal, Nedtrekk, Tekstfelt, Tekstomrade } from "@/components/skjema";
 import { api } from "@/lib/klient";
+import { AVSLAGSGRUNNER, LEADKILDER, avslagsgrunnEtikett, kildeEtikett } from "@/lib/leadregler";
 import { Ramme } from "../ramme";
 
 /**
@@ -39,6 +40,8 @@ type Lead = {
   nettsted: string | null;
   nextAction: string | null;
   nextDate: string | null;
+  source: string | null;
+  rejectionReason: string | null;
 };
 
 type Aktivitet = {
@@ -93,9 +96,10 @@ export default function Leads() {
   const [nesteDato, setNesteDato] = useState("");
   const [avslaaApen, setAvslaaApen] = useState(false);
   const [avslaaGrunn, setAvslaaGrunn] = useState("");
+  const [avslaaValg, setAvslaaValg] = useState("");
   const [bekreftSlett, setBekreftSlett] = useState(false);
   const [manuellApen, setManuellApen] = useState(false);
-  const [manuell, setManuell] = useState({ navn: "", epost: "", telefon: "", selskap: "", orgnr: "", melding: "" });
+  const [manuell, setManuell] = useState({ navn: "", epost: "", telefon: "", selskap: "", orgnr: "", melding: "", kilde: "" });
 
   const last = useCallback(async () => {
     try {
@@ -227,6 +231,7 @@ export default function Leads() {
         company: manuell.selskap || null,
         orgNr: manuell.orgnr || null,
         message: manuell.melding || null,
+        kilde: manuell.kilde || null,
       });
       await last();
       setFilter("alle");
@@ -235,7 +240,7 @@ export default function Leads() {
     }, "Kunne ikke registrere leaden");
     if (ok) {
       setManuellApen(false);
-      setManuell({ navn: "", epost: "", telefon: "", selskap: "", orgnr: "", melding: "" });
+      setManuell({ navn: "", epost: "", telefon: "", selskap: "", orgnr: "", melding: "", kilde: "" });
     }
   }
 
@@ -243,11 +248,12 @@ export default function Leads() {
   function eksporter() {
     const felt = (v: string | null) => `"${(v ?? "").replaceAll('"', '""')}"`;
     const linjer = [
-      ["Navn", "E-post", "Telefon", "Selskap", "Org.nr", "Status", "Registrert", "Neste steg", "Melding"].join(";"),
+      ["Navn", "E-post", "Telefon", "Selskap", "Org.nr", "Status", "Kilde", "Avslagsgrunn", "Registrert", "Neste steg", "Melding"].join(";"),
       ...filtrert.map((l) =>
         [
           felt(l.name), felt(l.email), felt(l.phone), felt(l.company), felt(l.orgNr),
-          felt(STATUS[l.status]?.etikett ?? l.status), felt(dato(l.createdAt)),
+          felt(STATUS[l.status]?.etikett ?? l.status), felt(kildeEtikett(l.source)),
+          felt(avslagsgrunnEtikett(l.rejectionReason)), felt(dato(l.createdAt)),
           felt(l.nextAction && `${l.nextAction} ${dato(l.nextDate)}`), felt(l.message),
         ].join(";"),
       ),
@@ -449,6 +455,7 @@ export default function Leads() {
                         disabled={jobber}
                         onClick={() => {
                           setAvslaaGrunn("");
+                          setAvslaaValg("");
                           setAvslaaApen(true);
                         }}
                       >
@@ -477,6 +484,36 @@ export default function Leads() {
                   ))}
                   {valgt.status === "avslatt" && <span className="dod">Avslått</span>}
                 </div>
+                <dl className="pf-md-par" style={{ marginTop: "12px" }}>
+                  <div>
+                    <dt>Kilde</dt>
+                    <dd>
+                      {/* Fast liste (lib/leadregler.ts) — Statistikk teller leads og kunder per kilde. */}
+                      <select
+                        className="select"
+                        aria-label="Kilde"
+                        value={valgt.source ?? ""}
+                        disabled={jobber}
+                        onChange={(e) => void oppdater(valgt.id, { kilde: e.target.value || null })}
+                      >
+                        <option value="">Ikke satt</option>
+                        {LEADKILDER.map((k) => (
+                          <option key={k.nokkel} value={k.nokkel}>
+                            {k.etikett}
+                          </option>
+                        ))}
+                      </select>
+                    </dd>
+                  </div>
+                  {valgt.status === "avslatt" && (
+                    <div>
+                      <dt>Avslagsgrunn</dt>
+                      <dd className={valgt.rejectionReason ? "" : "tom"}>
+                        {avslagsgrunnEtikett(valgt.rejectionReason) ?? "Ikke satt"}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
               </div>
 
               <div className="pf-md-seksjon">
@@ -734,10 +771,21 @@ export default function Leads() {
       {avslaaApen && valgt && (
         <Modal tittel="Avslå lead" onLukk={() => setAvslaaApen(false)} bredde={460}>
           <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, marginTop: 0 }}>
-            Skriv gjerne hvorfor. Det er verdt mye den dagen {valgt.name} tar kontakt igjen.
+            Velg hvorfor, og skriv gjerne litt mer. Det er verdt mye den dagen {valgt.name} tar
+            kontakt igjen.
           </p>
+          <Nedtrekk
+            etikett="Hvorfor sa de nei?"
+            verdi={avslaaValg}
+            valg={[
+              { verdi: "", etikett: "Velg grunn" },
+              ...AVSLAGSGRUNNER.map((g) => ({ verdi: g.nokkel, etikett: g.etikett })),
+            ]}
+            onEndre={setAvslaaValg}
+            notat="Fast liste, så Statistikk kan telle grunnene."
+          />
           <Tekstomrade
-            etikett="Begrunnelse"
+            etikett="Utdypning"
             verdi={avslaaGrunn}
             onEndre={setAvslaaGrunn}
             plassholder="F.eks. bundet i avtale med annen leverandør til mars 2028"
@@ -748,9 +796,11 @@ export default function Leads() {
             sendEtikett="Avslå"
             farlig
             sender={jobber}
+            deaktivert={!avslaaValg}
             onSend={() =>
               void oppdater(valgt.id, {
                 status: "avslatt",
+                avslagsgrunn: avslaaValg,
                 notat: avslaaGrunn.trim() || undefined,
               }).then((ok) => ok && setAvslaaApen(false))
             }
@@ -808,6 +858,15 @@ export default function Leads() {
               notat="Ni siffer, brukes til oppslaget mot Enhetsregisteret"
               verdi={manuell.orgnr}
               onEndre={(v) => setManuell((m) => ({ ...m, orgnr: v }))}
+            />
+            <Nedtrekk
+              etikett="Kilde"
+              verdi={manuell.kilde}
+              valg={[
+                { verdi: "", etikett: "Ikke satt" },
+                ...LEADKILDER.map((k) => ({ verdi: k.nokkel, etikett: k.etikett })),
+              ]}
+              onEndre={(v) => setManuell((m) => ({ ...m, kilde: v }))}
             />
             <Tekstomrade
               etikett="Hva gjelder det?"

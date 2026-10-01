@@ -17,6 +17,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { adminPool, dbNavn, lukkPooler, medEierklient, verifiserRoller } from "../src/db/client";
 import { settOpp } from "../src/db/rls/setup";
 import { kjorFeltmigrering } from "../src/lib/tavlemigrering";
+import { kjorAvtalehistorikk } from "../src/lib/avtalehistorikk";
 
 const APP_DB_USER = process.env.APP_DB_USER ?? "driftiq_v2_app";
 const APP_DB_PASSWORD = process.env.APP_DB_PASSWORD;
@@ -53,6 +54,9 @@ async function main(): Promise<void> {
   // Datamigrering som trenger applikasjonslogikk (se lib/tavlemigrering.ts). Idempotent.
   const felt = await kjorFeltmigrering();
   if (felt > 0) console.log(`[oppstart] oppslagstavle: ${felt} skjerm(er) fikk felt fra gammel plassering`);
+  // Avtaler fra før avtalehistorikken (lib/avtalehistorikk.ts). Idempotent.
+  const avtaler = await kjorAvtalehistorikk();
+  if (avtaler > 0) console.log(`[oppstart] avtalehistorikk: ${avtaler} avtale(r) ført inn fra startdato`);
   console.log(`[rls] Aktiv — appen kobler til som «${APP_DB_USER}», underlagt policyene.`);
 }
 

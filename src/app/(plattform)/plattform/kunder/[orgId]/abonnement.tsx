@@ -234,6 +234,10 @@ export function Fakturering({
             </div>
             <div className="pf-kort-kropp">
               <Felt etikett="Avtaleperiode" verdi={periode(abonnement)} />
+              <Felt
+                etikett="Neste fornyelse"
+                verdi={abonnement.renewalDate ? dato(abonnement.renewalDate) : null}
+              />
               {abonnement.notes && <Felt etikett="Notat" verdi={abonnement.notes} />}
             </div>
             {/* Grunnpakken på kontrakten er et snapshot. Har andelstallet eller satsene
@@ -304,6 +308,7 @@ function AbonnementModal({
   const [rabatt, setRabatt] = useState(abonnement?.discountPercent ?? 0);
   const [start, setStart] = useState(abonnement?.startDate ?? "");
   const [slutt, setSlutt] = useState(abonnement?.endDate ?? "");
+  const [fornyelse, setFornyelse] = useState(abonnement?.renewalDate ?? "");
   const [notat, setNotat] = useState(abonnement?.notes ?? "");
   const [priser, setPriser] = useState<Record<string, number>>(() => {
     const fra = Object.fromEntries((abonnement?.moduler ?? []).map((m) => [m.key, m.price]));
@@ -332,6 +337,7 @@ function AbonnementModal({
               discountPercent: rabatt,
               startDate: start || null,
               endDate: slutt || null,
+              renewalDate: fornyelse || null,
               notes: notat.trim() || null,
             }),
           );
@@ -384,6 +390,13 @@ function AbonnementModal({
           verdi={slutt}
           onEndre={setSlutt}
           notat="Tomt = løpende avtale. En utløpt dato sperrer kundens tilgang."
+        />
+        <Tekstfelt
+          etikett="Neste fornyelse"
+          type="date"
+          verdi={fornyelse}
+          onEndre={setFornyelse}
+          notat="Når avtalen skal opp til ny vurdering. Vises under Fornyelser i Statistikk og sperrer ingenting."
         />
         <Tekstomrade etikett="Notat" verdi={notat} onEndre={setNotat} />
 

@@ -104,19 +104,30 @@ utløpstid, begrunnelse og «Avslutt».
   kunden betaler etter avtalen (frosne priser). Kunden har
   ingen egen bryter — modulvalget styres bare herfra.
 - **Abonnement** (samme fane) — den registrerte avtalen: grunnpakke (snapshot fra sist
-  lagring), tilleggsmoduler med pris, rabatt, start-/sluttdato, notat. Varsler når
-  grunnpakken med dagens prismodell avviker fra snapshotet.
+  lagring), tilleggsmoduler med pris, rabatt, start-/sluttdato, neste fornyelse, notat.
+  Varsler når grunnpakken med dagens prismodell avviker fra snapshotet.
   - **Ingen avtale sperrer ingenting.** Avtalen er bokføring.
   - **En utløpt sluttdato sperrer kunden** (`abonnementUtlopt`): har orgen avtaler og alle
     har passert sluttdatoen, avvises kundens brukere med «Abonnementet er utløpt …».
     Plattformadmin med support-sesjon slipper forbi, for innsyn og sletting.
   - 100 % rabatt vises som «Pilot» i kundelista.
+  - **Neste fornyelse** er ren bokføring for Statistikk (fornyelseslista) og sperrer
+    ingenting. Står den tom, vises «Ikke satt»; den gjettes ikke fra startdatoen.
+  - **Avtalehistorikk:** hver lagring og sletting fører avtalt årssum inn i
+    `platform_contract_versions` (`lib/avtalehistorikk.ts`). Statistikkens inntektsgraf leser
+    den. En endring gjelder fra i dag og skriver aldri om måneder bak oss. Avtaler fra før
+    historikken fantes, ble ført inn ved oppstart med antakelsen «dagens pris siden
+    startdatoen».
 
 ### Tilgang
 
 - **Brukere** — tabell med navn, rolle og sist innlogget. Plattformadmins
-  supportmedlemskap er merket «Plattformadmin». Kun visning; her finnes
-  ingen knapp for å legge til eller endre brukere (se «Ny kunde»).
+  supportmedlemskap er merket «Plattformadmin». Her finnes ingen knapp for å legge til eller
+  endre brukere (se «Ny kunde»), med ett unntak: **«Merk som agentkonto»**. En agentkonto
+  (f.eks. `agent@driftiq.no` i demo-orgene) er en test- eller automatiseringsbruker, og
+  teller, som plattformbrukerne, ikke som kundens styre i onboarding, «sist aktiv» og
+  kundehelse. Regelen bor i `lib/kundebrukere.ts`. Flagget er på brukeren, så det gjelder i
+  alle kundene kontoen sitter i.
 - **Innsynslogg** — de 20 siste support-sesjonene mot kunden: hvem, begrunnelse, start og
   slutt («pågår»).
 

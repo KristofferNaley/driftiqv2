@@ -151,7 +151,7 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
         </>
       )}
       {fane === "tilgang" && (
-        <Tilgang kunde={kunde} />
+        <Tilgang kunde={kunde} onEndret={last} />
       )}
 
       {redigerer && (

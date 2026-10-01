@@ -40,6 +40,13 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true),
   /** Sist vellykkede innlogging — ETT felt, ikke en logg (BL-121). */
   lastLoginAt: timestamp("last_login_at"),
+  /**
+   * Agentkonto: en bruker som er medlem hos kunden for testing eller automatisering, ikke et
+   * styremedlem (f.eks. `agent@driftiq.no` i demo-orgene). Teller ikke som kundens bruker i
+   * onboarding, «sist aktiv» eller kundehelse — samme unntak som plattformrollene, se
+   * `lib/kundebrukere.ts`. Settes fra kundens Tilgang-fane i panelet (BL-180/BL-182).
+   */
+  isAgent: boolean("is_agent").notNull().default(false),
 
   // --- Påkrevd av Better Auth. Biblioteket peker på DENNE tabellen, ikke en egen `user`. ---
   emailVerified: boolean("email_verified").notNull().default(false),

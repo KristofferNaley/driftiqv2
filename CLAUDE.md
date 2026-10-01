@@ -168,6 +168,10 @@ Ingen rutehandler skrives for hånd — en `route.ts` er 3–6 linjer med
   `src/lib/nivaer.ts`.
 - Nivåverdiene er `orgadmin`/`redigering`/`visning`; «Kontoadmin» er bare etikett
   (`NIVA_ETIKETT`). Medlemskapets *tittel* styrer ingenting.
+- **«Kundens brukere» er én regel:** `erKundebruker`/`erKundensBruker` i
+  `src/lib/kundebrukere.ts` — uten plattformrollene og uten agentkontoer (`users.is_agent`,
+  satt i panelets Tilgang-fane). Onboarding, «sist aktiv», innlogginger og kundehelse skal
+  alle bruke den; rolleunntaket sto skrevet ut sju steder før 01.10.2026.
 - Brukeren slås opp **ferskt** per forespørsel (`hentBruker`), aldri fra sesjonskopien —
   en deaktivering biter umiddelbart.
 
@@ -198,6 +202,7 @@ tester leser. Glemmer du oppføringen, blir en **test** rød — ikke en kunde:
 | Moduler + meny | `src/lib/moduler.ts` | — (men én fil, ikke tre som i v1) |
 | AI-verktøy uten org-parameter | `src/lib/ai-verktoy.ts` | `tests/ai.test.ts` |
 | Kundesletting (FK uten kaskade) | `SLETTES_EKSPLISITT` i `src/lib/kundesletting.ts` | `tests/kundesletting.test.ts` |
+| Leadkilde og avslagsgrunn (enum) | `src/lib/leadregler.ts` | `tests/leads.test.ts` |
 
 **Ny modul:** nøkkel i `ALLE_MODULER` **og** menypunkt i `MENY` (ellers usynlig — ikonet er
 et lucide-navn som *streng*, så fila er React-fri), vurder `AV_SOM_STANDARD`, og `modul:` i
@@ -286,7 +291,7 @@ klientkomponenter trenger, ligger i **importfrie filer** — `nivaer.ts`,
 `orgnr.ts`, `brreg.ts`, `aktor.ts`, `urler.ts`, `laderegler.ts`, `easee.ts`, `regnskap.ts`,
 `okonomiregler.ts`, `prisregler.ts`, `kontraktregler.ts`, `enhetnavn.ts`,
 `oppslagstavleregler.ts`, `avfallsregler.ts`, `tavlemaler.ts`, `vaerregler.ts`,
-`selskapsform.ts`, `kundehandlinger.ts`. Ikke gi dem
+`selskapsform.ts`, `kundehandlinger.ts`, `leadregler.ts`. Ikke gi dem
 server-importer: verken tsc eller lint ser bruddet, symptomet er `Can't resolve 'dns'` i
 bygget.
 

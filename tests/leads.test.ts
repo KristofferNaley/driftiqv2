@@ -20,12 +20,15 @@ import {
   hentLeads,
   konverterLead,
   leadInn,
+  leadManuellInn,
+  leadOppdaterInn,
   leggTilLeadNotat,
   oppdaterLead,
   opprettLeadManuelt,
   registrerLead,
   slettLead,
 } from "../src/lib/leads";
+import { AVSLAGSGRUNN_NOKLER, LEADKILDE_NOKLER } from "../src/lib/leadregler";
 
 let eierPool: Pool;
 const ryddLeads: string[] = [];
@@ -104,19 +107,25 @@ describe("statusflyt", () => {
     const lead = await nyLead();
     await withoutRls("plattformpanel", async (db) => {
       await oppdaterLead(db, lead.id, { status: "kontaktet" }, aktor);
-      await oppdaterLead(db, lead.id, { status: "avslatt", notat: "Bundet i annen avtale" }, aktor);
+      await oppdaterLead(
+        db,
+        lead.id,
+        { status: "avslatt", avslagsgrunn: "pris", notat: "Bundet i annen avtale" },
+        aktor,
+      );
     });
     const logg = await withoutRls("plattformpanel", (db) => hentLeadAktiviteter(db, lead.id));
     const tekster = logg.map((r) => r.text);
     expect(tekster).toContain("Flyttet til Kontaktet");
     expect(tekster).toContain("Avslått");
-    expect(logg.find((r) => r.text === "Avslått")!.note).toBe("Bundet i annen avtale");
+    // Grunnen fra den faste lista står først, utdypningen etter.
+    expect(logg.find((r) => r.text === "Avslått")!.note).toBe("Pris: Bundet i annen avtale");
   });
 
   it("gjenåpning fra avslått logges som gjenåpning, ikke flytting", async () => {
     const lead = await nyLead();
     await withoutRls("plattformpanel", async (db) => {
-      await oppdaterLead(db, lead.id, { status: "avslatt" }, aktor);
+      await oppdaterLead(db, lead.id, { status: "avslatt", avslagsgrunn: "for_tidlig" }, aktor);
       await oppdaterLead(db, lead.id, { status: "ny" }, aktor);
     });
     const logg = await withoutRls("plattformpanel", (db) => hentLeadAktiviteter(db, lead.id));
@@ -136,6 +145,100 @@ describe("statusflyt", () => {
     });
     expect(etter.nextAction).toBeNull();
     expect(etter.nextDate).toBeNull();
+  });
+});
+
+describe("statistikkgrunnlaget (BL-182)", () => {
+  /** Statusbyttene i rekkefølge, som «fra→til». */
+  async function bytter(leadId: string) {
+    const { rows } = await eierPool.query(
+      "SELECT from_status, to_status FROM lead_status_changes WHERE lead_id = $1 ORDER BY changed_at, id",
+      [leadId],
+    );
+    return rows.map((r) => `${r.from_status}→${r.to_status}`);
+  }
+
+  it("hvert statusbytte blir en rad med fra og til, også konverteringen", async () => {
+    const lead = await nyLead({ company: "Bytteveien Sameie Test" });
+    const org = await withoutRls("plattformpanel", async (db) => {
+      await oppdaterLead(db, lead.id, { status: "kontaktet" }, aktor);
+      await oppdaterLead(db, lead.id, { status: "kvalifisert" }, aktor);
+      return konverterLead(db, lead.id, aktor);
+    });
+    ryddOrg.push(org.id);
+    expect(await bytter(lead.id)).toEqual(["ny→kontaktet", "kontaktet→kvalifisert", "kvalifisert→konvertert"]);
+  });
+
+  it("neste steg alene er ikke et statusbytte", async () => {
+    const lead = await nyLead();
+    await withoutRls("plattformpanel", (db) =>
+      oppdaterLead(db, lead.id, { neste: { tekst: "Ringe", dato: "2030-01-01" } }, aktor),
+    );
+    expect(await bytter(lead.id)).toEqual([]);
+  });
+
+  it("avslag uten grunn avvises — grunnen er en fast liste, ikke valgfri fritekst", async () => {
+    const lead = await nyLead();
+    const feil = await withoutRls("plattformpanel", (db) =>
+      oppdaterLead(db, lead.id, { status: "avslatt", notat: "for dyrt" }, aktor).catch((e: ApiFeil) => e),
+    );
+    expect((feil as ApiFeil).status).toBe(400);
+    expect(await bytter(lead.id)).toEqual([]);
+  });
+
+  it("avslagsgrunnen lagres, og nullstilles når leaden gjenåpnes", async () => {
+    const lead = await nyLead();
+    const avslatt = await withoutRls("plattformpanel", (db) =>
+      oppdaterLead(db, lead.id, { status: "avslatt", avslagsgrunn: "forretningsforer" }, aktor),
+    );
+    expect(avslatt.rejectionReason).toBe("forretningsforer");
+    const gjenapnet = await withoutRls("plattformpanel", (db) =>
+      oppdaterLead(db, lead.id, { status: "kontaktet" }, aktor),
+    );
+    expect(gjenapnet.rejectionReason).toBeNull();
+    expect(await bytter(lead.id)).toEqual(["ny→avslatt", "avslatt→kontaktet"]);
+  });
+
+  it("landingsskjemaet setter kilden «nettsiden»; manuell registrering tar valgt kilde", async () => {
+    const fraNettet = await nyLead();
+    expect(fraNettet.source).toBe("nettsiden");
+
+    const manuell = await withoutRls("plattformpanel", async (db) => {
+      const rad = await opprettLeadManuelt(
+        db,
+        leadManuellInn.parse({ name: "Anne Anbefalt", email: "anne@example.test", kilde: "anbefaling" }),
+        aktor,
+      );
+      ryddLeads.push(rad.id);
+      return rad;
+    });
+    expect(manuell.source).toBe("anbefaling");
+  });
+
+  it("kilden kan rettes i ettertid, og rettingen logges", async () => {
+    const lead = await nyLead();
+    const etter = await withoutRls("plattformpanel", (db) =>
+      oppdaterLead(db, lead.id, { kilde: "messe" }, aktor),
+    );
+    expect(etter.source).toBe("messe");
+    const logg = await withoutRls("plattformpanel", (db) => hentLeadAktiviteter(db, lead.id));
+    expect(logg.map((r) => r.text)).toContain("Kilde satt til Messe/seminar");
+  });
+
+  it("ukjent kilde eller grunn slipper ikke gjennom skjemaet", () => {
+    expect(leadOppdaterInn.safeParse({ kilde: "tiktok" }).success).toBe(false);
+    expect(leadOppdaterInn.safeParse({ status: "avslatt", avslagsgrunn: "dårlig vær" }).success).toBe(false);
+  });
+
+  it("enum-verdiene i databasen er de samme som de faste listene", async () => {
+    const etiketter = async (type: string) =>
+      (
+        await eierPool.query(
+          `SELECT enumlabel FROM pg_enum WHERE enumtypid = '${type}'::regtype ORDER BY enumsortorder`,
+        )
+      ).rows.map((r) => r.enumlabel);
+    expect(await etiketter("leadkildeenum")).toEqual([...LEADKILDE_NOKLER]);
+    expect(await etiketter("avslagsgrunnenum")).toEqual([...AVSLAGSGRUNN_NOKLER]);
   });
 });
 

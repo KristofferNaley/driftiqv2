@@ -47,6 +47,7 @@ import { sisteKjoringer } from "./jobbkjoring";
 import { diskbruk } from "./systemhelse";
 import { AUTH_OPPBEVARING_DAGER } from "./hendelser";
 import { kreverHandling, type IDagGrunnlag, type SidenSist } from "./idag";
+import { erKundebruker, erKundensBruker, erPlattformbruker } from "./kundebrukere";
 
 export const supportStart = z.object({
   orgId: z.string().min(1),
@@ -252,18 +253,19 @@ export async function hentKunder(db: Db) {
       .from(userOrgMemberships)
       .groupBy(userOrgMemberships.orgId),
     // … men onboarding og «sist aktiv» teller bare EKTE brukere: plattformadmins
-    // medlemskap er supportinnganger, ikke kundens styre (reell v1-feil).
+    // medlemskap er supportinnganger, ikke kundens styre (reell v1-feil). Agentkontoer
+    // heller ikke (lib/kundebrukere.ts).
     db
       .select({ orgId: userOrgMemberships.orgId, n: count() })
       .from(userOrgMemberships)
       .innerJoin(users, eq(users.id, userOrgMemberships.userId))
-      .where(and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig")))
+      .where(erKundebruker)
       .groupBy(userOrgMemberships.orgId),
     db
       .select({ orgId: userOrgMemberships.orgId, siste: max(users.lastLoginAt) })
       .from(userOrgMemberships)
       .innerJoin(users, eq(users.id, userOrgMemberships.userId))
-      .where(and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig")))
+      .where(erKundebruker)
       .groupBy(userOrgMemberships.orgId),
     db
       .select({ orgId: supportAccessLog.orgId })
@@ -399,6 +401,7 @@ export async function hentKunde(db: Db, orgId: string) {
         epost: users.email,
         nivaa: userOrgMemberships.role,
         rolle: users.role,
+        agent: users.isAgent,
         sistInnlogget: users.lastLoginAt,
       })
       .from(userOrgMemberships)
@@ -417,16 +420,17 @@ export async function hentKunde(db: Db, orgId: string) {
     innloggingerPerUke(db, orgId),
   ]);
 
-  // Plattformbrukere har medlemskap for å yte support; innloggingen deres sier ingenting om
-  // hvorvidt KUNDEN bruker systemet. Samme unntak som i onboardingen.
-  const kundens = brukere.filter((b) => b.rolle !== "superadmin" && b.rolle !== "kontoansvarlig");
+  // Plattformbrukere har medlemskap for å yte support, og agentkontoer er der for testing;
+  // innloggingen deres sier ingenting om hvorvidt KUNDEN bruker systemet. Samme unntak som
+  // i onboardingen (lib/kundebrukere.ts).
+  const kundens = brukere.filter(erKundensBruker);
   const sist = kundens
     .filter((b) => b.sistInnlogget)
     .sort((a, b) => b.sistInnlogget!.getTime() - a.sistInnlogget!.getTime())[0];
 
   return {
     ...org,
-    brukere: brukere.map(({ rolle, ...b }) => ({ ...b, plattform: rolle === "superadmin" || rolle === "kontoansvarlig" })),
+    brukere: brukere.map(({ rolle, ...b }) => ({ ...b, plattform: erPlattformbruker(rolle) })),
     sistAktiv: sist ? { navn: sist.navn, tid: sist.sistInnlogget } : null,
     innloggingerPerUke: uker,
     antallOppgaver: oppgaver[0]?.n ?? 0,
@@ -434,6 +438,29 @@ export async function hentKunde(db: Db, orgId: string) {
     sesjoner,
     maksTimer: SUPPORT_SESJON_MAKS_TIMER,
   };
+}
+
+export const agentkontoInn = z.object({ agent: z.boolean() });
+
+/**
+ * Merker en bruker som agentkonto (eller fjerner merket). Flagget er på BRUKEREN, ikke
+ * medlemskapet: en testkonto er en testkonto i alle kundene den sitter i.
+ *
+ * Plattformbrukere avvises — de teller allerede ikke, og et agentflagg på en plattformadmin
+ * ville bare skjult hvem kontoen egentlig er.
+ */
+export async function settAgentkonto(db: Db, brukerId: string, agent: boolean) {
+  const [bruker] = await db
+    .select({ id: users.id, rolle: users.role })
+    .from(users)
+    .where(eq(users.id, brukerId))
+    .limit(1);
+  if (!bruker) throw ikkeFunnet("Bruker");
+  if (erPlattformbruker(bruker.rolle)) {
+    throw ugyldig("Plattformbrukere teller allerede ikke som kundens brukere");
+  }
+  await db.update(users).set({ isAgent: agent }).where(eq(users.id, brukerId));
+  return { id: brukerId, agent };
 }
 
 /**
@@ -456,7 +483,7 @@ async function innloggingerPerUke(db: Db, orgId: string) {
     left join (
       auth_events e
       join user_org_memberships m on m.user_id = e.user_id and m.org_id = ${orgId}
-      join users b on b.id = e.user_id and b.role not in ('superadmin', 'kontoansvarlig')
+      join users b on b.id = e.user_id and b.role not in ('superadmin', 'kontoansvarlig') and not b.is_agent
     ) on e.event = 'innlogget'
       and date_trunc('week', e.occurred_at at time zone 'Europe/Oslo') = u.uke
     group by u.uke
@@ -701,8 +728,8 @@ export async function hentStatistikk(db: Db) {
   const d30 = new Date(Date.now() - 30 * dag);
   const d365 = new Date(Date.now() - 365 * dag);
 
-  // Ekte brukere = uten plattformadmin og kontoansvarlig: supportinnganger er ikke styret.
-  const ekteMedlem = and(ne(users.role, "superadmin"), ne(users.role, "kontoansvarlig"));
+  // Ekte brukere = uten plattformroller og agentkontoer: supportinnganger er ikke styret.
+  const ekteMedlem = erKundebruker;
 
   const [orger, brukere, aktiveBrukere, aldriInnlogget, sistInnlogget, avtaler, leadRader] =
     await Promise.all([

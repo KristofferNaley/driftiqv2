@@ -25,8 +25,10 @@ export type Kunde = {
     sistInnlogget: string | null;
     /** Plattformbruker med supportmedlemskap, ikke kundens egen. */
     plattform: boolean;
+    /** Agentkonto (testing): teller ikke som kundens bruker. */
+    agent: boolean;
   }>;
-  /** Kundens siste innlogging, uten plattformbrukere. */
+  /** Kundens siste innlogging, uten plattformbrukere og agentkontoer. */
   sistAktiv: { navn: string; tid: string } | null;
   /** 12 uker, eldste først. Bare antall. */
   innloggingerPerUke: Array<{ uke: string; antall: number }>;
@@ -72,6 +74,7 @@ export type Abonnement = {
   discountPercent: number;
   startDate: string | null;
   endDate: string | null;
+  renewalDate: string | null;
   notes: string | null;
   moduler: Array<{ key: string; price: number }>;
 } | null;

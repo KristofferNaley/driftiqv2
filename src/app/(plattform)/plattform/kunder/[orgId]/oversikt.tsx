@@ -205,7 +205,7 @@ function OnboardingKort({ detalj }: { detalj: Detalj }) {
           </div>
         ))}
         <p className="field-note" style={{ marginTop: "10px" }}>
-          Punktene teller kundens rader, aldri innholdet. Plattformbrukere teller ikke.
+          Punktene teller kundens rader, aldri innholdet. Plattformbrukere og agentkontoer teller ikke.
         </p>
       </div>
     </div>

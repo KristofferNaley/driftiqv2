@@ -24,6 +24,7 @@ import {
   settTilknytning,
   slettAbonnement,
 } from "../src/lib/kundedetalj";
+import { hentKunde, settAgentkonto } from "../src/lib/plattform";
 import { hentPrismodell, settPrismodell } from "../src/lib/prismodell";
 import { SELSKAPSFORM_KODER } from "../src/lib/selskapsform";
 
@@ -176,6 +177,24 @@ describe("onboarding", () => {
     // Tre medlemskap, men bare én ekte bruker — punktet skal IKKE være grønt.
     expect(styret.ok).toBe(false);
     expect(styret.detalj).toBe("1 bruker");
+  });
+
+  it("teller IKKE agentkontoer, og settAgentkonto avviser plattformbrukere (BL-182)", async () => {
+    const org = await nyOrg(50);
+    await nyBruker(org);
+    const agent = await nyBruker(org);
+    const admin = await nyBruker(org, "superadmin");
+
+    // To ekte brukere gir grønt styre — til den ene merkes som agentkonto.
+    expect((await i((db) => hentOnboarding(db, org))).tellinger.brukere).toBe(2);
+    await i((db) => settAgentkonto(db, agent, true));
+    expect((await i((db) => hentOnboarding(db, org))).tellinger.brukere).toBe(1);
+
+    const kunde = await i((db) => hentKunde(db, org));
+    expect(kunde.brukere.find((b) => b.id === agent)!.agent).toBe(true);
+
+    const feil = await i((db) => settAgentkonto(db, admin, true).catch((e: ApiFeil) => e));
+    expect((feil as ApiFeil).status).toBe(400);
   });
 
   it("blir grønt på styret når to ekte brukere er inne", async () => {

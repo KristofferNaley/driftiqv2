@@ -13,7 +13,7 @@
  * sammenligningen entydig, og migreringen fra v1 tolker de gamle verdiene som UTC.
  */
 
-import { boolean, date, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -36,9 +36,43 @@ export const platformContracts = pgTable("platform_contracts", {
    * valgfri bokføring, og fraværet av den skal aldri stenge en kunde ute.
    */
   endDate: date("end_date"),
+  /**
+   * Neste fornyelse — når avtalen skal opp til ny vurdering (BL-182). Ren bokføring for
+   * Statistikk: i motsetning til `endDate` sperrer den ingenting. NULL = ikke satt; den
+   * utledes IKKE fra startdatoen, en gjettet dato i fornyelseslista er verre enn en tom.
+   */
+  renewalDate: date("renewal_date"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Avtalehistorikken: hvilken avtalt årssum som gjaldt for kunden i hvilket tidsrom (BL-182).
+ *
+ * `platform_contracts` er alltid GJELDENDE avtale og overskrives ved lagring — denne tabellen
+ * er sporet etter den, så «avtalt årlig inntekt per måned» kan regnes for måneder bak oss.
+ * Skrives av `settAbonnement`/`slettAbonnement` i samme transaksjon (`lib/avtalehistorikk.ts`).
+ * Valgt framfor et månedlig snapshot fra en cron-jobb: ingen ny jobb (jobbene har ikke vern mot
+ * dobbeltkjøring), og en endring midt i måneden blir ikke borte. Se docs/beslutninger.md.
+ *
+ * `annualAmount` er avtalt pris ETTER rabatt, i hele kroner (samme `arssum` som panelet viser).
+ * `validTo` er EKSKLUSIV; NULL = gjelder fortsatt. En rad gjelder dato d når
+ * `validFrom <= d < validTo`.
+ */
+export const platformContractVersions = pgTable("platform_contract_versions", {
+  id: varchar("id").primaryKey(),
+  orgId: varchar("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  annualAmount: integer("annual_amount").notNull(),
+  /** Med for å skille pilot (100 %) fra en betalende kunde i en gitt måned. */
+  discountPercent: integer("discount_percent").notNull().default(0),
+  validFrom: date("valid_from").notNull(),
+  validTo: date("valid_to"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("idx_platform_contract_versions_org_fra").on(t.orgId, t.validFrom),
+]);
 
 /** Logg over plattformadmins innsyn i kundedata (support-modus). */
 export const supportAccessLog = pgTable("support_access_log", {
@@ -67,6 +101,7 @@ export const supportAccessLog = pgTable("support_access_log", {
 });
 
 export type PlatformContract = typeof platformContracts.$inferSelect;
+export type PlatformContractVersion = typeof platformContractVersions.$inferSelect;
 export type SupportAccessLog = typeof supportAccessLog.$inferSelect;
 
 /**

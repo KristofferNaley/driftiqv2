@@ -136,10 +136,13 @@ export const UNNTATT: Readonly<Record<string, string>> = {
   // Leses også av abonnementssperren fra innloggingen, som ikke har org-kontekst.
   // En RLS-policy her ville gjort at sperren aldri fant kontraktene.
   platform_contracts: "plattformtabell (abonnement), superadmin + tilgangssperren i auth",
+  // Avtalehistorikken bak Statistikk. DriftIQs inntekt, ikke kundens data — kun panelet leser.
+  platform_contract_versions: "plattformtabell (avtalehistorikk), kun plattformpanelet",
   // En lead har ingen org_id — den er nettopp noen som ENNÅ ikke er kunde. RLS har
   // ingenting å filtrere på, og tabellen er kun for plattformadmin.
   leads: "plattformtabell, ingen org_id å filtrere på",
   lead_activities: "barnetabell av leads, samme begrunnelse",
+  lead_status_changes: "barnetabell av leads, samme begrunnelse",
   // Saken hører til DriftIQs kø, ikke kundens — løpenummeret går på tvers av kunder.
   // Kunden ser bare sine egne via API-gaten, ikke via RLS.
   feedback_reports: "plattformtabell (DriftIQs sakskø)",

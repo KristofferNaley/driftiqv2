@@ -9,6 +9,32 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 01.10.2026 — Avtalehistorikk i egen tabell, ikke månedlig snapshot (BL-182)
+
+**Hva:** «Avtalt årlig inntekt per måned» i Statistikk regnes fra
+`platform_contract_versions`: én rad per periode med avtalt årssum, `valid_from` og
+eksklusiv `valid_to`. Raden skrives av `settAbonnement`/`slettAbonnement` i samme
+transaksjon (`lib/avtalehistorikk.ts`). Avtaler fra før tabellen fantes, ble ført inn én
+gang ved oppstart fra startdatoen. Samtidig: statusbytter på leads i
+`lead_status_changes`, og kilde/avslagsgrunn som Postgres-enum (samme mønster som
+selskapsform).
+
+**Hvorfor:** `platform_contracts` overskrives ved hver lagring, så historikken fantes ikke.
+Å føre den der den endres, er det eneste som fanger en endring midt i måneden. Det krever
+heller ingen ny jobb.
+
+**Alternativer:**
+- *Månedlig snapshot fra en node-cron-jobb.* Forkastet: jobbene har ikke vern mot
+  dobbeltkjøring (se CLAUDE.md «Bakgrunnsjobber»), en jobb som ikke kjørte en måned gir et
+  hull, og en rabatt som ble lagt inn og fjernet innenfor samme måned ville aldri blitt sett.
+- *Regne historikk fra dagens kontrakt (`start_date`).* Forkastet som varig løsning: den
+  antar at prisen aldri har endret seg. Brukt én gang, for utfyllingen av avtalene som
+  fantes (avklart med eier).
+- *Statusbytter lest ut av `lead_activities.text`.* Forkastet utenom engangsutfyllingen:
+  teksten er norsk prosa for mennesker, og en omformulering ville stille brutt trakten.
+- *Registreringer talt fra `audit_events`.* Forkastet: avvik, oppgaver og driftslogg logger
+  ikke dit. Statistikk teller rader per org og tidspunkt i modultabellene, aldri innhold.
+
 ## 01.10.2026 — Fylke på boligbyggelag som enum-liste, «Siden sist» fra innloggingsloggen
 
 **Hva:** `bbl.county_codes` er `fylkeenum[]` med SSB-fylkesnummer (`03`, `46`, …), lista og

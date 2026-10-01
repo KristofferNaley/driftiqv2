@@ -34,6 +34,8 @@ import type { Aktor } from "./aktor";
 import { hentEnhet } from "./brreg";
 import { sendOppstartspaminnelse } from "./epost";
 import { loggHendelse } from "./hendelser";
+import { avsluttAvtalehistorikk, forAvtaleversjon } from "./avtalehistorikk";
+import { erKundebruker } from "./kundebrukere";
 import { ER_EPOST, PAMINNELSE } from "./kundehandlinger";
 import { normaliserOrgnr } from "./orgnr";
 import { erSelskapsform, SELSKAPSFORM_KODER } from "./selskapsform";
@@ -220,8 +222,7 @@ export async function sendPaminnelse(
         eq(userOrgMemberships.orgId, orgId),
         eq(userOrgMemberships.role, "orgadmin"),
         eq(users.active, true),
-        ne(users.role, "superadmin"),
-        ne(users.role, "kontoansvarlig"),
+        erKundebruker,
       ),
     );
   if (mottakere.length === 0) throw ugyldig("Kunden har ingen orgadmin å sende påminnelsen til");
@@ -276,6 +277,8 @@ export const abonnementInn = z.object({
   discountPercent: z.number().int().min(0).max(100).default(0),
   startDate: z.string().nullish(),
   endDate: z.string().nullish(),
+  /** Neste fornyelse (BL-182). Bokføring for Statistikk, sperrer ingenting. */
+  renewalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ugyldig dato").nullish().or(z.literal("")),
   notes: z.string().nullish(),
 });
 
@@ -301,6 +304,7 @@ export async function settAbonnement(
     discountPercent: data.discountPercent,
     startDate: data.startDate || null,
     endDate: data.endDate || null,
+    renewalDate: data.renewalDate || null,
     notes: data.notes ?? null,
   };
 
@@ -316,6 +320,8 @@ export async function settAbonnement(
   } else {
     await db.insert(platformContracts).values({ id: randomUUID(), orgId, ...felter });
   }
+  // Statistikkens inntektsgraf leser historikken, ikke kontrakten (lib/avtalehistorikk.ts).
+  await forAvtaleversjon(db, orgId, { ...felter, annualFee: null });
   return hentAbonnement(db, orgId);
 }
 
@@ -341,6 +347,7 @@ export async function hentAbonnement(db: Db, orgId: string) {
 
 export async function slettAbonnement(db: Db, orgId: string) {
   await db.delete(platformContracts).where(eq(platformContracts.orgId, orgId));
+  await avsluttAvtalehistorikk(db, orgId);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -473,8 +480,7 @@ export async function hentOnboarding(db: Db, orgId: string) {
       .where(
         and(
           eq(userOrgMemberships.orgId, orgId),
-          ne(users.role, "superadmin"),
-          ne(users.role, "kontoansvarlig"),
+          erKundebruker,
         ),
       ),
     db
