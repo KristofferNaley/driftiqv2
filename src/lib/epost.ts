@@ -236,6 +236,28 @@ export async function sendKontooppsett(navn: string, til: string, url: string): 
   );
 }
 
+/**
+ * Påminnelse om et onboarding-punkt, sendt fra «Krever handling» i plattformpanelet til
+ * kundens orgadmins. Sier hva som mangler og hvor det gjøres — ingenting om innholdet.
+ */
+export async function sendOppstartspaminnelse(
+  orgNavn: string,
+  navn: string,
+  til: string,
+  punkt: { tekst: string; sti: string },
+): Promise<void> {
+  await send(
+    til,
+    `Kom i gang med DriftIQ: ${orgNavn}`,
+    ramme(
+      h(`Hei, ${trygg(fornavn(navn))}!`) +
+        p(`Et lite steg gjenstår før <strong>${trygg(orgNavn)}</strong> får fullt utbytte av DriftIQ:`) +
+        p(trygg(punkt.tekst)) +
+        knapp("Åpne DriftIQ", `${APP_URL}${punkt.sti}`),
+    ),
+  );
+}
+
 /* ── Varsler fra den periodiske jobben ─────────────────────────────────────────────── */
 
 const rad = (venstre: string, hoyre?: string) =>

@@ -185,6 +185,15 @@ describe("onboarding", () => {
     expect(o.punkter.find((p) => p.nokkel === "styret")!.ok).toBe(true);
   });
 
+  it("returnerer tellingene punktene er regnet fra", async () => {
+    const org = await nyOrg(50);
+    await nyBruker(org);
+    await nyBruker(org, "superadmin");
+    const o = await i((db) => hentOnboarding(db, org));
+    expect(o.tellinger.brukere).toBe(1);
+    expect(o.tellinger.enheter).toBe(0);
+  });
+
   it("regner prosent av antall punkter", async () => {
     const org = await nyOrg(null);
     const o = await i((db) => hentOnboarding(db, org));
@@ -266,6 +275,32 @@ describe("tilknytning", () => {
     expect(etter.managerName).toBeNull();
     expect(etter.managerOrgNr).toBeNull();
     expect(etter.managerBblId).toBeNull();
+  });
+
+  it("lagres sammen med organisasjonen i ett kall — feiler den, står ingenting lagret", async () => {
+    const org = await nyOrg();
+    const lag = await nyBbl("Vestbo");
+    const etter = await i((db) =>
+      endreKunde(db, org, {
+        municipality: "Bergen",
+        tilknytning: { affiliationType: "tilknyttet", bblId: lag },
+      }),
+    );
+    expect(etter.municipality).toBe("Bergen");
+    expect(etter.bblId).toBe(lag);
+
+    // Et boligbyggelag som ikke finnes, bryter FK-en i tilknytningen. Kommunen fra samme
+    // skjema skal da ikke stå igjen alene.
+    await expect(
+      i((db) =>
+        endreKunde(db, org, {
+          municipality: "Oslo",
+          tilknytning: { affiliationType: "tilknyttet", bblId: "finnes-ikke" },
+        }),
+      ),
+    ).rejects.toThrow();
+    const { rows } = await eier.query("SELECT municipality FROM organizations WHERE id = $1", [org]);
+    expect(rows[0].municipality).toBe("Bergen");
   });
 
   it("henter navnet på laget til visningen", async () => {

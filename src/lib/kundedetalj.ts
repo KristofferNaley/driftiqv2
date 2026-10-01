@@ -29,7 +29,13 @@ import { routines } from "../db/schema/rutiner";
 import { units } from "../db/schema/units";
 import { userOrgMemberships, users } from "../db/schema/users";
 import { vendors } from "../db/schema/vendors";
-import { ikkeFunnet } from "./api";
+import { ApiFeil, ikkeFunnet, ugyldig } from "./api";
+import type { Aktor } from "./aktor";
+import { hentEnhet } from "./brreg";
+import { sendOppstartspaminnelse } from "./epost";
+import { loggHendelse } from "./hendelser";
+import { ER_EPOST, PAMINNELSE } from "./kundehandlinger";
+import { normaliserOrgnr } from "./orgnr";
 import { ALLE_MODULER, modulErAktivert, type ModulNokkel } from "./moduler";
 import { grunnpakke } from "./prisregler";
 import { hentPrismodell } from "./prismodell";
@@ -45,7 +51,11 @@ export const kundeEndring = z.object({
   municipality: z.string().trim().nullish(),
   unitCount: z.number().int().min(0).nullish(),
   phone: z.string().trim().nullish(),
-  contactEmail: z.string().trim().nullish(),
+  contactEmail: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || ER_EPOST.test(v), "Ugyldig e-postadresse")
+    .nullish(),
   website: z.string().trim().nullish(),
   hasEmployees: z.boolean().optional(),
   active: z.boolean().optional(),
@@ -125,6 +135,99 @@ export async function settTilknytning(
 
   await db.update(organizations).set(felter).where(eq(organizations.id, orgId));
   return krevOrg(db, orgId);
+}
+
+// ---------------------------------------------------------------------------------------
+// Handlinger fra «Krever handling»
+// ---------------------------------------------------------------------------------------
+
+export const orgnrOppslag = z.object({
+  orgNr: z
+    .string()
+    .transform((v) => v.replace(/\s/g, ""))
+    .refine((v) => /^\d{9}$/.test(v), "Org.nr har 9 siffer"),
+});
+
+/**
+ * «Slå opp»: setter org.nr og henter det Enhetsregisteret vet. Fyller bare felt som er
+ * TOMME — en e-post plattformadmin har rettet for hånd, skal ikke overskrives av registeret.
+ */
+export async function slaOppOrgnr(db: Db, orgId: string, orgNrInn: string) {
+  await krevOrg(db, orgId);
+  const orgNr = normaliserOrgnr(orgNrInn)!;
+  const [annen] = await db
+    .select({ id: organizations.id, name: organizations.name })
+    .from(organizations)
+    .where(and(eq(organizations.orgNr, orgNr), ne(organizations.id, orgId)))
+    .limit(1);
+  if (annen) throw new ApiFeil(400, `Org.nr er allerede registrert på ${annen.name}`);
+
+  const enhet = await hentEnhet(orgNr);
+  if (!enhet) {
+    throw new ApiFeil(400, "Fant ikke org.nr i Enhetsregisteret, eller registeret svarte ikke");
+  }
+
+  const org = await krevOrg(db, orgId);
+  const felter: Record<string, unknown> = { orgNr };
+  if (!org.municipality && enhet.kommune) felter.municipality = enhet.kommune;
+  if (!org.contactEmail && enhet.epost) felter.contactEmail = enhet.epost;
+  if (!org.phone && enhet.telefon) felter.phone = enhet.telefon;
+  if (!org.website && enhet.nettsted) felter.website = enhet.nettsted;
+  await db.update(organizations).set(felter).where(eq(organizations.id, orgId));
+  return krevOrg(db, orgId);
+}
+
+export const paaminnelseInn = z.object({ punkt: z.string() });
+
+/**
+ * Påminnelse om ett onboarding-punkt, på e-post til kundens orgadmins.
+ *
+ * Plattformadmin kan ikke invitere brukere inn hos kunden (det er kundens orgadmin sin
+ * jobb, og å gjøre det herfra ville vært en ny vei inn i tilgangskontrollen). Påminnelsen
+ * er det vi kan gjøre uten innsyn: den sier HVA som mangler, aldri noe om innholdet.
+ */
+export async function sendPaminnelse(
+  db: Db,
+  orgId: string,
+  punkt: string,
+  av: Aktor,
+  etterCommit: (fn: () => Promise<void>) => void,
+) {
+  const org = await krevOrg(db, orgId);
+  const tekst = PAMINNELSE[punkt];
+  if (!tekst) throw ugyldig("Det finnes ingen påminnelse for dette punktet");
+  const { punkter } = await hentOnboarding(db, orgId);
+  const p = punkter.find((x) => x.nokkel === punkt);
+  if (!p) throw ugyldig("Ukjent onboarding-punkt");
+  if (p.ok) throw ugyldig("Punktet er allerede oppfylt");
+
+  const mottakere = await db
+    .select({ navn: users.name, epost: users.email })
+    .from(userOrgMemberships)
+    .innerJoin(users, eq(users.id, userOrgMemberships.userId))
+    .where(
+      and(
+        eq(userOrgMemberships.orgId, orgId),
+        eq(userOrgMemberships.role, "orgadmin"),
+        eq(users.active, true),
+        ne(users.role, "superadmin"),
+        ne(users.role, "kontoansvarlig"),
+      ),
+    );
+  if (mottakere.length === 0) throw ugyldig("Kunden har ingen orgadmin å sende påminnelsen til");
+
+  await loggHendelse(db, orgId, av, {
+    modul: "org",
+    entitet: "onboarding",
+    entitetId: punkt,
+    hendelse: `Sendte påminnelse om «${p.etikett}» til ${mottakere.length} ${mottakere.length === 1 ? "orgadmin" : "orgadmins"}`,
+  });
+  etterCommit(async () => {
+    for (const m of mottakere) {
+      await sendOppstartspaminnelse(org.name, m.navn, m.epost, tekst);
+    }
+  });
+  return { mottakere: mottakere.length };
 }
 
 // ---------------------------------------------------------------------------------------

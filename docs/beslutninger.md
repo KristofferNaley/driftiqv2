@@ -9,6 +9,27 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 01.10.2026 — «Krever handling»: påminnelse på e-post i stedet for invitasjon fra panelet
+
+**Hva:** Kundedetaljen viser punktene som krever handling (`lib/kundehandlinger.ts`). For
+onboarding-punkter kunden selv må løse, sender knappen en ny e-posttype,
+`sendOppstartspaminnelse`, til kundens aktive orgadmins. Plattformadmin og kontoansvarlig
+er unntatt. Sendingen ligger i `etterCommit`, og hver påminnelse logges i kundens
+hendelseslogg. Også «Inviter styremedlem» er en slik påminnelse (be orgadmin invitere
+styret).
+
+**Hvorfor:** Panelet skal ikke gi innsyn i kundedata, og å invitere brukere hos en kunde er
+kundens orgadmin sin jobb. En e-post som sier *hva* som mangler, gir ingen ny vei inn i
+tilgangskontrollen.
+
+**Alternativer:**
+- *Invitere brukere direkte fra panelet.* Forkastet: det ville vært en ny skrivevei inn i
+  kundens brukerliste utenom support-modus og `krevOrgAdmin`.
+- *Bare en lenke/tekst uten utsending.* Forkastet: plattformadmin ville måtte skrive
+  e-posten selv, og påminnelsen hadde ikke blitt logget.
+
+---
+
 ## 01.10.2026 — «Slett kunde» er hard sletting, bak inaktiv-status og navnebekreftelse
 
 **Hva:** Plattformpanelet kan slette en kunde for godt (`lib/kundesletting.ts`): raden,

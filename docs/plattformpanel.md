@@ -49,6 +49,18 @@ utløpstid, begrunnelse og «Avslutt».
 
 ### Oversikt
 
+- **Krever handling** øverst, skjult når det ikke finnes punkter. Antallet står i gult på
+  fanen. Regelsettet er én ren funksjon, `kreverHandling()` i `lib/kundehandlinger.ts`
+  (ny regel = én oppføring i `REGLER`):
+  - *Mangler e-post* (rødt): e-postfelt med Lagre, formatet sjekkes også på serveren.
+  - *Mangler org.nr* (gult): 9 siffer + «Slå opp». Setter org.nr og fyller *tomme* felt
+    (kommune, e-post, telefon, nettside) fra Enhetsregisteret. Nektes hvis en annen
+    kunde har nummeret.
+  - *Mangler selskapsform* (gult).
+  - *Onboarding: <sjekk>* (gult), ett per sjekk som ikke er oppfylt. Abonnement går til
+    fanen, andeler til Rediger. Resten sender en påminnelse på e-post til kundens aktive
+    orgadmins (styret: «Inviter styremedlem»). Påminnelsen logges i kundens
+    hendelseslogg og nektes når punktet er oppfylt eller kunden ikke har noen orgadmin.
 - **Snarveier** til abonnement, moduler og onboarding.
 - **Organisasjon** — ett kort med én «Rediger», i fire seksjoner: Identitet (navn, org.nr,
   selskapsform, kommune), Størrelse (andeler, enheter i Enhetsregisteret, har ansatte),

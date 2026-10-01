@@ -4,9 +4,11 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Ramme } from "../../ramme";
 import { api } from "@/lib/klient";
+import { kreverHandling } from "@/lib/kundehandlinger";
 import { ALLE_MODULER } from "@/lib/moduler";
 import { Fakturering, ModulFane } from "./abonnement";
 import { FANER, tolkFane, type Detalj, type Fane, type Kunde } from "./deler";
+import { KreverHandling } from "./handlinger";
 import { Kundehode, SupportDialog, SupportStripe } from "./hode";
 import { OrgModal } from "./organisasjon";
 import { Oversikt } from "./oversikt";
@@ -36,6 +38,9 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
   const [fane, setFane] = useState<Fane>("oversikt");
   const [redigerer, setRedigerer] = useState(false);
   const [supportApen, setSupportApen] = useState(false);
+  // Koden Brreg ga ved siste «Slå opp» når den ikke er en av selskapsformene våre. Lagres
+  // ikke (feltet skal ikke få en ugyldig verdi), så den lever bare til siden lastes på nytt.
+  const [ukjentKode, setUkjentKode] = useState<string | null>(null);
 
   useEffect(() => {
     setFane(tolkFane(new URLSearchParams(window.location.search).get("fane")));
@@ -74,8 +79,13 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
     );
   }
 
+  const punkter = kreverHandling({
+    org: detalj.org,
+    onboarding: detalj.onboarding.punkter,
+    ukjentBrregKode: ukjentKode,
+  });
   const merker: Record<Fane, { tekst: string; klasse: string } | null> = {
-    oversikt: null,
+    oversikt: punkter.length > 0 ? { tekst: String(punkter.length), klasse: "warn" } : null,
     abonnement: { tekst: `${detalj.moduler.length}/${ALLE_MODULER.length}`, klasse: "muted" },
     tilgang: { tekst: String(kunde.brukere.length), klasse: "muted" },
   };
@@ -116,6 +126,16 @@ export default function Kundedetalj({ params }: { params: Promise<{ orgId: strin
         ))}
       </div>
 
+      {fane === "oversikt" && (
+        <KreverHandling
+          orgId={orgId}
+          punkter={punkter}
+          onEndret={last}
+          onGaTil={velgFane}
+          onRediger={() => setRedigerer(true)}
+          onUkjentKode={setUkjentKode}
+        />
+      )}
       {fane === "oversikt" && (
         <Oversikt
           detalj={detalj}

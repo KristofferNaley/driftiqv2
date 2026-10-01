@@ -2458,6 +2458,28 @@ textarea.qr-input { resize: vertical; }
 }
 .pf-support-stripe b { color: var(--accent); }
 .pf-support-stripe .btn { margin-left: auto; }
+/* «Krever handling»: gul ramme, ett punkt per rad med handlingen til høyre. */
+.pf-handling-kort { border: 1.5px solid var(--warn); }
+.pf-handling-kort .pf-kort-hode { color: var(--warn); }
+.pf-handling {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 10px 18px; border-top: 1px solid var(--border);
+}
+.pf-handling-prikk {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font-size: var(--fs-label); font-weight: 700;
+}
+.pf-handling-prikk.rod { background: rgba(240, 64, 64, 0.14); color: var(--danger); }
+.pf-handling-prikk.gul { background: rgba(245, 166, 35, 0.16); color: var(--warn); }
+.pf-handling-kontroll { display: flex; justify-content: flex-end; }
+.pf-handling-fiks { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-handling-fiks .input { width: 220px; max-width: 100%; }
+.pf-handling-feil { display: block; font-size: var(--fs-label); color: var(--danger); }
+.pf-handling-ok { display: block; font-size: var(--fs-label); color: var(--ok); }
+@media (max-width: 640px) {
+  .pf-handling { grid-template-columns: 22px minmax(0, 1fr); }
+  .pf-handling-kontroll { grid-column: 2; justify-content: flex-start; }
+}
 /* Tom verdi: «Ikke satt», svakere og kursiv — skal ikke kunne forveksles med en ekte verdi. */
 .pf-ikke-satt { color: var(--muted); font-style: italic; font-weight: 400 !important; }
 
