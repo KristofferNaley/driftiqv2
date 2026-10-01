@@ -48,7 +48,7 @@ export const JOBBER: Jobb[] = [
     beskrivelse: "Trekker ut søkbar tekst (PDF, Word, OCR) fra nye dokumenter i arkivet",
     cron: "*/5 * * * *",
     timezone: "Europe/Oslo",
-    plan: "Hvert 5. minutt — logges bare når det fantes noe å gjøre",
+    plan: "Hvert 5. minutt. Logges bare når det fantes noe å gjøre.",
     kilde: "app",
   },
   {
@@ -63,7 +63,7 @@ export const JOBBER: Jobb[] = [
   {
     nokkel: "easee-token",
     navn: "Easee-token",
-    beskrivelse: "Fornyer Easee-innloggingen — refresh-tokenet lever bare 24 timer",
+    beskrivelse: "Fornyer Easee-innloggingen. Refresh-tokenet lever bare 24 timer.",
     cron: "45 */6 * * *",
     timezone: "Europe/Oslo",
     plan: "Hver 6. time (00:45, 06:45, 12:45, 18:45, Europe/Oslo)",
@@ -93,7 +93,7 @@ export const JOBBER: Jobb[] = [
   {
     nokkel: "backup",
     navn: "Backup",
-    beskrivelse: "backup.sh på verten — databasedump og volumer",
+    beskrivelse: "backup.sh på verten: databasedump og volumer",
     cron: "30 3 * * *",
     timezone: "Europe/Oslo",
     plan: "Hver natt kl. 03:30",
@@ -103,7 +103,7 @@ export const JOBBER: Jobb[] = [
   {
     nokkel: "docker-byggecache",
     navn: "Docker-byggecache",
-    beskrivelse: "docker buildx prune av byggecache eldre enn 7 dager — frigjør diskplass",
+    beskrivelse: "docker buildx prune av byggecache eldre enn 7 dager, frigjør diskplass",
     cron: "30 4 * * 0",
     timezone: "Europe/Oslo",
     plan: "Søndager kl. 04:30",

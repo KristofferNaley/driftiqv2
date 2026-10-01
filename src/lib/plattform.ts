@@ -346,7 +346,7 @@ export async function hentKunder(db: Db) {
     if (o.active && avtale?.endDate && rabatt > 0) {
       const dager = Math.ceil((new Date(avtale.endDate).getTime() - naa) / dag);
       if (dager > 0 && dager <= 90) {
-        oppfolging.push(`Rabatten (${rabatt} %) utløper ${new Date(avtale.endDate).toLocaleDateString("nb-NO")} — om ${dager} dager.`);
+        oppfolging.push(`Rabatten (${rabatt} %) utløper ${new Date(avtale.endDate).toLocaleDateString("nb-NO")}, om ${dager} dager.`);
       }
     }
     // Ukjent opprettelsesdato regnes som gammel — heller mase én gang for mye.

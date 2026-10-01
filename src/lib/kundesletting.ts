@@ -118,7 +118,7 @@ export async function slettKunde(
     throw new ApiFeil(
       409,
       `Kunden har ${levendeNokler.length} digitale nøkler hos Unloc som ikke er trukket tilbake. ` +
-        "Trekk dem tilbake i kundeappen først — slettingen her fjerner dem ikke hos Unloc.",
+        "Trekk dem tilbake i kundeappen først. Slettingen her fjerner dem ikke hos Unloc.",
     );
   }
 
