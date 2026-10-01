@@ -147,6 +147,13 @@ export default function Saker() {
     void last();
   }, [last]);
 
+  // `?apen=<id>` fra «I dag» velger saken. Lest fra `window.location` etter montering, ikke
+  // med `useSearchParams` — den tvinger hele siden over til klientrendring (se CLAUDE.md).
+  useEffect(() => {
+    const apen = new URLSearchParams(window.location.search).get("apen");
+    if (apen) setValgtId(apen);
+  }, []);
+
   const lastTrad = useCallback(async (id: string) => {
     try {
       const sak = await api.hent<{ meldinger: Melding[] }>(`/plattform/saker/${id}`);

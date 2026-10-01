@@ -8,6 +8,7 @@ import { api } from "@/lib/klient";
 import { MENY, type ModulNokkel } from "@/lib/moduler";
 import { kroner } from "@/lib/prisregler";
 import { Ramme } from "../ramme";
+import { Plattformtall } from "./plattformtall";
 
 /**
  * Statistikk — etter `mockups/statistikk-v3-mockup.html`: hvordan forretningen og
@@ -235,6 +236,7 @@ export default function Statistikk() {
       }
     >
       {feil && <div className="feilmelding">{feil}</div>}
+      <Plattformtall />
       {!data ? (
         <p className="pf-dempet">Henter …</p>
       ) : (

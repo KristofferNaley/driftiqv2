@@ -136,7 +136,7 @@ export async function hentSystemhelse(db: Db) {
   };
 }
 
-async function diskbruk() {
+export async function diskbruk() {
   try {
     const s = await statfs("/app");
     const totalt = s.blocks * s.bsize;

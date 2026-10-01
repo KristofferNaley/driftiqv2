@@ -18,7 +18,7 @@
  * er to ulike ting, og bare den andre er inngripende.
  */
 
-import { and, count, desc, eq, isNull, max, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, max, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -40,6 +40,13 @@ import { PLATTFORMADMIN } from "./nivaer";
 import { ALLE_MODULER, GAMLE_ALIASER, modulErAktivert, type ModulNokkel } from "./moduler";
 import { leads } from "../db/schema/leads";
 import { onboardingProsent, onboardingPunkter } from "./kundedetalj";
+import { feedbackMessages, feedbackReports } from "../db/schema/feedback";
+import { authEvents } from "../db/schema/hendelser";
+import { JOBBER } from "./jobber";
+import { sisteKjoringer } from "./jobbkjoring";
+import { diskbruk } from "./systemhelse";
+import { AUTH_OPPBEVARING_DAGER } from "./hendelser";
+import { kreverHandling, type IDagGrunnlag, type SidenSist } from "./idag";
 
 export const supportStart = z.object({
   orgId: z.string().min(1),
@@ -54,14 +61,15 @@ export const supportStart = z.object({
 });
 
 /**
- * Forsiden i panelet.
+ * Plattformtallene øverst på Statistikk. Lå på forsiden («Dashboard») til den ble
+ * arbeidslista «I dag» (01.10.2026).
  *
  * Tallene er PLATTFORMENS, ikke én kundes: hvor mange kunder finnes, hvor mye brukes
  * systemet, hva koster AI-en. Ingen av dem røper innholdet i en bestemt kundes data — det
  * krever fortsatt support-modus.
  */
-export async function hentDashbord(db: Db) {
-  const [kunder, oppgaver, avvik, kvitteringer, salg, ai, sesjoner] = await Promise.all([
+export async function hentNokkeltall(db: Db) {
+  const [kunder, oppgaver, avvik, kvitteringer, salg, ai] = await Promise.all([
     db
       .select({ aktiv: organizations.active, n: count() })
       .from(organizations)
@@ -83,10 +91,6 @@ export async function hentDashbord(db: Db) {
       })
       .from(aiUsageDaily)
       .where(sql`${aiUsageDaily.date} >= current_date - interval '30 days'`),
-    db
-      .select({ n: count() })
-      .from(supportAccessLog)
-      .where(and(isNull(supportAccessLog.endedAt), sql`${supportAccessLog.expiresAt} > now()`)),
   ]);
 
   return {
@@ -98,7 +102,104 @@ export async function hentDashbord(db: Db) {
     arligSalg: Number(salg[0]?.sum ?? 0),
     aiSporsmal: Number(ai[0]?.sporsmal ?? 0),
     aiTokens: Number(ai[0]?.inn ?? 0) + Number(ai[0]?.ut ?? 0),
-    aktiveSesjoner: sesjoner[0]?.n ?? 0,
+  };
+}
+
+/**
+ * Grunnlaget for «Krever handling» på I dag (regler og grenser i `lib/idag.ts`).
+ *
+ * Disk og jobber kommer fra de samme kildene som System-siden (`diskbruk`, `JOBBER` +
+ * `sisteKjoringer`), så de to sidene aldri kan være uenige om tilstanden.
+ */
+export async function hentKreverHandling(db: Db, naa: Date) {
+  const [disk, siste, saker, svar, kunder, okter] = await Promise.all([
+    diskbruk(),
+    sisteKjoringer(db),
+    db
+      .select({
+        id: feedbackReports.id,
+        nummer: feedbackReports.number,
+        status: feedbackReports.status,
+        orgNavn: organizations.name,
+        opprettet: feedbackReports.createdAt,
+      })
+      .from(feedbackReports)
+      .innerJoin(organizations, eq(organizations.id, feedbackReports.orgId))
+      .where(ne(feedbackReports.status, "lost")),
+    // Siste melding til kunden per sak. Interne notater er ikke svar.
+    db
+      .select({ reportId: feedbackMessages.reportId, siste: max(feedbackMessages.createdAt) })
+      .from(feedbackMessages)
+      .where(eq(feedbackMessages.internal, false))
+      .groupBy(feedbackMessages.reportId),
+    // Demo-kunder er utenfor: de har ingen ekte mottaker å varsle.
+    db
+      .select({ id: organizations.id, navn: organizations.name, epost: organizations.contactEmail })
+      .from(organizations)
+      .where(and(eq(organizations.active, true), eq(organizations.demo, false))),
+    db
+      .select({
+        orgId: supportAccessLog.orgId,
+        orgNavn: organizations.name,
+        adminNavn: supportAccessLog.adminName,
+        utloper: supportAccessLog.expiresAt,
+      })
+      .from(supportAccessLog)
+      .innerJoin(organizations, eq(organizations.id, supportAccessLog.orgId))
+      .where(and(isNull(supportAccessLog.endedAt), gt(supportAccessLog.expiresAt, naa))),
+  ]);
+
+  const sisteSvar = new Map(svar.map((r) => [r.reportId, r.siste]));
+  const grunnlag: IDagGrunnlag = {
+    disk,
+    jobber: JOBBER.map((j) => {
+      const s = siste.get(j.nokkel);
+      return {
+        nokkel: j.nokkel,
+        navn: j.navn,
+        siste: s ? { naar: s.finishedAt, ok: s.ok, detail: s.detail } : null,
+      };
+    }),
+    saker: saker.map((s) => ({ ...s, sisteSvar: sisteSvar.get(s.id) ?? null })),
+    kunder,
+    supportokter: okter.map((o) => ({
+      orgId: o.orgId,
+      orgNavn: o.orgNavn,
+      adminNavn: o.adminNavn ?? "Ukjent",
+      utloper: o.utloper!,
+    })),
+  };
+  return kreverHandling(grunnlag, naa);
+}
+
+/**
+ * «Siden sist du var her»: det som har kommet til siden FORRIGE innlogging — den nest siste
+ * `innlogget`-raden i `auth_events`, siden den siste er økten du sitter i nå.
+ *
+ * Ingen egen kolonne: innloggingsloggen har tidspunktet allerede. Prisen er oppbevaringen
+ * (`AUTH_OPPBEVARING_DAGER`): er forrige innlogging eldre enn loggen, telles alt innenfor
+ * loggens vindu og `fra` er `null`, så siden kan si det i stedet for å late som.
+ */
+export async function hentSidenSist(db: Db, brukerId: string, naa: Date): Promise<SidenSist> {
+  const innlogginger = await db
+    .select({ tid: authEvents.occurredAt })
+    .from(authEvents)
+    .where(and(eq(authEvents.userId, brukerId), eq(authEvents.event, "innlogget")))
+    .orderBy(desc(authEvents.occurredAt))
+    .limit(2);
+  const forrige = innlogginger[1]?.tid ?? null;
+  const fra = forrige ?? new Date(naa.getTime() - AUTH_OPPBEVARING_DAGER * 24 * 60 * 60 * 1000);
+
+  const [l, f, s] = await Promise.all([
+    db.select({ n: count() }).from(leads).where(gt(leads.createdAt, fra)),
+    db.select({ n: count() }).from(feedbackReports).where(gt(feedbackReports.createdAt, fra)),
+    db.select({ n: count() }).from(supportAccessLog).where(gt(supportAccessLog.startedAt, fra)),
+  ]);
+  return {
+    fra: forrige ? forrige.toISOString() : null,
+    leads: l[0]?.n ?? 0,
+    innmeldinger: f[0]?.n ?? 0,
+    supportokter: s[0]?.n ?? 0,
   };
 }
 

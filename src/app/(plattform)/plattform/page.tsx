@@ -3,76 +3,42 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/klient";
+import { sidenSistTekst, tidspunkt, type IDagPunkt, type SidenSist } from "@/lib/idag";
 import { Ramme } from "./ramme";
 
-type Dashbord = {
-  aktiveKunder: number;
-  inaktiveKunder: number;
-  aktiveOppgaver: number;
-  apneAvvik: number;
-  kvitteringer: number;
-  arligSalg: number;
-  aiSporsmal: number;
-  aiTokens: number;
-  aktiveSesjoner: number;
-};
-
-export default function PlattformDashbord() {
-  const [d, setD] = useState<Dashbord | null>(null);
+/**
+ * «I dag» — forsiden i panelet, en arbeidsliste (01.10.2026, erstatter Dashboard).
+ *
+ * Siden skal virke uansett hvor lenge siden du var innom: «Krever handling» er tilstanden NÅ
+ * (reglene i `lib/idag.ts`), og «Siden sist» regnes fra forrige innlogging, ikke fra i går.
+ * Nøkkeltallene som sto her, er flyttet til Statistikk.
+ */
+export default function IDag() {
+  const [data, setData] = useState<{ punkter: IDagPunkt[]; sidenSist: SidenSist } | null>(null);
   const [feil, setFeil] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .hent<Dashbord>("/plattform/dashbord")
-      .then(setD)
-      .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke hente tallene"));
+      .hent<{ punkter: IDagPunkt[]; sidenSist: SidenSist }>("/plattform/idag")
+      .then(setData)
+      .catch((e) => setFeil(e instanceof Error ? e.message : "Kunne ikke hente arbeidslista"));
   }, []);
 
   return (
-    <Ramme tittel="Dashboard">
+    <Ramme tittel="I dag">
       {feil && <div className="feilmelding">{feil}</div>}
-      {!d ? (
-        <p className="pf-dempet">Henter …</p>
+      {!data ? (
+        !feil && <p className="pf-dempet">Henter …</p>
       ) : (
         <>
-          {/* Aktivt innsyn står ØVERST og i egen farge. Er noen inne hos en kunde akkurat
-              nå, er det den viktigste opplysningen på siden. */}
-          {d.aktiveSesjoner > 0 && (
-            <Link href="/plattform/support" className="pf-varsel">
-              {d.aktiveSesjoner} aktiv{d.aktiveSesjoner === 1 ? "" : "e"} support-sesjon
-              {d.aktiveSesjoner === 1 ? "" : "er"} akkurat nå. Se hvem og hvorfor →
-            </Link>
-          )}
-
-          <div className="pf-kpi-grid">
-            <Kpi etikett="Aktive kunder" verdi={d.aktiveKunder} under={`${d.inaktiveKunder} inaktive`} />
-            <Kpi etikett="Aktive oppgaver" verdi={d.aktiveOppgaver} under="På tvers av alle kunder" />
-            <Kpi etikett="Åpne avvik" verdi={d.apneAvvik} under="Totalt på plattformen" />
-            <Kpi etikett="Kvitteringer" verdi={d.kvitteringer} under="Totalt registrert" />
-            <Kpi
-              etikett="Årlig salg"
-              verdi={`${d.arligSalg.toLocaleString("nb-NO")} kr`}
-              under="Sum av alle abonnement"
-            />
-          </div>
-
+          <KreverHandling punkter={data.punkter} />
           <div className="pf-kort">
-            <div className="pf-kort-hode"><span>AI-rådgiver, siste 30 dager</span></div>
-            <div className="pf-kort-kropp">
-              <div className="pf-felt">
-                <span className="pf-under">Spørsmål besvart</span>
-                <span>{d.aiSporsmal.toLocaleString("nb-NO")}</span>
-              </div>
-              <div className="pf-felt">
-                <span className="pf-under">Tokens brukt</span>
-                <span>{d.aiTokens.toLocaleString("nb-NO")}</span>
-              </div>
-              {/* Tokens, ikke kroner: prisen per token endres, og et lagret kronebeløp ville
-                  vært feil dagen etter. */}
-              <p className="pf-dempet" style={{ marginTop: "8px" }}>
-                Tokens og ikke kroner: prisen endres, og et lagret beløp ville vært feil
-                dagen etter.
-              </p>
+            <div className="pf-kort-kropp pf-idag-siden">
+              <b>
+                Siden sist du var her
+                {data.sidenSist.fra ? ` (${tidspunkt(new Date(data.sidenSist.fra))})` : " (siste 90 dager)"}:
+              </b>{" "}
+              <span className="pf-dempet">{sidenSistTekst(data.sidenSist)}</span>
             </div>
           </div>
         </>
@@ -81,12 +47,41 @@ export default function PlattformDashbord() {
   );
 }
 
-function Kpi({ etikett, verdi, under }: { etikett: string; verdi: number | string; under: string }) {
+function KreverHandling({ punkter }: { punkter: IDagPunkt[] }) {
+  if (punkter.length === 0) {
+    return (
+      <div className="pf-kort">
+        <div className="pf-kort-hode"><span>Krever handling</span></div>
+        <div className="pf-kort-kropp">
+          <p className="pf-dempet">Alt er i orden.</p>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="pf-kpi">
-      <div className="pf-kpi-etikett">{etikett}</div>
-      <div className="pf-kpi-verdi">{verdi}</div>
-      <div className="pf-under">{under}</div>
+    <div className="pf-kort pf-handling-kort">
+      <div className="pf-kort-hode">
+        <span>Krever handling</span>
+        <span className="pf-under">
+          {punkter.length} {punkter.length === 1 ? "punkt" : "punkter"}
+        </span>
+      </div>
+      {punkter.map((p) => (
+        <div key={p.nokkel} className="pf-handling">
+          <span className={`pf-handling-prikk ${p.nivaa}`} aria-hidden>
+            !
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <b>{p.tittel}</b>
+            <div className="pf-dempet">{p.forklaring}</div>
+          </div>
+          <div className="pf-handling-kontroll">
+            <Link href={p.knapp.href} className="btn btn-ghost">
+              {p.knapp.etikett}
+            </Link>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

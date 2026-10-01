@@ -2518,6 +2518,8 @@ textarea.qr-input { resize: vertical; }
   .pf-handling { grid-template-columns: 22px minmax(0, 1fr); }
   .pf-handling-kontroll { grid-column: 2; justify-content: flex-start; }
 }
+/* «I dag»: linja «Siden sist du var her» under kortet. */
+.pf-idag-siden { font-size: var(--fs-sm); }
 /* Nøkkeltall: fire klikkbare kort, to per rad på smal skjerm. */
 .pf-nokkeltall { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .pf-kpi-knapp {

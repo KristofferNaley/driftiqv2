@@ -23,7 +23,7 @@ medlemskapet.
 
 | Side | Hva den er til |
 |---|---|
-| Dashboard | Plattformtall: antall kunder (aktive/inaktive), bruk, AI-forbruk (tokens), aktive support-sesjoner. |
+| I dag | Arbeidsliste. «Krever handling» samler punkter fra hele plattformen (disk over 85 %, jobb som feilet siste kjøring, innmelding ubesvart mer enn én arbeidsdag, besvart sak som har stått stille i 14 dager, kunde uten e-post (ikke demo), aktiv support-økt), hver med knapp dit det løses. Reglene og grensene står i `src/lib/idag.ts`. Under kortet: nye leads, innmeldinger og support-økter siden forrige innlogging (nest siste `innlogget` i `auth_events`; eldre enn 90 dager vises som «siste 90 dager»). Plattformtallene som sto her, er øverst på Statistikk. |
 | Statistikk | Forretning og produktbruk: nøkkeltall, kundehelse, ukesaktivitet, modulbruk. Demo-kunder kan slås av og på i nøkkeltallene; grafene holder dem alltid utenfor. Inaktive kunder regnes ikke som «ekte». |
 | Leads | Salgsløpet ny → kontaktet → kvalifisert → kunde. Her opprettes nye kunder (se «Ny kunde»). |
 | Innmeldinger | Innmeldinger fra «Meld feil» i appen (feil, forslag, spørsmål), med tråd mot melderen og interne notater. «Løst» sender e-post til melderen. Telleren i menyen er saker der kunden venter på svar: ikke løst og ingen melding til kunden ennå, samme regel som «Ubesvart» på siden. Stien er fortsatt `/plattform/saker`. |
