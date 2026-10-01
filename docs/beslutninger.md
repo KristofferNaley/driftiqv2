@@ -9,6 +9,32 @@ Beslutninger fra før denne fila (28.09.2026) står der de ble tatt: `README.md`
 
 ---
 
+## 01.10.2026 — «Slett kunde» er hard sletting, bak inaktiv-status og navnebekreftelse
+
+**Hva:** Plattformpanelet kan slette en kunde for godt (`lib/kundesletting.ts`): raden,
+alle tabellene den eier, filene under `uploads/orgs/{orgId}/` (etter commit) og
+brukerkontoer som ikke er med i andre kunder og ikke er plattformadmin. Knappen er død til
+kunden er satt inaktiv, og navnet må tastes inn (sjekket på serveren). Sletting nektes
+så lenge kunden har Unloc-nøkler som ikke er trukket tilbake. Tabellene uten
+`ON DELETE CASCADE` mot `organizations` slettes i FK-riktig rekkefølge og står i
+`SLETTES_EKSPLISITT`, som en test sammenligner med fremmednøklene i databasen.
+`plattformRute` fikk `etterCommit` for filslettingen.
+
+**Hvorfor:** Testkunder som ikke går videre skal kunne fjernes helt, og en kunde som sier
+opp har krav på sletting. To steg (inaktiv → slett) gjør at kunden allerede har vært stengt
+ute før noe forsvinner.
+
+**Alternativer:**
+- *Myk sletting (`deleted_at`).* Forkastet: dataene ville ligget igjen, og hver spørring på
+  tvers måtte filtrert dem bort. Inaktiv-statusen er allerede den myke varianten.
+- *Gjøre alle fremmednøkler til `CASCADE` med en migrasjon.* Forkastet foreløpig: de 12
+  uten kaskade er arv fra v1-skjemaet, og å endre dem endrer også hva en vanlig sletting av
+  f.eks. en leverandør gjør inne i kundeappen.
+- *Beholde kundens brukerkontoer.* Forkastet: en konto uten medlemskap slipper inn i en tom
+  app, og personopplysningene skal ut med kunden.
+- *Sette leaden kunden kom fra til «avslått».* Forkastet: skjemaet bestemmer at den beholder
+  «konvertert» (`leads.convertedOrgId`). Den får i stedet en linje «Kunden slettet» i loggen.
+
 ## 30.09.2026 — Oppslagstavla: bilder konverteres med vips, og bildeoppslag begynner som kladd
 
 **Hva:** (1) Opplastede bilder og PDF-sider gjøres om til WebP med `vips` fra Alpine-pakkene

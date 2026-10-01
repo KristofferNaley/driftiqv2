@@ -244,7 +244,14 @@ export function somSvar(resultat: unknown, status: number): Response {
 export function plattformRute<P extends Record<string, string> = Record<string, string>>(opts: {
   /** `alle` = enhver innlogget bruker. `plattformadmin` = kun DriftIQ-ansatte. */
   nivaa: "alle" | "plattformadmin";
-  handler: (ctx: { db: Db; bruker: User; params: P; req: Request }) => Promise<unknown>;
+  handler: (ctx: {
+    db: Db;
+    bruker: User;
+    params: P;
+    req: Request;
+    /** Som i `orgRute`: kjøres først når transaksjonen er committet (f.eks. filsletting). */
+    etterCommit: (fn: () => Promise<void>) => void;
+  }) => Promise<unknown>;
   status?: number;
 }) {
   return async (req: Request, ctx: { params: Promise<P> }) => {
@@ -253,9 +260,13 @@ export function plattformRute<P extends Record<string, string> = Record<string, 
       const bruker = await hentBruker(req);
       if (opts.nivaa === "plattformadmin") krevPlattformadmin(bruker);
 
+      const etterpaa: Array<() => Promise<void>> = [];
       const resultat = await withoutRls("plattformpanel", (db) =>
-        opts.handler({ db, bruker, params, req }),
+        opts.handler({ db, bruker, params, req, etterCommit: (fn) => etterpaa.push(fn) }),
       );
+      for (const fn of etterpaa) {
+        await fn().catch((e) => console.error("[api] Sidevirkning feilet:", e));
+      }
 
       const status = opts.status ?? 200;
       if (status === 204) return new Response(null, { status: 204 });

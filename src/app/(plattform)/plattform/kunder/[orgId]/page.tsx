@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Ramme } from "../../ramme";
 import { dato, datoTid } from "@/components/felles";
 import { Knapperad, Modal, Tekstfelt, Tekstomrade, useSending } from "@/components/skjema";
@@ -494,6 +495,8 @@ function Organisasjon({ detalj, onEndret }: { detalj: Detalj; onEndret: () => Pr
         </div>
       </div>
 
+      <SlettKunde org={org} />
+
       {redigerer && (
         <OrgModal
           org={org}
@@ -515,6 +518,79 @@ function Organisasjon({ detalj, onEndret }: { detalj: Detalj; onEndret: () => Pr
         />
       )}
     </>
+  );
+}
+
+// ── Slett kunde ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sletter kunden og alt den eier, for godt — se `lib/kundesletting.ts`. Knappen er død til
+ * kunden er satt inaktiv: slettingen skal være andre steg av to, ikke ett feiltrykk.
+ */
+function SlettKunde({ org }: { org: Org }) {
+  const router = useRouter();
+  const [apen, setApen] = useState(false);
+  const [navn, setNavn] = useState("");
+  const { sender, feil, send } = useSending(() => router.push("/plattform/kunder"));
+
+  return (
+    <div className="pf-kort">
+      <div className="pf-kort-hode">
+        <span>Slett kunde</span>
+        <button
+          className="btn btn-ghost fjern-knapp"
+          disabled={org.active}
+          onClick={() => {
+            setNavn("");
+            setApen(true);
+          }}
+        >
+          Slett kunde …
+        </button>
+      </div>
+      <div className="pf-kort-kropp">
+        <p className="field-note">
+          {org.active
+            ? "Kunden må settes inaktiv før den kan slettes (Rediger → Aktiv kunde)."
+            : "Sletter organisasjonen, alle data og filer, og brukerkontoer som ikke er med i andre kunder. Kan ikke angres."}
+        </p>
+      </div>
+
+      {apen && (
+        <Modal tittel="Slett kunde" onLukk={() => setApen(false)} bredde={460}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send(() => api.send(`/plattform/kunder/${org.id}/slett`, { bekreftNavn: navn.trim() }));
+            }}
+          >
+            {feil && <div className="feilmelding">{feil}</div>}
+            <p style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+              Dette sletter <strong>{org.name}</strong> for godt: oppgaver, avvik, dokumenter,
+              filer, oppslagstavle, integrasjoner, abonnement, innsynslogg og
+              hendelseslogg. Brukerkontoer som bare finnes for denne kunden slettes også.
+            </p>
+            <div className="tips-stripe" style={{ margin: "12px 0" }}>
+              <span style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+                ⚠ Det finnes ingen angre og ingen sikkerhetskopi i appen.
+              </span>
+            </div>
+            <Tekstfelt
+              etikett="Skriv kundens navn for å bekrefte"
+              verdi={navn}
+              onEndre={setNavn}
+            />
+            <Knapperad
+              onAvbryt={() => setApen(false)}
+              sendEtikett="Slett kunden"
+              farlig
+              sender={sender}
+              deaktivert={navn.trim() !== org.name.trim()}
+            />
+          </form>
+        </Modal>
+      )}
+    </div>
   );
 }
 

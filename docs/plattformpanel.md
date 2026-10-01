@@ -51,6 +51,7 @@ medlemskapet.
   - *Tilknytning* → «Rediger»: frittstående / tilknyttet et boligbyggelag, og
     forretningsfører (selvadministrert / boligbyggelag / eksternt byrå). To separate
     forhold.
+  - *Slett kunde*: sletter kunden for godt, se «Slette en kunde».
 - **Onboarding** — sjekkliste regnet ut fra *antall* rader hos kunden (abonnement,
   andeler, Enhetsregisteret, «Om bygget», styret med minst to brukere, leverandører,
   kontrakter, …). Plattformadmins medlemskap teller ikke som kundens brukere.
@@ -148,6 +149,31 @@ Det finnes **ingen vei i UI-et for å legge til første bruker i en ny kunde.**
 
 Inntil det er bygget, må første orgadmin legges inn direkte i databasen. Ellers må et
 plattformadmin-medlemskap opprettes slik at orgen kan åpnes i kundeappen under support.
+
+## Slette en kunde
+
+Kunder → <kunde> → **Organisasjon** → kortet «Slett kunde» nederst. Tenkt for kunder som
+har prøvd systemet uten å kjøpe, og for sletting etter oppsigelse. Koden er i
+`lib/kundesletting.ts`.
+
+1. Sett kunden **inaktiv** først («Rediger» → fjern krysset i «Aktiv kunde»). Før det er
+   knappen død.
+2. **Slett kunde …** → skriv kundens navn nøyaktig → **Slett kunden**.
+
+Det som slettes: organisasjonen og alt den eier (oppgaver, avvik, dokumenter, økonomi,
+oppslagstavle, integrasjonskoblinger, abonnement, innsynslogg, hendelseslogg, feilmeldinger),
+filene under `uploads/orgs/<orgId>/`, og brukerkontoer som *bare* var med i denne kunden.
+Kontoer med medlemskap i andre kunder og plattformadmins beholdes. En lead kunden kom fra
+beholder statusen «Kunde», mister lenken og får linja «Kunden slettet» i loggen.
+
+Sperrer:
+
+- Aktive digitale nøkler hos Unloc må trekkes tilbake i kundeappen først (krever
+  support-sesjon). Slettingen fjerner bare radene våre, ikke nøklene hos Unloc.
+- Ingen angre. Den nattlige sikkerhetskopien (14 dager) er eneste vei tilbake, og den
+  gjenoppretter hele basen, ikke én kunde.
+- Slettingen logges bare i serverloggen (`[kundesletting] …`), siden kundens egen
+  hendelseslogg forsvinner med kunden.
 
 ## Feilsøking
 

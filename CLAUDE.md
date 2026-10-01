@@ -128,6 +128,8 @@ kompileringsfeil i stedet.
 `src/db/rls/tables.ts` — `DIREKTE_TABELLER` (egen `org_id`), `BARNETABELLER` (EXISTS mot
 forelder, og da også `FK_INDEKSER`), eller `UNNTATT` med skriftlig grunn.
 `tests/rls.test.ts` («ingen tenanttabell uten dekning») feiler hvis du glemmer det.
+Gi `org_id` `onDelete: "cascade"` mot `organizations`, ellers stopper «Slett kunde» på
+tabellen og `tests/kundesletting.test.ts` blir rød (01.10.2026).
 Policyene settes idempotent ved hver oppstart av `scripts/oppstart.ts` — rekkefølgen
 migrasjoner → `settOpp()` → `verifiserRoller()` er ikke valgfri. Migrasjoner genereres med
 `npm run db:generate` og **sjekkes inn** i `drizzle/`.
@@ -195,6 +197,7 @@ tester leser. Glemmer du oppføringen, blir en **test** rød — ikke en kunde:
 | Filtabeller (kvote) | `FILTABELLER` i `src/lib/lagring.ts` | `tests/lagring.test.ts` |
 | Moduler + meny | `src/lib/moduler.ts` | — (men én fil, ikke tre som i v1) |
 | AI-verktøy uten org-parameter | `src/lib/ai-verktoy.ts` | `tests/ai.test.ts` |
+| Kundesletting (FK uten kaskade) | `SLETTES_EKSPLISITT` i `src/lib/kundesletting.ts` | `tests/kundesletting.test.ts` |
 
 **Ny modul:** nøkkel i `ALLE_MODULER` **og** menypunkt i `MENY` (ellers usynlig — ikonet er
 et lucide-navn som *streng*, så fila er React-fri), vurder `AV_SOM_STANDARD`, og `modul:` i
@@ -320,7 +323,7 @@ rører integrasjonen.
 `docs/tekstsok.md`, `docs/leverandorportal.md` (designutkast, ikke bygget),
 `docs/mobilapp.md` og `docs/modultilgang.md` (designutkast, ikke bygget), `docs/fdv.md`,
 `docs/mcp-servere.md`, `docs/plattformpanel.md` (bruksnotat for plattformadmin: kundesiden,
-aktiv vs. demo, support-sesjon, feilsøking av tom kundeapp).
+aktiv vs. demo, support-sesjon, slette kunde, feilsøking av tom kundeapp).
 
 ## Frontend
 
