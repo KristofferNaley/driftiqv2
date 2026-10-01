@@ -2425,28 +2425,23 @@ textarea.qr-input { resize: vertical; }
   letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
 }
 
-/* ── Kundesiden (v3) ──
-   Etter mockups/kundeside-v3-mockup.html: vertikal fane-skinne i grupper —
-   kundeforhold, abonnement, tilgang og sikkerhet. */
-.pf-skinne-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
-.pf-skinne { position: sticky; top: 12px; }
-.pf-skinne-gruppe { margin-bottom: 16px; }
-.pf-skinne-gruppe h3 {
-  font-size: var(--fs-label); letter-spacing: 0.8px; text-transform: uppercase;
-  color: var(--muted); font-weight: 700; margin: 0 0 6px 12px;
+/* ── Kundesiden (BL-180) ──
+   Tre faner med teller i badge, innhold i kort. Oversikt har to kolonner: Organisasjon til
+   venstre, Aktivitet og Onboarding til høyre — én kolonne under 900px. */
+.pf-faner { border-bottom: 1px solid var(--border); flex-wrap: nowrap; overflow-x: auto; }
+.pf-fane { display: flex; align-items: center; gap: 8px; white-space: nowrap; margin-bottom: -1px; }
+.pf-oversikt-grid {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start;
 }
-.pf-skinnefane {
-  width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;
-  background: none; border: none; border-left: 2px solid transparent;
-  border-radius: 0 8px 8px 0; padding: 8px 12px; color: var(--muted);
-  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 500; cursor: pointer;
+.pf-kolonne { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pf-kolonne > * { flex-shrink: 0; }
+.pf-seksjon {
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--muted); padding: 14px 0 4px;
 }
-.pf-skinnefane:hover { background: var(--surface2); color: var(--text); }
-.pf-skinnefane.valgt {
-  background: rgba(var(--accent-rgb), 0.12); border-left-color: var(--accent);
-  color: var(--text); font-weight: 600;
-}
-.pf-skinnefane .badge { margin-left: auto; }
+.pf-seksjon:first-child { padding-top: 0; }
+/* Tom verdi: «Ikke satt», svakere og kursiv — skal ikke kunne forveksles med en ekte verdi. */
+.pf-ikke-satt { color: var(--muted); font-style: italic; font-weight: 400 !important; }
 
 .pf-modulgruppe {
   padding: 10px 16px 4px; font-size: var(--fs-label); font-weight: 700;
@@ -2470,12 +2465,7 @@ textarea.qr-input { resize: vertical; }
 .pf-bryter-input:focus-visible + .pf-bryter { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (max-width: 900px) {
-  /* Skinnen blir en horisontal faner-rad — samme grep som mockupen. */
-  .pf-skinne-layout { grid-template-columns: 1fr; }
-  .pf-skinne { position: static; display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
-  .pf-skinne-gruppe { display: flex; gap: 4px; margin: 0; }
-  .pf-skinne-gruppe h3 { display: none; }
-  .pf-skinnefane { width: auto; white-space: nowrap; border-left: none; border-radius: 8px; }
+  .pf-oversikt-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ── Kundelista (v3) ──

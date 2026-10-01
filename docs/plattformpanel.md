@@ -37,24 +37,24 @@ medlemskapet.
 
 ## Kundesiden (Kunder → <kunde>)
 
-`src/app/(plattform)/plattform/kunder/[orgId]/page.tsx`. Vertikal fanerad i tre grupper.
+`src/app/(plattform)/plattform/kunder/[orgId]/` (én fil per fane). Tre faner (BL-180).
+Valgt fane står i `?fane=oversikt|abonnement|tilgang`. De gamle undersidenøklene
+(`sammendrag`, `organisasjon`, `onboarding`, `brukere`, `support`, `innsyn`) sendes videre
+til riktig fane.
 
-### Kundeforhold
+### Oversikt
 
-- **Sammendrag** — abonnement per år, aktive moduler med listepris, onboarding-prosent,
-  nøkkelinfo og bruk (antall oppgaver, avvik, brukere). Kortene er snarveier til fanene.
-- **Organisasjon** — to kort:
-  - *Identitet og kontakt* → «Rediger»: navn, org.nr, selskapsform, kommune, antall
-    andeler (grunnlaget for grunnpakkeprisen), e-post, telefon, nettside, lagringskvote i
-    GB (tomt = standard), og tre avkrysninger nederst: **Har ansatte**, **Aktiv kunde**,
-    **Demo- eller testkunde** (se «Aktiv vs. demo»). Kortet viser «Status: Aktiv/Inaktiv».
-  - *Tilknytning* → «Rediger»: frittstående / tilknyttet et boligbyggelag, og
-    forretningsfører (selvadministrert / boligbyggelag / eksternt byrå). To separate
-    forhold.
-  - *Slett kunde*: sletter kunden for godt, se «Slette en kunde».
+- **Snarveier** til abonnement, moduler og onboarding.
+- **Organisasjon** — ett kort med én «Rediger», i fire seksjoner: Identitet (navn, org.nr,
+  selskapsform, kommune), Størrelse (andeler, enheter i Enhetsregisteret, har ansatte),
+  Kontakt (e-post, telefon, nettside) og Tilknytning (boligbyggelag, forretningsfører).
+  Skjemaet har i tillegg lagringskvote i GB og avkrysningene **Aktiv kunde** og **Demo-
+  eller testkunde** (se «Aktiv vs. demo»). Tilknytningen lagres i samme transaksjon.
+  Tomme verdier vises som «Ikke satt».
 - **Onboarding** — sjekkliste regnet ut fra *antall* rader hos kunden (abonnement,
   andeler, Enhetsregisteret, «Om bygget», styret med minst to brukere, leverandører,
   kontrakter, …). Plattformadmins medlemskap teller ikke som kundens brukere.
+- **Slett kunde** nederst, se «Slette en kunde».
 
 ### Abonnement
 
@@ -70,12 +70,11 @@ medlemskapet.
     Plattformadmin med support-sesjon slipper forbi, for innsyn og sletting.
   - 100 % rabatt vises som «Pilot» i kundelista.
 
-### Tilgang og sikkerhet
+### Tilgang
 
 - **Brukere** — kundens medlemmer med nivå og sist innlogget. Kun visning; her finnes
   ingen knapp for å legge til eller endre brukere (se «Ny kunde»).
-- **Support-modus** — start/avslutt innsyn. Fanen får merket «Aktiv» mens en sesjon
-  pågår, så den synes fra resten av siden.
+- **Support-modus** — start/avslutt innsyn.
 - **Innsynslogg** — de 20 siste support-sesjonene mot kunden: hvem, begrunnelse, start og
   slutt («pågår»).
 
@@ -133,7 +132,7 @@ Nye kunder opprettes **bare fra Leads**. Det finnes ingen «Ny kunde»-knapp i k
    kontaktperson kopieres ikke inn. Avvises hvis org.nr allerede finnes som kunde.
 3. Du havner på den nye kundesiden. Orgen er **aktiv**, ikke demo, og har ingen egen
    modulliste (standardsettet, se `PA_SOM_STANDARD` i `lib/moduler.ts`).
-4. Fyll inn antall andeler under Organisasjon, velg moduler under «Moduler og pris», og
+4. Fyll inn antall andeler under Oversikt → Organisasjon, velg moduler under Abonnement, og
    registrer abonnementet.
 
 ### Kjent mangel: første bruker
@@ -152,7 +151,7 @@ plattformadmin-medlemskap opprettes slik at orgen kan åpnes i kundeappen under 
 
 ## Slette en kunde
 
-Kunder → <kunde> → **Organisasjon** → kortet «Slett kunde» nederst. Tenkt for kunder som
+Kunder → <kunde> → **Oversikt** → kortet «Slett kunde» nederst. Tenkt for kunder som
 har prøvd systemet uten å kjøpe, og for sletting etter oppsigelse. Koden er i
 `lib/kundesletting.ts`.
 
@@ -184,7 +183,7 @@ ingenting. Ingen feilmelding.
 
 Sjekk i rekkefølge:
 
-1. **Er orgen aktiv?** Kunder → <kunde> → Organisasjon → «Status». Står det «Inaktiv»:
+1. **Er orgen aktiv?** Kunder → <kunde> → Oversikt → Organisasjon → «Rediger». Er «Aktiv kunde» ikke krysset av:
    «Rediger» → kryss av **Aktiv kunde** → lagre. Det var årsaken 01.10.2026. Avkrysningen
    står ved siden av «Demo», og de er lette å forveksle.
 2. **Er sesjonen fortsatt gyldig?** Fanen «Support-modus» skal ha merket «Aktiv». Etter 4

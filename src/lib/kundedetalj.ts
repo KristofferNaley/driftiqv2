@@ -53,6 +53,11 @@ export const kundeEndring = z.object({
   demo: z.boolean().optional(),
   /** Lagringskvote i BYTES. Skjemaet regner om fra GB — se kommentaren på feltet. */
   storageQuota: z.number().int().min(0).nullish(),
+  /**
+   * Tilknytningen lagres i samme kall når Organisasjon-kortet redigeres som ett skjema.
+   * Utelates den, er tilknytningen urørt.
+   */
+  tilknytning: z.lazy(() => tilknytningEndring).optional(),
 });
 
 export const tilknytningEndring = z.object({
@@ -72,9 +77,17 @@ async function krevOrg(db: Db, orgId: string) {
 }
 
 export async function endreKunde(db: Db, orgId: string, data: z.infer<typeof kundeEndring>) {
+  const { tilknytning, ...rest } = data;
+  if (tilknytning) {
+    // Ett skjema, én transaksjon: feiler tilknytningen, skal ikke halve skjemaet stå lagret.
+    return db.transaction(async (tx) => {
+      await endreKunde(tx as unknown as Db, orgId, rest);
+      return settTilknytning(tx as unknown as Db, orgId, tilknytning);
+    });
+  }
   await krevOrg(db, orgId);
   const felter: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(rest)) {
     if (v === undefined) continue;
     // Tom streng fra et skjemafelt betyr «ikke utfylt», ikke «lagre en tom streng» — ellers
     // blir `—` i visningen til et usynlig blankt felt.
@@ -367,7 +380,7 @@ export async function hentOnboarding(db: Db, orgId: string) {
 
   const n = (r: Array<{ n: number }>) => r[0]?.n ?? 0;
 
-  const punkter = onboardingPunkter(org, {
+  const tellinger: OnboardingTellinger = {
     enheter: n(enheter),
     brukere: n(brukere),
     leverandorer: n(leverandorer),
@@ -376,9 +389,12 @@ export async function hentOnboarding(db: Db, orgId: string) {
     rutiner: n(rutiner),
     dokumenter: n(dokumenter),
     abonnement: n(abonnement),
-  });
+  };
+  const punkter = onboardingPunkter(org, tellinger);
 
-  return { prosent: onboardingProsent(punkter), punkter };
+  // Tellingene følger med: Organisasjon-kortet viser antall enheter og Aktivitet antall
+  // kontrakter, og de skal være de SAMME tallene som onboardingen regnet med.
+  return { prosent: onboardingProsent(punkter), punkter, tellinger };
 }
 
 // ---------------------------------------------------------------------------------------
