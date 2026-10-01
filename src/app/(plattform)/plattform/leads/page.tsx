@@ -301,7 +301,7 @@ export default function Leads() {
           hvor varslingen styres — den setningen blir stående, alene og på én linje. */}
       <p className="pf-dempet">
         Hvem som varsles på e-post når det kommer en ny, styres under{" "}
-        <Link className="pf-lenke-inline" href="/plattform/prismodell">Prismodell</Link>.
+        <Link className="pf-lenke-inline" href="/plattform/innstillinger/varsler">Innstillinger › Varsler</Link>.
       </p>
 
       <div className="pf-kpi-grid">

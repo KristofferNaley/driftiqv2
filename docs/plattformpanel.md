@@ -21,6 +21,10 @@ medlemskapet.
 
 ## Menyen
 
+Seks punkter: **I dag** og **Innmeldinger** øverst, **Salg og kunder** (Leads, Kunder),
+**Innsikt** (Statistikk) og **Innstillinger** nederst ved «Til kundeappen» og lys/mørk.
+Tellerne kommer fra `/api/plattform/tellere`.
+
 | Side | Hva den er til |
 |---|---|
 | I dag | Arbeidsliste. «Krever handling» samler punkter fra hele plattformen (disk over 85 %, jobb som feilet siste kjøring, innmelding ubesvart mer enn én arbeidsdag, besvart sak som har stått stille i 14 dager, kunde uten e-post (ikke demo), aktiv support-økt), hver med knapp dit det løses. Reglene og grensene står i `src/lib/idag.ts`. Under kortet: nye leads, innmeldinger og support-økter siden forrige innlogging (nest siste `innlogget` i `auth_events`; eldre enn 90 dager vises som «siste 90 dager»). Plattformtallene som sto her, er øverst på Statistikk. |
@@ -28,12 +32,22 @@ medlemskapet.
 | Leads | Salgsløpet ny → kontaktet → kvalifisert → kunde. Her opprettes nye kunder (se «Ny kunde»). |
 | Innmeldinger | Innmeldinger fra «Meld feil» i appen (feil, forslag, spørsmål), med tråd mot melderen og interne notater. «Løst» sender e-post til melderen. Telleren i menyen er saker der kunden venter på svar: ikke løst og ingen melding til kunden ennå, samme regel som «Ubesvart» på siden. Stien er fortsatt `/plattform/saker`. |
 | Kunder | Kundelista og kundesiden — se under. |
-| Boligbyggelag | Registeret over boligbyggelag. Globalt; brukes til tilknytning og forretningsfører på kundesiden. Flere kunder kan peke på samme lag, og lag kan fusjoneres. |
+
+### Innstillinger
+
+Én side med undermeny til venstre (`/plattform/innstillinger/<side>`). De gamle stiene
+(`/plattform/prismodell`, `/boligbyggelag`, `/maler`, `/brukere`, `/support`, `/system`)
+omdirigerer hit, så bokmerker virker.
+
+| Underside | Hva den er til |
+|---|---|
 | Prismodell | Standardprisene nye avtaler regnes fra (gulvpris, trinn per andel, modulpriser). Hver lagring blir en versjon. Kundens faktiske avtale redigeres på kundesiden, ikke her. |
-| Brukere | **DriftIQs egne plattformadmins**, ikke kundenes brukere. Kundebrukere administreres inne i kundeappen. `kontoansvarlig` fra v1 tilbys ikke — rollen er ikke implementert i tilgangslaget. |
-| Support-modus | Innsynsloggen på tvers av alle kunder: hvem har innsyn nå, og hvem har hatt det. |
-| Maler | HMS-malene (spørsmålslister for vernerunde og risikovurdering). Felles for alle kunder; kunden velger mal, men kan ikke endre punktene. Endringer slår ikke tilbake på gjennomførte runder. |
-| System | Systemhelse, viktigst om RLS faktisk er i kraft (spurt mot databasen). |
+| Boligbyggelag | Registeret over boligbyggelag. Globalt; brukes til tilknytning og forretningsfører på kundesiden. Flere kunder kan peke på samme lag, og lag kan slås sammen. Kundetallet teller unike kunder med laget som tilknytning ELLER forretningsfører; testbasen har ingen slike koblinger og viser 0 overalt. |
+| HMS-maler | Spørsmålslistene for vernerunde og risikovurdering. Felles for alle kunder; kunden velger mal, men kan ikke endre punktene. Endringer slår ikke tilbake på gjennomførte runder. |
+| Varsler | Hvem som får e-post om nye leads og innmeldinger (`pricing_config.leads_notify_emails`). Tom liste faller tilbake på `LEADS_NOTIFY_EMAIL`. |
+| Plattformadmins | **DriftIQs egne plattformadmins**, ikke kundenes brukere. Kundebrukere administreres inne i kundeappen. `kontoansvarlig` fra v1 tilbys ikke; rollen er ikke implementert i tilgangslaget. |
+| Innsynslogg | Support-økter på tvers av alle kunder: hvem har innsyn nå, og hvem har hatt det. Økter startes fra kundesiden. |
+| System | Systemhelse, viktigst om RLS faktisk er i kraft (spurt mot databasen), pluss disk og bakgrunnsjobber. |
 
 ## Kundesiden (Kunder → <kunde>)
 
@@ -146,8 +160,8 @@ Regler:
 - **Orgen må ligge i orgvelgeren din.** Orgvelgeren viser bare orger du har et *medlemskap*
   i (`user_org_memberships`) og som er aktive. Sesjonen alene gir ikke orgen en plass i
   velgeren. De migrerte kundene har plattformadmin-medlemskap fra v1 («supportinnganger»).
-- Innsynet logges og vises i panelet: «Innsynslogg» under fanen Tilgang per kunde og siden
-  «Support-modus» på tvers. Loggen er laget for at kunden skal kunne se den, men per
+- Innsynet logges og vises i panelet: «Innsynslogg» under fanen Tilgang per kunde og Innstillinger ›
+  Innsynslogg på tvers. Loggen er laget for at kunden skal kunne se den, men per
   01.10.2026 finnes det ingen side i kundeappen som viser den.
 
 ## Ny kunde

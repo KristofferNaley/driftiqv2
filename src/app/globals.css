@@ -2518,6 +2518,34 @@ textarea.qr-input { resize: vertical; }
   .pf-handling { grid-template-columns: 22px minmax(0, 1fr); }
   .pf-handling-kontroll { grid-column: 2; justify-content: flex-start; }
 }
+/* Innstillinger: undermeny til venstre, innholdet til høyre. Under 900px blir undermenyen
+   en rad med lenker over innholdet, uten gruppenavn. */
+.pf-inst { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+.pf-inst-meny { display: flex; flex-direction: column; gap: 2px; position: sticky; top: calc(var(--topbar-h) + 22px); }
+.pf-inst-gruppe { display: flex; flex-direction: column; gap: 2px; }
+.pf-inst-gruppenavn {
+  padding: 14px 12px 4px; font-size: var(--fs-label); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted);
+}
+.pf-inst-gruppe:first-child .pf-inst-gruppenavn { padding-top: 0; }
+.pf-inst-lenke {
+  padding: 7px 12px; border-left: 2px solid transparent; border-radius: 0 8px 8px 0;
+  font-size: var(--fs-sm); color: var(--muted); text-decoration: none;
+}
+.pf-inst-lenke:hover { color: var(--text); background: var(--surface2); }
+.pf-inst-lenke.aktiv { border-left-color: var(--pf); color: var(--text); background: var(--surface); font-weight: 600; }
+.pf-inst-innhold { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pf-inst-innhold > * { flex-shrink: 0; }
+.pf-inst-hode h2 { margin: 0; font-size: var(--fs-lg); font-weight: 700; }
+.pf-inst-hode .pf-dempet { margin-top: 2px; }
+@media (max-width: 900px) {
+  .pf-inst { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .pf-inst-meny { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .pf-inst-gruppe { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .pf-inst-gruppenavn { display: none; }
+  .pf-inst-lenke { border-left: none; border-radius: 8px; border: 1px solid var(--border); }
+  .pf-inst-lenke.aktiv { border-color: var(--pf); }
+}
 /* «I dag»: linja «Siden sist du var her» under kortet. */
 .pf-idag-siden { font-size: var(--fs-sm); }
 /* Nøkkeltall: fire klikkbare kort, to per rad på smal skjerm. */
