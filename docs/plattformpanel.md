@@ -188,7 +188,7 @@ ingenting. Ingen feilmelding.
 Sjekk i rekkefølge:
 
 1. **Er orgen aktiv?** Kunder → <kunde> → chipen i hodet. Står det «Inaktiv»: «Rediger»
-   hodet: kryss av **Aktiv kunde** → lagre. Det var årsaken 01.10.2026. Avkrysningen
+   → kryss av **Aktiv kunde** → lagre. Det var årsaken 01.10.2026. Avkrysningen
    står ved siden av «Demo», og de er lette å forveksle.
 2. **Er sesjonen fortsatt gyldig?** Stripen «Support-modus aktiv» skal stå på kundesiden. Etter 4
    timer utløper den stille; start en ny. Uten gyldig sesjon finnes orgen i velgeren, men
